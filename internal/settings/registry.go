@@ -62,6 +62,12 @@ const (
 	KeyMOAlignMediaTags        = "mo_align_media_tags"
 	KeyMOMaxWorksPerRun        = "mo_max_works_per_run"
 	KeyMOOverwriteExisting     = "mo_overwrite_existing"
+
+	KeyQBEnabled   = "qb_enabled"
+	KeyQBURL       = "qb_url"
+	KeyQBUsername  = "qb_username"
+	KeyQBPassword  = "qb_password"
+	KeyQBSavePath  = "qb_save_path"
 )
 
 // Type 决定后台表单控件与校验方式。
@@ -612,6 +618,49 @@ func defaultSpecs() []Spec {
 			Label:       "同名冲突时覆盖",
 			Description: "目标位置已有同名文件时覆盖，默认跳过。",
 			Default:     "false",
+		},
+		// qBittorrent 下载工具（由「qb下载」面板管理，不在通用设置页展示）
+		{
+			Key:      KeyQBEnabled,
+			Type:     TypeBool,
+			Category: "qb",
+			Label:    "启用 qBittorrent 下载",
+			Default:  "false",
+			Hidden:   true,
+		},
+		{
+			Key:      KeyQBURL,
+			Type:     TypeString,
+			Category: "qb",
+			Label:    "qBittorrent WebUI 地址",
+			Default:  "http://127.0.0.1:8080",
+			Hidden:   true,
+		},
+		{
+			Key:      KeyQBUsername,
+			Type:     TypeString,
+			Category: "qb",
+			Label:    "qBittorrent 用户名",
+			Default:  "admin",
+			Hidden:   true,
+		},
+		{
+			Key:      KeyQBPassword,
+			Type:     TypeString,
+			Category: "qb",
+			Label:    "qBittorrent 密码",
+			Default:  "",
+			Hidden:   true,
+			Sensitive: true,
+		},
+		{
+			Key:      KeyQBSavePath,
+			Type:     TypeString,
+			Category: "qb",
+			Label:    "qBittorrent 保存目录",
+			Description: "可选；留空则使用 qBittorrent 默认下载目录。",
+			Default:  "",
+			Hidden:   true,
 		},
 	}
 }

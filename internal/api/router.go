@@ -34,6 +34,7 @@ import (
 	"litepan/internal/notification"
 	"litepan/internal/offlinedownload"
 	"litepan/internal/playback"
+	"litepan/internal/qb"
 	"litepan/internal/settings"
 	"litepan/internal/share/dav"
 	"litepan/internal/strm"
@@ -74,6 +75,7 @@ type Deps struct {
 	Notifications     *notification.Service
 	DataDir           string
 	OnSettingsUpdated func(map[string]string)
+	QB                *qb.Service
 }
 
 // Handler 持有处理请求所需的依赖。
@@ -104,6 +106,7 @@ type Handler struct {
 	adminAuth         *adminauth.Service
 	notifications     *notification.Service
 	onSettingsUpdated func(map[string]string)
+	qb                *qb.Service
 }
 
 // NewRouter 装配并返回 HTTP 路由（含内嵌管理页面）。
@@ -139,6 +142,7 @@ func NewRouter(d Deps) http.Handler {
 		adminAuth:         d.AdminAuth,
 		notifications:     d.Notifications,
 		onSettingsUpdated: d.OnSettingsUpdated,
+		qb:                d.QB,
 	}
 
 	r := chi.NewRouter()
@@ -365,6 +369,14 @@ func NewRouter(d Deps) http.Handler {
 					r.Post("/tasks/refresh", h.refreshOfflineDownloadTasks)
 					r.Post("/tasks/batch-delete", h.batchDeleteOfflineDownloadTasks)
 					r.Delete("/tasks/{taskID}", h.deleteOfflineDownloadTask)
+				})
+				r.Route("/qb", func(r chi.Router) {
+					r.Get("/settings", h.getQBSettings)
+					r.Put("/settings", h.updateQBSettings)
+					r.Post("/test", h.testQB)
+					r.Post("/add", h.addQBDownload)
+					r.Get("/tasks", h.listQBDownloads)
+					r.Post("/tasks/delete", h.deleteQBDownloads)
 				})
 			})
 		})

@@ -17,37 +17,25 @@ func TestAccountLifecycleDeleteRemovesFavorites(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	favoritesSvc := favorites.NewService(filepath.Join(dir, "litepan.db"), logger)
 	ctx := context.Background()
-	for _, accountID := range []int64{11, 22} {
-		if _, err := favoritesSvc.Put(ctx, accountID, favorites.AccountState{
-			Items: []favorites.Item{{
-				ID:   "folder",
-				Name: "收藏目录",
-				Crumbs: []favorites.Crumb{{
-					ID:   "root",
-					Name: "根目录",
-				}},
-			}},
-		}); err != nil {
-			t.Fatalf("保存账号 %d 收藏失败: %v", accountID, err)
+	mk := func(id string, accountID int64) favorites.Item {
+		return favorites.Item{
+			ID: id, Name: id + "收藏", AccountID: accountID,
+			Crumbs: []favorites.Crumb{{ID: "root", Name: "根目录"}},
 		}
+	}
+	if _, err := favoritesSvc.Put(ctx, favorites.State{Items: []favorites.Item{mk("f1", 11), mk("f2", 22)}}); err != nil {
+		t.Fatalf("保存收藏失败: %v", err)
 	}
 
 	lifecycle := accountLifecycle{favorites: favoritesSvc}
 	if err := lifecycle.OnAccountDeleted(ctx, 11); err != nil {
 		t.Fatalf("执行账号删除生命周期失败: %v", err)
 	}
-	deleted, err := favoritesSvc.Get(ctx, 11)
+	state, err := favoritesSvc.Get(ctx)
 	if err != nil {
-		t.Fatalf("读取目标账号收藏失败: %v", err)
+		t.Fatalf("读取收藏失败: %v", err)
 	}
-	if len(deleted.Items) != 0 {
-		t.Fatalf("账号删除生命周期未清理收藏: %#v", deleted)
-	}
-	kept, err := favoritesSvc.Get(ctx, 22)
-	if err != nil {
-		t.Fatalf("读取其他账号收藏失败: %v", err)
-	}
-	if len(kept.Items) != 1 {
-		t.Fatalf("其他账号收藏被误清理: %#v", kept)
+	if len(state.Items) != 1 || state.Items[0].AccountID != 22 {
+		t.Fatalf("账号删除生命周期应只清理账号 11 的收藏: %#v", state.Items)
 	}
 }

@@ -22,6 +22,7 @@ const adminPageLoaders = {
   tools: () => import("@/components/admin/AuxToolsManagement.vue"),
   "cross-transfer": () => import("@/components/admin/CrossDriveTransfer.vue"),
   share: () => import("@/components/admin/FileShareManagement.vue"),
+  qb: () => import("@/components/admin/QbPanel.vue"),
 };
 const DashboardManagement = defineAsyncComponent(adminPageLoaders.dashboard);
 const AccountManagement = defineAsyncComponent(adminPageLoaders.accounts);
@@ -30,6 +31,7 @@ const TaskManagement = defineAsyncComponent(adminPageLoaders.tasks);
 const AuxToolsManagement = defineAsyncComponent(adminPageLoaders.tools);
 const CrossDriveTransfer = defineAsyncComponent(adminPageLoaders["cross-transfer"]);
 const FileShareManagement = defineAsyncComponent(adminPageLoaders.share);
+const QbPanel = defineAsyncComponent(adminPageLoaders.qb);
 import { logout, fetchSystemConfig } from "@/api/auth";
 import { useAuthStore } from "@/stores/auth";
 import { provideAdminPageContext } from "@/composables/useAdminLoadingBar";
@@ -48,6 +50,7 @@ const nav = [
   { key: "tools", label: "辅助工具", icon: "toolbox" },
   { key: "cross-transfer", label: "跨盘秒传", icon: "right-left" },
   { key: "share", label: "文件共享", icon: "share-alt" },
+  { key: "qb", label: "qb 下载", icon: "download" },
 ];
 const navKeys = nav.map((n) => n.key);
 
@@ -88,6 +91,7 @@ const cachedPageComponents: Record<string, Component> = {
   accounts: AccountManagement,
   tasks: TaskManagement,
   tools: AuxToolsManagement,
+  qb: QbPanel,
 };
 const cachedPageComponent = computed(() => cachedPageComponents[page.value] ?? null);
 
@@ -257,7 +261,7 @@ onBeforeUnmount(() => {
     </WarningBanner>
 
     <AdminEmptyState
-      v-if="!cachedPageComponent && !['settings', 'cross-transfer', 'share'].includes(page)"
+      v-if="!cachedPageComponent && !['settings', 'cross-transfer', 'share', 'qb'].includes(page)"
       icon="🚧"
       :title="`「${nav.find((n) => n.key === page)?.label}」功能开发中`"
     />

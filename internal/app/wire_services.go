@@ -19,6 +19,7 @@ import (
 	"litepan/internal/mediaorganize"
 	"litepan/internal/offlinedownload"
 	"litepan/internal/playback"
+	"litepan/internal/qb"
 	"litepan/internal/settings"
 	"litepan/internal/strm"
 	"litepan/internal/strmscrape"
@@ -42,6 +43,7 @@ type servicesBundle struct {
 	embyProxy        *embyproxy.Service
 	fnosProxy        *fnosproxy.Service
 	favorites        *favorites.Service
+	qb               *qb.Service
 }
 
 func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *coreBundle) *servicesBundle {
@@ -149,6 +151,7 @@ func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *
 	})
 	automationSvc.Register(core.bus)
 	strmSvc.SetAutomationManagedChecker(automationSvc.IsStrmTaskManaged)
+	qbSvc := qb.NewService(st.settings, logs.For(logx.ModuleSystem))
 	return &servicesBundle{
 		files:            fileSvc,
 		uploads:          uploadSvc,
@@ -166,5 +169,6 @@ func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *
 		embyProxy:        embyProxySvc,
 		fnosProxy:        fnosProxySvc,
 		favorites:        favoritesSvc,
+		qb:               qbSvc,
 	}
 }
