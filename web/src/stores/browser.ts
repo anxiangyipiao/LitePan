@@ -37,6 +37,8 @@ export const useBrowserStore = defineStore("browser", () => {
   const favorites = ref<BrowserFavoriteItem[]>([]);
   const favoritesOpen = ref(false);
   const favoritesAccountId = ref<number | null>(null);
+  // 会话内是否已加载过一次收藏夹：首次加载恢复历史开合状态，之后切换账号保留当前状态
+  let favoritesLoadedOnce = false;
   let loadFilesSeq = 0;
   let refreshFilesSeq = 0;
   let favoritesStateSeq = 0;
@@ -50,7 +52,7 @@ export const useBrowserStore = defineStore("browser", () => {
 
   function clearFavoritesState() {
     favorites.value = [];
-    favoritesOpen.value = false;
+    // favoritesOpen 是会话级偏好：切换存储盘时保留，避免收藏夹被收起
     favoritesAccountId.value = null;
   }
 
@@ -82,7 +84,11 @@ export const useBrowserStore = defineStore("browser", () => {
       const data = await filesApi.getFavorites(accountId);
       if (!isCurrentFavoritesOperation(operationSeq, accountId)) return;
       favorites.value = data.items;
-      favoritesOpen.value = data.open;
+      // 切换存储盘时不因新盘的历史 open 状态把收藏夹收起，仅首次加载恢复
+      if (!favoritesLoadedOnce) {
+        favoritesOpen.value = data.open;
+        favoritesLoadedOnce = true;
+      }
       favoritesAccountId.value = accountId;
     } catch (e) {
       if (!isCurrentFavoritesOperation(operationSeq, accountId)) return;

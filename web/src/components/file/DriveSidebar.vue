@@ -56,6 +56,7 @@ function driverText(a: Account): string {
   flex-direction: column;
   background: var(--surface);
   min-width: 0;
+  height: 100%;
 }
 
 .drive-sidebar__head {
@@ -65,6 +66,7 @@ function driverText(a: Account): string {
   padding: 0 12px 0 16px;
   background: var(--surface-muted);
   border-bottom: 1px solid var(--border-soft);
+  flex: 0 0 auto;
 }
 
 .drive-sidebar__title {
@@ -77,9 +79,9 @@ function driverText(a: Account): string {
 .drive-sidebar__list {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  max-height: 42vh;
 }
 
 .drive-sidebar__row {

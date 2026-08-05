@@ -864,40 +864,37 @@ onUnmounted(() => {
         class="browser__content"
         :class="{
           'browser__content--with-sidebar': accounts.length > 0,
+          'browser__content--with-favorites': showFavorites,
           'browser__content--favorites-transition-ready': favoritesTransitionReady,
         }"
       >
-        <div class="browser__sidebar-slot">
-          <div class="browser__sidebar-panel">
-            <DriveSidebar
-              v-if="accounts.length > 0"
-              :accounts="accounts"
-              :model-value="currentAccountId"
-              @update:model-value="store.selectAccount"
-            />
-            <div
-              v-if="isAdmin"
-              class="browser__favorites-section"
-              :class="{ 'is-open': showFavorites }"
-            >
-              <FavoritesSidebar
-                :items="favorites"
-                :current-crumb-ids="currentCrumbIds"
-                :current-folder-favorited="currentFolderFavorited"
-                :drag-active="dragMove.active"
-                :active-drop-target-id="dragMove.targetId"
-                :can-drop-on-favorite="canDropOnFavorite"
-                @add-current="openFavoriteNameModal"
-                @open="store.openFavorite"
-                @rename="openFavoriteRenameModal"
-                @remove="store.removeFavorite"
-                @move="store.moveFavorite"
-                @drag-enter="handleFavoriteDragEnter"
-                @drag-leave="handleFavoriteDragLeave"
-                @drop="handleFavoriteDrop"
-              />
-            </div>
-          </div>
+        <div class="browser__drives-slot">
+          <DriveSidebar
+            v-if="accounts.length > 0"
+            :accounts="accounts"
+            :model-value="currentAccountId"
+            @update:model-value="store.selectAccount"
+          />
+        </div>
+
+        <div class="browser__favorites-slot">
+          <FavoritesSidebar
+            v-if="isAdmin"
+            :items="favorites"
+            :current-crumb-ids="currentCrumbIds"
+            :current-folder-favorited="currentFolderFavorited"
+            :drag-active="dragMove.active"
+            :active-drop-target-id="dragMove.targetId"
+            :can-drop-on-favorite="canDropOnFavorite"
+            @add-current="openFavoriteNameModal"
+            @open="store.openFavorite"
+            @rename="openFavoriteRenameModal"
+            @remove="store.removeFavorite"
+            @move="store.moveFavorite"
+            @drag-enter="handleFavoriteDragEnter"
+            @drag-leave="handleFavoriteDragLeave"
+            @drop="handleFavoriteDrop"
+          />
         </div>
 
         <div class="browser__main">
@@ -1059,43 +1056,30 @@ onUnmounted(() => {
 }
 .browser__content {
   display: grid;
-  grid-template-columns: 0 minmax(0, 1fr);
+  grid-template-columns: 0 0 minmax(0, 1fr);
   gap: 0;
 }
 .browser__content--with-sidebar {
-  grid-template-columns: 168px minmax(0, 1fr);
+  grid-template-columns: 168px 0 minmax(0, 1fr);
+}
+.browser__content--with-sidebar.browser__content--with-favorites {
+  grid-template-columns: 168px 168px minmax(0, 1fr);
 }
 .browser__content--favorites-transition-ready {
   transition: grid-template-columns 0.22s ease;
 }
-.browser__sidebar-slot {
+.browser__drives-slot,
+.browser__favorites-slot {
   min-width: 0;
   overflow: hidden;
 }
-.browser__content--with-sidebar .browser__sidebar-slot {
+.browser__content--with-sidebar .browser__drives-slot {
   border-right: 1px solid var(--border-soft);
 }
-.browser__sidebar-panel {
-  width: 168px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
+.browser__content--with-favorites .browser__favorites-slot {
+  border-right: 1px solid var(--border-soft);
 }
-.browser__favorites-section {
-  flex: 0 1 auto;
-  min-height: 0;
-  height: 0;
-  overflow: hidden;
-  opacity: 0;
-}
-.browser__favorites-section.is-open {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: auto;
-  opacity: 1;
-}
-.browser__favorites-section :deep(.favorites-sidebar) {
+.browser__favorites-slot :deep(.favorites-sidebar) {
   height: 100%;
   border-right: none;
 }
@@ -1180,35 +1164,42 @@ onUnmounted(() => {
     min-width: 0;
   }
 
-  .browser__content--with-sidebar {
+  .browser__content--with-sidebar,
+  .browser__content--with-sidebar.browser__content--with-favorites {
     grid-template-columns: 1fr;
   }
 
-  .browser__content--with-sidebar .browser__sidebar-slot {
+  .browser__drives-slot {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
     border-right: none;
+  }
+
+  .browser__content--with-sidebar .browser__drives-slot {
+    max-height: 220px;
+    opacity: 1;
     border-bottom: 1px solid var(--border-soft);
   }
 
-  .browser__sidebar-slot {
+  .browser__favorites-slot {
     max-height: 0;
     opacity: 0;
+    overflow: hidden;
+    border-right: none;
   }
 
-  .browser__content--favorites-transition-ready .browser__sidebar-slot {
+  .browser__content--with-favorites .browser__favorites-slot {
+    max-height: 360px;
+    opacity: 1;
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .browser__content--favorites-transition-ready .browser__drives-slot,
+  .browser__content--favorites-transition-ready .browser__favorites-slot {
     transition:
       max-height 0.22s ease,
       opacity 0.18s ease;
-  }
-
-  .browser__content--with-sidebar .browser__sidebar-slot {
-    max-height: 360px;
-    opacity: 1;
-  }
-
-  .browser__sidebar-panel {
-    width: 100%;
-    max-height: 360px;
-    overflow-y: auto;
   }
 }
 
