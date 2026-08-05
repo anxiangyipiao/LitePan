@@ -25,6 +25,27 @@
 > 当前仓库是正在开发中的 **Go 版 LitePan**，首次发布可能问题较多，请谨慎测试。
 > Python 旧版已归档至 [LitePan-old](https://github.com/Ponphil/LitePan-old)。
 
+<br>
+
+## ▎ 本分支说明（fork）
+
+本仓库是 [LitePan](https://github.com/Ponphil/LitePan) 的分支，在保留上游全部功能的基础上，与原始版本的主要差异：
+
+| 差异 | 说明 |
+|------|------|
+| 🆕 **沃云盘驱动** | 新增中国联通「沃云盘」（pan.wo.cn）支持，个人空间 / 家庭空间均可挂载，refresh_token 直连换新、自动续期，302 直链与代理下载。上游 LitePan 暂无此驱动。 |
+| ⬆️ **天翼云盘增强** | 家庭云空间新增「家庭空间 ID」配置项，有多个家庭空间时可手动指定精确挂载；留空则沿用上游的自动选择逻辑。 |
+
+### 📦 下载（fnOS `.fpk` 安装包）
+
+由 [LitePan-fpk](https://github.com/anxiangyipiao/LitePan-fpk) 自动构建的 x86 / arm64 两个平台安装包：
+
+| 平台 | 架构 | 下载 |
+|------|------|------|
+| x86 | amd64 | [LitePan_x86_0.4.6.fpk](https://github.com/anxiangyipiao/LitePan-fpk/releases/download/v0.4.6-fpk-1/LitePan_x86_0.4.6.fpk) |
+| arm | arm64 | [LitePan_arm_0.4.6.fpk](https://github.com/anxiangyipiao/LitePan-fpk/releases/download/v0.4.6-fpk-1/LitePan_arm_0.4.6.fpk) |
+
+在 fnOS 中安装后，默认管理员账号密码均为 `admin`。
 
 <br>
 
