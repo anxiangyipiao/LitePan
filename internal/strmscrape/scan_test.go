@@ -685,3 +685,21 @@ func TestInferMediaTypeJAVNumberIsMovie(t *testing.T) {
 		t.Fatalf("inferMediaType=%q, want movie (JAV 番号)", mt)
 	}
 }
+
+func TestBuildItemJAVShowsFullNumber(t *testing.T) {
+	root := t.TempDir()
+	jav := filepath.Join(root, "ABP-123")
+	mustMkdir(t, jav)
+	mustWrite(t, filepath.Join(jav, "ABP-123.strm"), "x")
+	works, err := scanWorks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := buildItem(1, root, works[0])
+	if item.Title != "ABP-123" {
+		t.Fatalf("title=%q, want ABP-123（完整番号，不能只剩字母码）", item.Title)
+	}
+	if item.MediaType != MediaTypeMovie {
+		t.Fatalf("media_type=%q, want movie", item.MediaType)
+	}
+}

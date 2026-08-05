@@ -56,6 +56,11 @@ func FindJAVNumber(name string) string {
 // validateJAVCode 校验主字母码：字母段需全大写；字母段非全大写时仅接受 2-3 位数字段
 // （允许 abc-100 这类小写番号，但拒绝 Room 1408 这种 4 位数 + 普通片名）。
 func validateJAVCode(code, num string) bool {
+	// 元数据 ID 标签不是 JAV 番号（tmdb-1108306 / imdb-tt1234 等）
+	switch strings.ToLower(strings.TrimSpace(code)) {
+	case "tmdb", "imdb", "tvdb", "douban", "anidb", "bangumi", "bgm", "dmzj":
+		return false
+	}
 	letters := strings.Map(func(r rune) rune {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
 			return r

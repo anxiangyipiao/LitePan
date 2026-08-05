@@ -39,6 +39,10 @@ func buildItem(taskID int64, root string, g workGroup) Item {
 		parsed = rules.NormalizeParsedMedia(rules.ParseFilenameStrict(stem + ".mkv"))
 	}
 	title := strings.TrimSpace(parsed.Title)
+	// JAV 番号：解析器会把数字当成集号（ABP-123 → ABP），无 nfo 时用完整番号展示
+	if jav := workJAVNumber(g); jav != "" {
+		title = jav
+	}
 	if title == "" {
 		title = folderName
 	}

@@ -189,7 +189,7 @@ func TestFindJAVNumber(t *testing.T) {
 		{"SSIS.123", "SSIS-123"},
 		{"SSIS 123", "SSIS-123"},
 		{"SSIS-123 (2021)", "SSIS-123"},
-		// 防误判：Title Case 片名 / 年份
+		// 防误判：Title Case 片名 / 年份 / 元数据 ID 标签
 		{"ssis-123", "ssis-123"},
 		{"abc-100", "abc-100"},
 		{"Room 1408", ""},
@@ -198,6 +198,10 @@ func TestFindJAVNumber(t *testing.T) {
 		{"Star Wars 1977", ""},
 		{"The.Wire.S01E01.1080p", ""},
 		{"S01E01", ""},
+		{"tmdb-1108306", ""},
+		{"{tmdb-1108306}", ""},
+		{"特别篇 吹响吧！上低音号～合奏比赛～ (2023){tmdb-1108306}", ""},
+		{"douban-123456", ""},
 		{"", ""},
 	}
 	for _, c := range cases {
