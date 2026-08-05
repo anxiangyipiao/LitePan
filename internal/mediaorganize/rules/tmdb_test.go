@@ -149,3 +149,35 @@ func TestMovieMatchAttemptsKeepTitleTrailingNumber(t *testing.T) {
 		t.Fatalf("电视剧尾数字应交给季号回退处理，不应在中文核心尝试中提前剔除: %v", titles)
 	}
 }
+
+func TestFindJAVNumber(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"SSIS-123", "SSIS-123"},
+		{"SSIS-123 (2021)", "SSIS-123"},
+		{"SSIS-123-CD1", "SSIS-123"},
+		{"SSIS-123 CD1", "SSIS-123"},
+		{"SSIS 123", "SSIS-123"},
+		{"SSNI.999", "SSNI-999"},
+		{"IPX-001", "IPX-001"},
+		{"MIDE-777-CD2", "MIDE-777"},
+		{"SSIS-123456", "SSIS-123456"},
+		// 字母代码非全大写 → 不是番号
+		{"ssis-123", ""},
+		{"Room 1408", ""},
+		{"Mr 3000", ""},
+		{"Inception 2010", ""},
+		{"Star Wars 1977", ""},
+		{"The.Wire.S01E01.1080p", ""},
+		{"S01E01", ""},
+		{"FC2-123456", ""},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := FindJAVNumber(c.in); got != c.want {
+			t.Fatalf("FindJAVNumber(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

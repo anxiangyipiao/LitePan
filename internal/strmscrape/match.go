@@ -64,19 +64,26 @@ func (s *Service) matchWork(ctx context.Context, client scrapeSource, g workGrou
 
 	title := strings.TrimSpace(dirParsed.Title)
 	year := dirParsed.Year
-	if title == "" {
-		for _, p := range fileParses {
-			if strings.TrimSpace(p.Title) != "" {
-				title = strings.TrimSpace(p.Title)
-				if year == nil {
-					year = p.Year
+	if jav := workJAVNumber(g); jav != "" {
+		// JAV 番号：番号本身唯一标识作品，直接用完整番号搜索并忽略年份，
+		// 既避免现有解析器把数字当成季/集号导致查询残缺，也避免文件夹年份偏差触发 ±1 年存疑。
+		title = jav
+		year = nil
+	} else {
+		if title == "" {
+			for _, p := range fileParses {
+				if strings.TrimSpace(p.Title) != "" {
+					title = strings.TrimSpace(p.Title)
+					if year == nil {
+						year = p.Year
+					}
+					break
 				}
-				break
 			}
 		}
-	}
-	if title == "" {
-		title = folderName
+		if title == "" {
+			title = folderName
+		}
 	}
 	if title == "" {
 		return nil, fmt.Errorf("无法解析标题")

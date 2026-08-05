@@ -110,7 +110,26 @@ func resolveWorkDir(libraryRoot, strmAbs string) string {
 	}
 }
 
+// workJAVNumber 从作品名（文件夹或首个分集文件）提取 JAV 番号（如 SSIS-123）。
+// 命中时表示该作品按番号刮削（MetaTube 源按番号搜索），且一定是电影。
+func workJAVNumber(g workGroup) string {
+	if n := rules.FindJAVNumber(workDisplayName(g)); n != "" {
+		return n
+	}
+	for _, e := range g.entries {
+		stem := strings.TrimSuffix(filepath.Base(e.absPath), filepath.Ext(e.absPath))
+		if n := rules.FindJAVNumber(stem); n != "" {
+			return n
+		}
+	}
+	return ""
+}
+
 func inferMediaType(g workGroup) string {
+	// JAV 番号（如 SSIS-123）一定是电影：优先判定，避免数字被当成季/集号误判成剧集
+	if workJAVNumber(g) != "" {
+		return MediaTypeMovie
+	}
 	// 目录结构优先：存在 Season / 特别篇子目录，或文件位于此类目录下 → 剧集
 	if g.flatFile == "" {
 		if entries, err := os.ReadDir(g.absDir); err == nil {

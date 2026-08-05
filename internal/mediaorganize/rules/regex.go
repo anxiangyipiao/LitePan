@@ -49,6 +49,10 @@ var (
 		regexp.MustCompile(`(?i)\{\[\s*tmdbid\s*=\s*(\d+)\s*`),
 	}
 
+	// javNumberRe 匹配 JAV 番号：大写字母代码（2-8 位）+ 2-6 位数字（排除 1900-2099 年份），可带 CD 后缀。
+	// 例：SSIS-123、SSNI.999、IPX 001、MIDE-777-CD1。
+	javNumberRe = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])([a-z]{2,8})[-_. ]?(\d{2,6})(?:[-_. ]?cd\d{1,3})?(?:[^a-z0-9]|$)`)
+
 	organizedStructureRe = regexp.MustCompile(`(?i)^.+?\s\((?:19|20)\d{2}\)(?:\s+S\d{1,3}E\d{1,4})?(?:\s+\[[^\]]*\])?\.[^.]+$`)
 	titleNoiseRe         = regexp.MustCompile(`(?i)www\.|https?://|(?:\.com|\.net|\.org|\.cc|\.tv|\.me|\.io)\b|发布|影视之家|资源网|论坛|社区`)
 	resolutionInTitleRe  = regexp.MustCompile(`(?i)\d{3,4}p`)

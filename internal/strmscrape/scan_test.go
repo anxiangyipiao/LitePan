@@ -663,3 +663,25 @@ func mustWrite(t *testing.T, path, body string) {
 		t.Fatal(err)
 	}
 }
+
+func TestInferMediaTypeJAVNumberIsMovie(t *testing.T) {
+	root := t.TempDir()
+	// JAV 番号文件夹即使带 CD 文件也不该被当成剧集
+	jav := filepath.Join(root, "SSIS-123")
+	mustMkdir(t, jav)
+	mustWrite(t, filepath.Join(jav, "SSIS-123-CD1.strm"), "x")
+	mustWrite(t, filepath.Join(jav, "SSIS-123-CD2.strm"), "x")
+	works, err := scanWorks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(works) != 1 {
+		t.Fatalf("works=%d, want 1", len(works))
+	}
+	if n := workJAVNumber(works[0]); n != "SSIS-123" {
+		t.Fatalf("workJAVNumber=%q, want SSIS-123", n)
+	}
+	if mt := inferMediaType(works[0]); mt != MediaTypeMovie {
+		t.Fatalf("inferMediaType=%q, want movie (JAV 番号)", mt)
+	}
+}
