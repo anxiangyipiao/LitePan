@@ -1090,7 +1090,7 @@ onUnmounted(() => {
   opacity: 0;
 }
 .browser__favorites-section.is-open {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-height: 0;
   height: auto;
   opacity: 1;
