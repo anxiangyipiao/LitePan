@@ -15,6 +15,10 @@ func (d *Driver) isFamily() bool {
 }
 
 func (d *Driver) currentFamilyID() string {
+	// 用户在配置里显式填写的家庭空间 ID 优先；未填写时用 Init 自动解析出的默认家庭空间。
+	if id := strings.TrimSpace(d.add.FamilyID); id != "" {
+		return id
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.familyID

@@ -11,5 +11,6 @@ type Addition struct {
 	DeleteMode   string     `json:"delete_mode" label:"删除模式" type:"select" options:"trash:移动到回收站,delete:永久删除" default:"trash" form:"pair=opts1"`
 	DownloadMode string     `json:"download_mode" label:"下载模式" type:"select" options:"redirect:302重定向,proxy:本机代理" default:"redirect" form:"pair=opts1"`
 	RootFolderID string     `json:"root_folder_id" label:"根目录ID（默认空间根目录）" default:"-11" form:"pair=space" default_by:"space_type" defaults:"personal=-11,family=/"`
+	FamilyID     string     `json:"family_id" label:"家庭空间 ID（留空自动选择）" form:"pair=space"`
 	CacheTTL     flexString `json:"cache_ttl" label:"缓存时间(分钟)" type:"number" default:"30" form:"pair=opts2"`
 }

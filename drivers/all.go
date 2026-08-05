@@ -12,4 +12,5 @@ import (
 	_ "litepan/drivers/OneDrive"
 	_ "litepan/drivers/Quark"
 	_ "litepan/drivers/WebDAV"
+	_ "litepan/drivers/wopan"
 )
