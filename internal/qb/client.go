@@ -161,7 +161,7 @@ func (c *Client) login(ctx context.Context) error {
 		return err
 	}
 	if !strings.Contains(strings.ToLower(string(body)), "ok") {
-		return fmt.Errorf("qB 登录失败：请检查 WebUI 地址、用户名与密码")
+		return fmt.Errorf("qB 登录失败（%s%s）：请检查 WebUI 地址、用户名与密码", c.baseURL, apiLogin)
 	}
 	return nil
 }
@@ -178,7 +178,8 @@ func joinURLs(urls []string) string {
 }
 
 func (c *Client) postForm(ctx context.Context, endpoint string, form url.Values) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+endpoint, strings.NewReader(form.Encode()))
+	fullURL := c.baseURL + endpoint
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +189,7 @@ func (c *Client) postForm(ctx context.Context, endpoint string, form url.Values)
 		return nil, err
 	}
 	if resp != nil && resp.StatusCode >= http.StatusBadRequest {
-		return body, fmt.Errorf("qB: http status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return body, fmt.Errorf("qB 请求 %s 返回 HTTP %d：%s", fullURL, resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	return body, nil
 }
@@ -199,7 +200,7 @@ func (c *Client) get(ctx context.Context, endpoint string, query url.Values) ([]
 		return nil, err
 	}
 	if resp != nil && resp.StatusCode >= http.StatusBadRequest {
-		return body, fmt.Errorf("qB: http status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return body, fmt.Errorf("qB 请求 %s%s 返回 HTTP %d：%s", c.baseURL, endpoint, resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	return body, nil
 }
