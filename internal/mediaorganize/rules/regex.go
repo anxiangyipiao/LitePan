@@ -49,9 +49,22 @@ var (
 		regexp.MustCompile(`(?i)\{\[\s*tmdbid\s*=\s*(\d+)\s*`),
 	}
 
-	// javNumberRe 匹配 JAV 番号：大写字母代码（2-8 位）+ 2-6 位数字（排除 1900-2099 年份），可带 CD 后缀。
-	// 例：SSIS-123、SSNI.999、IPX 001、MIDE-777-CD1。
-	javNumberRe = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])([a-z]{2,8})[-_. ]?(\d{2,6})(?:[-_. ]?cd\d{1,3})?(?:[^a-z0-9]|$)`)
+	// javNumberPatterns 按优先级匹配 JAV 番号。前 3 个是多段特殊格式；第 4 个是主字母码
+	// （可含少量数字/数字前缀，可带 CD/-C 尾缀，自动截断）；最后是纯数字无码。
+	// 例：SSSS-001 / KIN8-1675 / FC2-1234567 / 390JAC-132 / 123456_999 / xxx-av-1234 /
+	// heydouga-1234-321 / c0930-ki897634 / h4610-ori98321。
+	javNumberPatterns = []*regexp.Regexp{
+		// 多段 字母+数字-字母+数字：c0930-ki897634 / h4610-ori98321
+		regexp.MustCompile(`(?i)(?:^|[^a-z0-9])([a-z]\d{2,6}[-_.][a-z]{1,4}\d{2,8})(?:[^a-z0-9]|$)`),
+		// 多段 字母码-数字-数字：heydouga-1234-321
+		regexp.MustCompile(`(?i)(?:^|[^a-z0-9])([a-z]{3,12}[-_.]\d{2,4}[-_.]\d{2,4})(?:[^a-z0-9]|$)`),
+		// 多段 字母-字母-数字：xxx-av-1234
+		regexp.MustCompile(`(?i)(?:^|[^a-z0-9])([a-z]{2,8}[-_.][a-z]{2,4}[-_.]\d{2,8})(?:[^a-z0-9]|$)`),
+		// 主字母码：SSSS-001 / KIN8-1675 / FC2-1234567 / 390JAC-132 / 300MAAN-783（可带 CD 尾缀）
+		regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(([a-z]{2,8}|[a-z]{2,5}\d{1,2}|\d{1,4}[a-z]{2,8})[-_. ]?(\d{2,8}))(?:[-_. ]?cd\d{1,3})?(?:[^a-z0-9]|$)`),
+		// 纯数字无码：123456_999 / 543210-001 / 587234-01
+		regexp.MustCompile(`(?:^|[^0-9])(\d{5,6}[-_]\d{1,3})(?:[^0-9]|$)`),
+	}
 
 	organizedStructureRe = regexp.MustCompile(`(?i)^.+?\s\((?:19|20)\d{2}\)(?:\s+S\d{1,3}E\d{1,4})?(?:\s+\[[^\]]*\])?\.[^.]+$`)
 	titleNoiseRe         = regexp.MustCompile(`(?i)www\.|https?://|(?:\.com|\.net|\.org|\.cc|\.tv|\.me|\.io)\b|发布|影视之家|资源网|论坛|社区`)

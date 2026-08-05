@@ -62,28 +62,27 @@ func (s *Service) matchWork(ctx context.Context, client scrapeSource, g workGrou
 		}
 	}
 
+	// JAV 番号：番号本身唯一标识作品，走专用匹配（搜索番号→精确匹配→不存疑），
+	// 避免现有解析器把数字当成季/集号导致查询残缺，也避免模糊标题匹配触发存疑。
+	if jav := workJAVNumber(g); jav != "" {
+		return s.matchJAVNumber(ctx, client, jav, mediaType)
+	}
+
 	title := strings.TrimSpace(dirParsed.Title)
 	year := dirParsed.Year
-	if jav := workJAVNumber(g); jav != "" {
-		// JAV 番号：番号本身唯一标识作品，直接用完整番号搜索并忽略年份，
-		// 既避免现有解析器把数字当成季/集号导致查询残缺，也避免文件夹年份偏差触发 ±1 年存疑。
-		title = jav
-		year = nil
-	} else {
-		if title == "" {
-			for _, p := range fileParses {
-				if strings.TrimSpace(p.Title) != "" {
-					title = strings.TrimSpace(p.Title)
-					if year == nil {
-						year = p.Year
-					}
-					break
+	if title == "" {
+		for _, p := range fileParses {
+			if strings.TrimSpace(p.Title) != "" {
+				title = strings.TrimSpace(p.Title)
+				if year == nil {
+					year = p.Year
 				}
+				break
 			}
 		}
-		if title == "" {
-			title = folderName
-		}
+	}
+	if title == "" {
+		title = folderName
 	}
 	if title == "" {
 		return nil, fmt.Errorf("无法解析标题")
@@ -182,6 +181,72 @@ func pickTMDBScrapeMatch(results []map[string]any, year *int, mediaType, title s
 	}
 	if best := rules.PickUniqueTMDBAdjacentYearMatch(results, year, mediaType, title); best != nil {
 		return best, true
+	}
+	return nil, false
+}
+
+// matchJAVNumber 按 JAV 番号专用匹配：搜索番号 → 精确命中番号 → 前缀/后缀或标题兼容兜底。
+// 番号查询本身足够精确，命中不触发存疑（避免多 provider / 规范化番号导致的误判）。
+func (s *Service) matchJAVNumber(ctx context.Context, client scrapeSource, javNumber, mediaType string) (*tmdbInfo, error) {
+	raws, err := client.Search(ctx, javNumber, nil, mediaType)
+	if err != nil {
+		return nil, err
+	}
+	if len(raws) == 0 {
+		return nil, fmt.Errorf("无搜索结果")
+	}
+	best, _ := pickJAVMatch(rules.RawJSONListToMaps(raws), javNumber)
+	if best == nil {
+		return nil, fmt.Errorf("没有番号相符的结果")
+	}
+	raw, err := client.EnrichSearchResult(ctx, mustRaw(best), mediaType)
+	if err != nil {
+		raw = mustRaw(best)
+	}
+	info, err := decodeTMDBInfo(raw, mediaType)
+	if err != nil {
+		return nil, err
+	}
+	info.Doubt = false
+	return &info, nil
+}
+
+// pickJAVMatch 在番号搜索结果中挑出与查询番号一致的命中。优先番号精确相等，
+// 其次查询是存储番号的前缀/后缀（MetaTube 可能规范化掉数字前缀，如 390JAC-132 → JAC-132），
+// 最后按标题兼容兜底。
+func pickJAVMatch(results []map[string]any, query string) (map[string]any, bool) {
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" {
+		return nil, false
+	}
+	numberKeys := func(item map[string]any) []string {
+		var out []string
+		for _, k := range []string{"_metatube_number", "_metatube_id", "original_title", "id"} {
+			if v := strings.ToLower(nonNilString(item[k])); v != "" {
+				out = append(out, v)
+			}
+		}
+		return out
+	}
+	for _, item := range results {
+		for _, v := range numberKeys(item) {
+			if v == q {
+				return item, false
+			}
+		}
+	}
+	for _, item := range results {
+		for _, v := range numberKeys(item) {
+			if v != "" && (strings.HasSuffix(q, v) || strings.HasSuffix(v, q)) {
+				return item, false
+			}
+		}
+	}
+	for _, item := range results {
+		_, t, o, _ := rules.ExtractTMDBDisplayFields(item, MediaTypeMovie)
+		if rules.IsTMDBTitleCompatible(query, t, o) {
+			return item, false
+		}
 	}
 	return nil, false
 }

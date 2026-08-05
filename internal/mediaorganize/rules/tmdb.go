@@ -19,35 +19,70 @@ func FindTMDBIDInName(name string) string {
 	return ""
 }
 
-// FindJAVNumber 从片名中提取 JAV 番号（如 SSIS-123 / IPX-001 / MIDE-777-CD1）。
-// 要求字母代码全大写、数字部分不是 1900-2099 年份，避免把普通片名（Room 1408、
-// Inception 2010 等）误判成番号。未命中返回空串。
+// FindJAVNumber 从片名中提取 JAV 番号，覆盖各类格式：
+//
+//	有码：    SSSS-001 / ABC-100 / PPPC-326
+//	素人：    390JAC-132 / 300MAAN-783
+//	无码：    HEYZO-1234 / KIN8-1675 / 123456_999 / 543210-001 / 587234-01 /
+//	         xxx-av-1234 / heydouga-1234-321 / c0930-ki897634 / h4610-ori98321
+//	其他：    FC2-1234567 / MYWIFE-1394 / GETCHU-3456789
+//
+// 支持 -C 字幕后缀与 -cdN 多碟后缀（自动截断）。字母码要求全大写（2-3 位数字段可放宽），
+// 排除 1900-2099 年份与 Title Case 普通片名（Room 1408 / Inception 2010 等）。未命中返回空串。
 func FindJAVNumber(name string) string {
 	raw := strings.TrimSpace(name)
 	if raw == "" {
 		return ""
 	}
-	m := javNumberRe.FindStringSubmatch(raw)
-	if len(m) < 3 {
-		return ""
-	}
-	code := m[1]
-	num := m[2]
-	if code == "" || num == "" {
-		return ""
-	}
-	// 字母代码必须全大写，排除 Title Case 的普通片名
-	if code != strings.ToUpper(code) {
-		return ""
-	}
-	// 4 位年份（1900-2099）不是番号
-	if len(num) == 4 {
-		if n, err := strconv.Atoi(num); err == nil && n >= 1900 && n <= 2099 {
-			return ""
+	// 1) 多段特殊格式（必须先于主字母码，避免 c0930-ki897634 被主模式截成 ki897634）
+	for _, re := range javNumberPatterns[:3] {
+		if m := re.FindStringSubmatch(raw); len(m) >= 2 && !yearLikeRe.MatchString(m[1]) {
+			return normalizeJAVNumber(m[1])
 		}
 	}
-	return code + "-" + num
+	// 2) 主字母码（覆盖绝大多数格式），需要单独校验代码与数字段
+	if m := javNumberPatterns[3].FindStringSubmatch(raw); len(m) >= 4 {
+		if validateJAVCode(m[2], m[3]) && !yearLikeRe.MatchString(m[1]) {
+			return normalizeJAVNumber(m[1])
+		}
+	}
+	// 3) 纯数字无码
+	if m := javNumberPatterns[4].FindStringSubmatch(raw); len(m) >= 2 {
+		return normalizeJAVNumber(m[1])
+	}
+	return ""
 }
+
+// validateJAVCode 校验主字母码：字母段需全大写；字母段非全大写时仅接受 2-3 位数字段
+// （允许 abc-100 这类小写番号，但拒绝 Room 1408 这种 4 位数 + 普通片名）。
+func validateJAVCode(code, num string) bool {
+	letters := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+			return r
+		}
+		return -1
+	}, code)
+	if letters == "" {
+		return true
+	}
+	if letters != strings.ToUpper(letters) && len(num) == 4 && !yearLikeRe.MatchString(num) {
+		return false
+	}
+	return true
+}
+
+// normalizeJAVNumber 把常见的点号/空格分隔符规范成 -（下划线保留，如 123456_999）。
+func normalizeJAVNumber(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '.' || r == ' ' {
+			return '-'
+		}
+		return r
+	}, s)
+}
+
+// yearLikeRe 匹配独立出现的 1900-2099 年份，用于排除 Inception 2010 / Star Wars 1977 这类片名。
+var yearLikeRe = regexp.MustCompile(`(?:^|[^0-9])(?:19|20)\d{2}(?:$|[^0-9])`)
 
 func ExtractTMDBDisplayFields(result map[string]any, mediaType string) (id, title, original string, year *int) {
 	_ = mediaType
