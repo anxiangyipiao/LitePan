@@ -5,7 +5,9 @@ import { testMediaOrganizeTmdb } from "@/api/mediaOrganize";
 import {
   fetchStrmScrapeSettings,
   saveStrmScrapeSettings,
+  testStrmScrape,
   type StrmScrapeSettings,
+  type StrmScrapeSource,
   type StrmScrapeWriteMode,
 } from "@/api/strmScrape";
 import AppButton from "@/components/base/AppButton.vue";
@@ -35,9 +37,14 @@ const writeModeOptions = [
   { value: "overwrite", label: "覆盖已有 nfo / 海报" },
 ];
 
+const sourceOptions = [
+  { value: "tmdb", label: "TMDB" },
+  { value: "metatube", label: "MetaTube" },
+];
+
 const { loading, loaded, runLoad } = useSettingsLoad();
 const saving = ref(false);
-const tmdbTesting = ref(false);
+const testing = ref(false);
 
 const {
   settings,
@@ -48,6 +55,8 @@ const {
   revert: revertToBaseline,
 } = useSettingsForm<StrmScrapeSettings>({
   write_mode: "missing_only",
+  source: "tmdb",
+  metatube_url: "",
   tmdb_api_key: "",
   tmdb_language: "zh-CN",
   tmdb_request_interval_ms: 300,
@@ -63,6 +72,8 @@ async function loadSettings(opts?: { silent?: boolean }) {
       const data = await fetchStrmScrapeSettings();
       applyBaseline({
         write_mode: (data.write_mode as StrmScrapeWriteMode) || "missing_only",
+        source: (data.source as StrmScrapeSource) || "tmdb",
+        metatube_url: data.metatube_url || "",
         tmdb_api_key: data.tmdb_api_key || "",
         tmdb_language: data.tmdb_language || "zh-CN",
         tmdb_request_interval_ms: Number(data.tmdb_request_interval_ms) || 300,
@@ -88,6 +99,8 @@ async function saveSettings() {
     applyBaseline({
       ...settings,
       write_mode: (data.write_mode as StrmScrapeWriteMode) || settings.write_mode,
+      source: (data.source as StrmScrapeSource) || settings.source,
+      metatube_url: data.metatube_url || settings.metatube_url,
       tmdb_api_key: data.tmdb_api_key || settings.tmdb_api_key,
       proxy_password: "",
     });
@@ -100,28 +113,42 @@ async function saveSettings() {
   }
 }
 
-async function testTmdb() {
-  if (tmdbTesting.value) return;
-  tmdbTesting.value = true;
+async function testProvider() {
+  if (testing.value) return;
+  testing.value = true;
   try {
-    const result = await testMediaOrganizeTmdb({
-      tmdb_api_key: settings.tmdb_api_key,
-      tmdb_language: settings.tmdb_language,
-      proxy_enabled: settings.proxy_enabled,
-      proxy_url: settings.proxy_url,
-      proxy_username: settings.proxy_username,
-      proxy_password: settings.proxy_password,
-      tmdb_request_interval_ms: Number(settings.tmdb_request_interval_ms),
-    });
-    if (result.ok) {
-      toast.success(result.proxy_used ? "TMDB 连通（已走代理）" : "TMDB 连通正常");
+    if (settings.source === "metatube") {
+      const url = String(settings.metatube_url || "").trim();
+      if (!url) {
+        toast.error("请先填写 MetaTube API 地址");
+        return;
+      }
+      const result = await testStrmScrape({ metatube_url: url });
+      if (result.ok) {
+        toast.success("MetaTube 连通正常");
+      } else {
+        toast.error("MetaTube 测试未通过");
+      }
     } else {
-      toast.error("TMDB 测试未通过");
+      const result = await testMediaOrganizeTmdb({
+        tmdb_api_key: settings.tmdb_api_key,
+        tmdb_language: settings.tmdb_language,
+        proxy_enabled: settings.proxy_enabled,
+        proxy_url: settings.proxy_url,
+        proxy_username: settings.proxy_username,
+        proxy_password: settings.proxy_password,
+        tmdb_request_interval_ms: Number(settings.tmdb_request_interval_ms),
+      });
+      if (result.ok) {
+        toast.success(result.proxy_used ? "TMDB 连通（已走代理）" : "TMDB 连通正常");
+      } else {
+        toast.error("TMDB 测试未通过");
+      }
     }
   } catch (e) {
-    toast.error(getApiErrorMessage(e, "TMDB 测试失败"));
+    toast.error(getApiErrorMessage(e, settings.source === "metatube" ? "MetaTube 测试失败" : "TMDB 测试失败"));
   } finally {
-    tmdbTesting.value = false;
+    testing.value = false;
   }
 }
 
@@ -155,85 +182,124 @@ defineExpose(
         </SettingsRow>
       </SettingsCard>
 
-      <SettingsCard title="TMDB 设置" :accent="SCRAPE_SETTINGS_ACCENT">
-        <template #head-aside>
-          <p class="scrape-settings-tip">与「目录整理」共用同一套 TMDB / 代理配置，修改后两边同步生效。</p>
+      <SettingsCard title="数据源" :accent="SCRAPE_SETTINGS_ACCENT">
+        <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('source')">
+          <template #info>
+            <div class="settings-row__label">刮削数据源</div>
+          </template>
+          <template #control>
+            <AppSelect v-model="settings.source" :options="sourceOptions" />
+          </template>
+        </SettingsRow>
+        <template v-if="settings.source === 'metatube'">
+          <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('metatube_url')">
+            <template #info>
+              <div class="settings-row__label">
+                <span>MetaTube API 地址</span>
+                <SettingsHelpTooltip title="MetaTube API 地址">
+                  <p>自托管 MetaTube 服务的地址（无需 TMDB API Key），例如 https://your-metatube.example.com/。</p>
+                  <p>默认地址为示例实例，请替换为你自己的部署。</p>
+                </SettingsHelpTooltip>
+              </div>
+            </template>
+            <template #control>
+              <AppInput v-model="settings.metatube_url" placeholder="https://your-metatube.example.com/" autocomplete="off" />
+            </template>
+          </SettingsRow>
+          <SettingsRow>
+            <template #info>
+              <div class="settings-row__label">测试连通性</div>
+            </template>
+            <template #control>
+              <AppButton type="button" variant="secondary" size="sm" :disabled="testing" @click="testProvider">
+                {{ testing ? "测试中…" : "测试 MetaTube" }}
+              </AppButton>
+            </template>
+          </SettingsRow>
         </template>
-        <template #head-actions>
-          <AppButton type="button" variant="secondary" size="sm" :disabled="tmdbTesting" @click="testTmdb">
-            {{ tmdbTesting ? "测试中…" : "测试连通性" }}
-          </AppButton>
-        </template>
-        <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('tmdb_api_key')">
-          <template #info>
-            <div class="settings-row__label">TMDB API Key</div>
-          </template>
-          <template #control>
-            <AppInput v-model="settings.tmdb_api_key" type="password" placeholder="请填写 TMDB API Key（必填）" autocomplete="off" />
-          </template>
-        </SettingsRow>
-        <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('tmdb_language')">
-          <template #info>
-            <div class="settings-row__label">搜索语言</div>
-          </template>
-          <template #control>
-            <AppSelect v-model="settings.tmdb_language" :options="tmdbLanguageOptions" />
-          </template>
-        </SettingsRow>
-        <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('tmdb_request_interval_ms')">
-          <template #info>
-            <div class="settings-row__label">
-              <span>请求间隔（毫秒）</span>
-              <SettingsHelpTooltip title="请求间隔说明">
-                <p>连续请求 TMDB 的最小间隔，过小可能触发限流。</p>
-              </SettingsHelpTooltip>
-            </div>
-          </template>
-          <template #control>
-            <AppInput v-model="settings.tmdb_request_interval_ms" type="number" min="200" max="5000" />
-          </template>
-        </SettingsRow>
       </SettingsCard>
 
-      <SettingsCard title="代理设置" :accent="SCRAPE_SETTINGS_ACCENT">
-        <template #head-aside>
-          <TmdbHostsHelpTip />
-        </template>
-        <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('proxy_enabled')">
-          <template #info>
-            <div class="settings-row__label">启用代理</div>
+      <template v-if="settings.source === 'tmdb'">
+        <SettingsCard title="TMDB 设置" :accent="SCRAPE_SETTINGS_ACCENT">
+          <template #head-aside>
+            <p class="scrape-settings-tip">与「目录整理」共用同一套 TMDB / 代理配置，修改后两边同步生效。</p>
           </template>
-          <template #control>
-            <SettingsBoolSegment v-model="settings.proxy_enabled" label="启用代理访问 TMDB" />
+          <template #head-actions>
+            <AppButton type="button" variant="secondary" size="sm" :disabled="testing" @click="testProvider">
+              {{ testing ? "测试中…" : "测试连通性" }}
+            </AppButton>
           </template>
-        </SettingsRow>
-        <template v-if="settings.proxy_enabled">
-          <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('proxy_url')">
+          <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('tmdb_api_key')">
             <template #info>
-              <div class="settings-row__label">代理地址</div>
+              <div class="settings-row__label">TMDB API Key</div>
             </template>
             <template #control>
-              <AppInput v-model="settings.proxy_url" placeholder="http://127.0.0.1:1080 或 socks5://127.0.0.1:1080" />
+              <AppInput v-model="settings.tmdb_api_key" type="password" placeholder="请填写 TMDB API Key（必填）" autocomplete="off" />
             </template>
           </SettingsRow>
-          <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('proxy_username')">
+          <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('tmdb_language')">
             <template #info>
-              <div class="settings-row__label">用户名</div>
+              <div class="settings-row__label">搜索语言</div>
             </template>
             <template #control>
-              <AppInput v-model="settings.proxy_username" placeholder="可选" autocomplete="off" />
+              <AppSelect v-model="settings.tmdb_language" :options="tmdbLanguageOptions" />
             </template>
           </SettingsRow>
-          <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('proxy_password')">
+          <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('tmdb_request_interval_ms')">
             <template #info>
-              <div class="settings-row__label">密码</div>
+              <div class="settings-row__label">
+                <span>请求间隔（毫秒）</span>
+                <SettingsHelpTooltip title="请求间隔说明">
+                  <p>连续请求 TMDB 的最小间隔，过小可能触发限流。</p>
+                </SettingsHelpTooltip>
+              </div>
             </template>
             <template #control>
-              <AppInput v-model="settings.proxy_password" type="password" placeholder="不修改请留空" autocomplete="off" />
+              <AppInput v-model="settings.tmdb_request_interval_ms" type="number" min="200" max="5000" />
             </template>
           </SettingsRow>
-        </template>
-      </SettingsCard>
+        </SettingsCard>
+
+        <SettingsCard title="代理设置" :accent="SCRAPE_SETTINGS_ACCENT">
+          <template #head-aside>
+            <TmdbHostsHelpTip />
+          </template>
+          <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('proxy_enabled')">
+            <template #info>
+              <div class="settings-row__label">启用代理</div>
+            </template>
+            <template #control>
+              <SettingsBoolSegment v-model="settings.proxy_enabled" label="启用代理访问 TMDB" />
+            </template>
+          </SettingsRow>
+          <template v-if="settings.proxy_enabled">
+            <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('proxy_url')">
+              <template #info>
+                <div class="settings-row__label">代理地址</div>
+              </template>
+              <template #control>
+                <AppInput v-model="settings.proxy_url" placeholder="http://127.0.0.1:1080 或 socks5://127.0.0.1:1080" />
+              </template>
+            </SettingsRow>
+            <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('proxy_username')">
+              <template #info>
+                <div class="settings-row__label">用户名</div>
+              </template>
+              <template #control>
+                <AppInput v-model="settings.proxy_username" placeholder="可选" autocomplete="off" />
+              </template>
+            </SettingsRow>
+            <SettingsRow :show-changed-badge="true" :changed="isFieldChanged('proxy_password')">
+              <template #info>
+                <div class="settings-row__label">密码</div>
+              </template>
+              <template #control>
+                <AppInput v-model="settings.proxy_password" type="password" placeholder="不修改请留空" autocomplete="off" />
+              </template>
+            </SettingsRow>
+          </template>
+        </SettingsCard>
+      </template>
     </template>
   </div>
 </template>

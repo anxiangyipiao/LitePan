@@ -45,6 +45,8 @@ const (
 	KeyStrmMetadataParentEnabled   = "strm_metadata_parent_enabled"
 	KeyStrmMetadataSyncMode        = "strm_metadata_sync_mode"
 	KeyStrmScrapeWriteMode         = "strm_scrape_write_mode"
+	KeyStrmScrapeSource            = "strm_scrape_source"
+	KeyStrmScrapeMetaTubeURL       = "strm_scrape_metatube_url"
 
 	KeyMOProxyEnabled          = "mo_proxy_enabled"
 	KeyMOProxyURL              = "mo_proxy_url"
@@ -468,6 +470,26 @@ func defaultSpecs() []Spec {
 			Label:       "STRM 刮削写入策略",
 			Description: "missing_only=仅补缺；overwrite=覆盖已有 nfo/海报。",
 			Default:     "missing_only",
+		},
+		{
+			Key:         KeyStrmScrapeSource,
+			Type:        TypeSelect,
+			Category:    "strm",
+			Label:       "刮削数据源",
+			Description: "tmdb=The Movie Database（需 API Key）；metatube=自托管 MetaTube 元数据服务（无需 Key）。",
+			Default:     "tmdb",
+			Options: []Option{
+				{Value: "tmdb", Label: "TMDB"},
+				{Value: "metatube", Label: "MetaTube"},
+			},
+		},
+		{
+			Key:         KeyStrmScrapeMetaTubeURL,
+			Type:        TypeString,
+			Category:    "strm",
+			Label:       "MetaTube API 地址",
+			Description: "MetaTube 服务地址，例如 https://your-metatube.example.com/。留空且数据源选 MetaTube 时刮削会提示未配置。",
+			Default:     "",
 		},
 		{
 			Key:         KeyMOProxyEnabled,

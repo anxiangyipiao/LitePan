@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { getApiErrorMessage } from "@/api/client";
-import {
-  searchMediaOrganizeTmdb,
-  type MediaOrganizeTmdbSearchHit,
-} from "@/api/mediaOrganize";
+import type { MediaOrganizeTmdbSearchHit } from "@/api/mediaOrganize";
 import { fetchStrmTasks, type StrmTask } from "@/api/strm";
 import {
   fetchStrmScrapeItems,
@@ -14,6 +11,7 @@ import {
   rescrapeStrmScrapeItem,
   markStrmScrapeNormal,
   runStrmScrape,
+  searchStrmScrape,
   stopStrmScrape,
   type StrmScrapeItem,
   type StrmScrapeItemListQuery,
@@ -551,7 +549,7 @@ async function searchCandidates() {
   }
   matchSearching.value = true;
   try {
-    const results = await searchMediaOrganizeTmdb({
+    const results = await searchStrmScrape({
       query: q,
       media_type: matchSearchType.value,
     });

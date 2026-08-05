@@ -23,9 +23,21 @@ type tmdbInfo struct {
 	MediaType    string
 	Doubt        bool
 	EpisodeCount int // 默认全剧集数；刮削时会按本地已有季收窄
+
+	// 富化字段（电影 NFO）：TMDB 与 MetaTube 均可提供，缺失时留空省略。
+	Genres   []string
+	Studio   string
+	Director string
+	Actors   []string
+	Runtime  int
+
+	// MetaTube 源附加字段：MetaTubeID 为 provider 侧 ID（详情/图片端点用），
+	// MetaTubeNumber 为番号（NFO uniqueid 用）。
+	MetaTubeID     string
+	MetaTubeNumber string
 }
 
-func (s *Service) matchWork(ctx context.Context, client *tmdb.Client, g workGroup) (*tmdbInfo, error) {
+func (s *Service) matchWork(ctx context.Context, client scrapeSource, g workGroup) (*tmdbInfo, error) {
 	mediaType := inferMediaType(g)
 	folderName := workDisplayName(g)
 	dirParsed := rules.NormalizeParsedMedia(rules.ParseDirName(folderName))
@@ -88,7 +100,7 @@ func (s *Service) matchWork(ctx context.Context, client *tmdb.Client, g workGrou
 	return info, nil
 }
 
-func lookupTMDBInfo(ctx context.Context, client *tmdb.Client, id, mediaType string) (*tmdbInfo, error) {
+func lookupTMDBInfo(ctx context.Context, client scrapeSource, id, mediaType string) (*tmdbInfo, error) {
 	order := []string{mediaType}
 	if mediaType == MediaTypeTV {
 		order = append(order, MediaTypeMovie)
@@ -115,7 +127,7 @@ func lookupTMDBInfo(ctx context.Context, client *tmdb.Client, id, mediaType stri
 	return nil, lastErr
 }
 
-func searchTMDBInfo(ctx context.Context, client *tmdb.Client, title string, year *int, mediaType string) (*tmdbInfo, error) {
+func searchTMDBInfo(ctx context.Context, client scrapeSource, title string, year *int, mediaType string) (*tmdbInfo, error) {
 	results, err := client.Search(ctx, title, year, mediaType)
 	if err != nil {
 		return nil, err
@@ -144,7 +156,12 @@ func searchTMDBInfo(ctx context.Context, client *tmdb.Client, title string, year
 		}
 		return nil, fmt.Errorf("没有标题相符的结果")
 	}
-	info, err := decodeTMDBInfo(mustRaw(best), mediaType)
+	// MetaTube 搜索命中缺 summary/genres 等详情，经 EnrichSearchResult 补齐；TMDB 源原样返回。
+	raw, err := client.EnrichSearchResult(ctx, mustRaw(best), mediaType)
+	if err != nil {
+		raw = mustRaw(best)
+	}
+	info, err := decodeTMDBInfo(raw, mediaType)
 	if err != nil {
 		return nil, err
 	}
@@ -162,12 +179,12 @@ func pickTMDBScrapeMatch(results []map[string]any, year *int, mediaType, title s
 	return nil, false
 }
 
-func (s *Service) writeMatched(ctx context.Context, client *tmdb.Client, g workGroup, info tmdbInfo, overwrite bool) error {
+func (s *Service) writeMatched(ctx context.Context, client scrapeSource, g workGroup, info tmdbInfo, overwrite bool) error {
 	_, err := s.writeMatchedOpts(ctx, client, g, info, overwrite, true)
 	return err
 }
 
-func (s *Service) writeMatchedOpts(ctx context.Context, client *tmdb.Client, g workGroup, info tmdbInfo, overwrite, withTVExtras bool) (epTMDB int, err error) {
+func (s *Service) writeMatchedOpts(ctx context.Context, client scrapeSource, g workGroup, info tmdbInfo, overwrite, withTVExtras bool) (epTMDB int, err error) {
 	mediaType := info.MediaType
 	if mediaType == "" {
 		mediaType = inferMediaType(g)
@@ -194,7 +211,7 @@ func (s *Service) writeMatchedOpts(ctx context.Context, client *tmdb.Client, g w
 			if err := writeTVShowNFO(nfo, info.Title, info.TMDBID, info.Plot, info.Year); err != nil {
 				return 0, err
 			}
-		} else if err := writeMovieNFO(nfo, info.Title, info.TMDBID, info.Plot, info.Year); err != nil {
+		} else if err := writeMovieNFO(nfo, info); err != nil {
 			return 0, err
 		}
 	}
@@ -220,7 +237,7 @@ func (s *Service) writeMatchedOpts(ctx context.Context, client *tmdb.Client, g w
 }
 
 // tmdbEpisodeCountForLocalSeasons 按 finale 截断正片季，避免跨季绝对集号被误当总集数。
-func tmdbEpisodeCountForLocalSeasons(ctx context.Context, client *tmdb.Client, g workGroup, tmdbID string) (int, error) {
+func tmdbEpisodeCountForLocalSeasons(ctx context.Context, client scrapeSource, g workGroup, tmdbID string) (int, error) {
 	seasons := listLocalRegularSeasonNumbers(g)
 	if client == nil || strings.TrimSpace(tmdbID) == "" || len(seasons) == 0 {
 		return 0, fmt.Errorf("无本地正片季")
@@ -310,7 +327,7 @@ func finaleEpisodeNumber(detail *tmdbSeasonDetail) int {
 	return best
 }
 
-func (s *Service) writeSeasonPosters(ctx context.Context, client *tmdb.Client, showDir, tmdbID string, overwrite bool) error {
+func (s *Service) writeSeasonPosters(ctx context.Context, client scrapeSource, showDir, tmdbID string, overwrite bool) error {
 	seasons := listLocalSeasonNumbers(showDir)
 	if len(seasons) == 0 {
 		return nil
@@ -385,8 +402,8 @@ func decodeTMDBInfo(raw json.RawMessage, mediaType string) (tmdbInfo, error) {
 		return tmdbInfo{}, err
 	}
 	id, title, original, year := rules.ExtractTMDBDisplayFields(m, mediaType)
-	plot := strings.TrimSpace(anyString(m["overview"]))
-	poster := strings.TrimSpace(anyString(m["poster_path"]))
+	plot := nonNilString(m["overview"])
+	poster := nonNilString(m["poster_path"])
 	if id == "" || title == "" {
 		return tmdbInfo{}, fmt.Errorf("TMDB 结果缺少标题")
 	}
@@ -394,7 +411,7 @@ func decodeTMDBInfo(raw json.RawMessage, mediaType string) (tmdbInfo, error) {
 	if n := asInt(m["number_of_episodes"]); n != nil && *n > 0 {
 		epCount = *n
 	}
-	return tmdbInfo{
+	info := tmdbInfo{
 		TMDBID:       id,
 		Title:        title,
 		Original:     original,
@@ -403,7 +420,58 @@ func decodeTMDBInfo(raw json.RawMessage, mediaType string) (tmdbInfo, error) {
 		PosterPath:   poster,
 		MediaType:    mediaType,
 		EpisodeCount: epCount,
-	}, nil
+		Genres:       extractStringList(m["genres"]),
+		Studio:       firstNonEmpty(nonNilString(m["studio"]), nonNilString(m["maker"])),
+		Director:     nonNilString(m["director"]),
+		Actors:       extractStringList(m["actors"]),
+		MetaTubeID:   nonNilString(m["_metatube_id"]),
+		MetaTubeNumber: nonNilString(m["_metatube_number"]),
+	}
+	if n := asInt(m["runtime"]); n != nil && *n > 0 {
+		info.Runtime = *n
+	}
+	return info, nil
+}
+
+// nonNilString 对 nil 安全的字符串取值，避免 anyString(nil) 返回 "<nil>"。
+func nonNilString(v any) string {
+	if v == nil {
+		return ""
+	}
+	return strings.TrimSpace(anyString(v))
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// extractStringList 兼容字符串数组（MetaTube）与 [{"name": ...}]（TMDB genres）两种形状。
+func extractStringList(v any) []string {
+	if v == nil {
+		return nil
+	}
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, item := range arr {
+		if s := nonNilString(item); s != "" {
+			out = append(out, s)
+			continue
+		}
+		if m, ok := item.(map[string]any); ok {
+			if n := nonNilString(m["name"]); n != "" {
+				out = append(out, n)
+			}
+		}
+	}
+	return out
 }
 
 func mustRaw(m map[string]any) json.RawMessage {

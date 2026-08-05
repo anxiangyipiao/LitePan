@@ -247,7 +247,7 @@ func TestWriteMatchedPropagatesTVExtrasError(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := &Service{}
-	client := tmdb.NewClient(tmdb.Options{}) // 空 API Key 会让季详情请求稳定失败
+	client := tmdbScrapeSource{client: tmdb.NewClient(tmdb.Options{})} // 空 API Key 会让季详情请求稳定失败
 	_, err = svc.writeMatchedOpts(context.Background(), client, works[0], tmdbInfo{
 		TMDBID:       "123",
 		Title:        "三体",

@@ -1,6 +1,7 @@
 import { http } from "./client";
 
 export type StrmScrapeWriteMode = "missing_only" | "overwrite";
+export type StrmScrapeSource = "tmdb" | "metatube";
 export type StrmScrapeItemStatus = "ok" | "miss" | "doubt";
 export type StrmScrapeTVState = "ended" | "updating";
 export type StrmScrapeItemListSort =
@@ -55,6 +56,8 @@ export interface StrmScrapeRematchResult {
 
 export interface StrmScrapeSettings {
   write_mode: StrmScrapeWriteMode;
+  source: StrmScrapeSource;
+  metatube_url: string;
   tmdb_api_key: string;
   tmdb_language: string;
   tmdb_request_interval_ms: number;
@@ -62,6 +65,20 @@ export interface StrmScrapeSettings {
   proxy_url: string;
   proxy_username: string;
   proxy_password: string;
+}
+
+export interface StrmScrapeSearchHit {
+  id?: number | string;
+  title?: string;
+  name?: string;
+  original_title?: string;
+  original_name?: string;
+  release_date?: string;
+  first_air_date?: string;
+  poster_path?: string;
+  media_type?: string;
+  overview?: string;
+  runtime?: number;
 }
 
 export interface StrmScrapeItemListQuery {
@@ -96,6 +113,25 @@ export function fetchStrmScrapeSettings() {
 
 export function saveStrmScrapeSettings(settings: Partial<StrmScrapeSettings>) {
   return http.put<StrmScrapeSettings>("/admin/strm-scrape/settings", settings);
+}
+
+export function testStrmScrape(payload?: { metatube_url?: string }) {
+  return http.post<{ ok: boolean; source?: StrmScrapeSource; url?: string; language?: string }>(
+    "/admin/strm-scrape/test",
+    payload ?? {},
+  );
+}
+
+export function searchStrmScrape(params: {
+  query: string;
+  year?: number;
+  media_type?: string;
+}) {
+  return http.get<StrmScrapeSearchHit[]>("/admin/strm-scrape/search", {
+    query: params.query,
+    year: params.year,
+    media_type: params.media_type ?? "auto",
+  });
 }
 
 export function runStrmScrape(strmTaskId: number, writeMode?: StrmScrapeWriteMode) {

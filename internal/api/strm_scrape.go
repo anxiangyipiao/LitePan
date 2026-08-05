@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"litepan/internal/domain"
 	"litepan/internal/strmscrape"
 )
 
@@ -53,6 +54,54 @@ func (h *Handler) updateStrmScrapeSettings(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	h.getStrmScrapeSettings(w, r)
+}
+
+// testStrmScrape 测试当前刮削数据源连通性（TMDB / MetaTube）。
+// 可传 {metatube_url} 覆盖未保存的表单地址。
+func (h *Handler) testStrmScrape(w http.ResponseWriter, r *http.Request) {
+	if !ensureServiceReady(w, h.strmScrape != nil) {
+		return
+	}
+	var override struct {
+		MetaTubeURL string `json:"metatube_url"`
+	}
+	if r.Body != nil && r.ContentLength != 0 {
+		_ = decodeJSON(r, &override)
+	}
+	result, err := h.strmScrape.TestProvider(r.Context(), strings.TrimSpace(override.MetaTubeURL))
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeOK(w, result)
+}
+
+// searchStrmScrape 按当前刮削数据源搜索候选（手动重新匹配用）。
+func (h *Handler) searchStrmScrape(w http.ResponseWriter, r *http.Request) {
+	if !ensureServiceReady(w, h.strmScrape != nil) {
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("query"))
+	if query == "" {
+		writeErr(w, domain.Errorf(domain.CodeValidation, "query 不能为空"))
+		return
+	}
+	var year *int
+	if rawYear := strings.TrimSpace(r.URL.Query().Get("year")); rawYear != "" {
+		y, err := strconv.Atoi(rawYear)
+		if err != nil {
+			writeErr(w, domain.Errorf(domain.CodeValidation, "year 需为整数"))
+			return
+		}
+		year = &y
+	}
+	mediaType := strings.TrimSpace(r.URL.Query().Get("media_type"))
+	results, err := h.strmScrape.Search(r.Context(), query, year, mediaType)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeOK(w, results)
 }
 
 func (h *Handler) runStrmScrape(w http.ResponseWriter, r *http.Request) {

@@ -16,10 +16,12 @@ func (s *Service) GetSettings() Settings {
 			writeMode = normalizeWriteMode(v)
 		}
 	}
-	out := Settings{WriteMode: writeMode}
+	out := Settings{WriteMode: writeMode, Source: SourceTMDB}
 	if s.settings == nil {
 		return out
 	}
+	out.Source = normalizeSource(s.settings.String(settings.KeyStrmScrapeSource))
+	out.MetaTubeURL = strings.TrimSpace(s.settings.String(settings.KeyStrmScrapeMetaTubeURL))
 	enriched := mediaorganize.EnrichPlannerSettings(s.settings, nil)
 	out.TmdbAPIKey = mediaorganize.PlannerTMDBAPIKey(enriched)
 	out.TmdbLanguage = mediaorganize.PlannerTMDBLanguage(enriched)
@@ -38,6 +40,10 @@ func (s *Service) UpdateSettings(ctx context.Context, in Settings) error {
 	}
 	payload := map[string]string{
 		settings.KeyStrmScrapeWriteMode: normalizeWriteMode(in.WriteMode),
+		settings.KeyStrmScrapeSource:    normalizeSource(in.Source),
+	}
+	if url := strings.TrimSpace(in.MetaTubeURL); url != "" {
+		payload[settings.KeyStrmScrapeMetaTubeURL] = url
 	}
 	if lang := strings.TrimSpace(in.TmdbLanguage); lang != "" {
 		payload[settings.KeyMOTmdbLanguage] = lang
@@ -67,5 +73,14 @@ func normalizeWriteMode(v string) string {
 		return WriteModeOverwrite
 	default:
 		return WriteModeMissingOnly
+	}
+}
+
+func normalizeSource(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case SourceMetaTube:
+		return SourceMetaTube
+	default:
+		return SourceTMDB
 	}
 }

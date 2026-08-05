@@ -4,6 +4,9 @@ const (
 	WriteModeMissingOnly = "missing_only"
 	WriteModeOverwrite   = "overwrite"
 
+	SourceTMDB    = "tmdb"
+	SourceMetaTube = "metatube"
+
 	ItemStatusOK    = "ok"
 	ItemStatusMiss  = "miss"
 	ItemStatusDoubt = "doubt"
@@ -88,6 +91,9 @@ type Progress struct {
 
 type Settings struct {
 	WriteMode string `json:"write_mode"`
+	Source    string `json:"source"`
+	// MetaTubeURL 是 MetaTube 服务地址；source=metatube 时用于刮削。
+	MetaTubeURL string `json:"metatube_url"`
 
 	TmdbAPIKey            string `json:"tmdb_api_key"`
 	TmdbLanguage          string `json:"tmdb_language"`

@@ -11,11 +11,29 @@ import (
 )
 
 type movieNFO struct {
-	XMLName xml.Name `xml:"movie"`
-	Title   string   `xml:"title"`
-	Year    string   `xml:"year,omitempty"`
-	TMDBID  string   `xml:"tmdbid,omitempty"`
-	Plot    string   `xml:"plot,omitempty"`
+	XMLName  xml.Name `xml:"movie"`
+	Title    string   `xml:"title"`
+	Year     string   `xml:"year,omitempty"`
+	TMDBID   string   `xml:"tmdbid,omitempty"`
+	Plot     string   `xml:"plot,omitempty"`
+	Runtime  string   `xml:"runtime,omitempty"`
+	Genres   []string `xml:"genre,omitempty"`
+	Studio   string   `xml:"studio,omitempty"`
+	Director string   `xml:"director,omitempty"`
+	Actors   []movieActorNFO `xml:"actor,omitempty"`
+	UniqueID *uniqueIDElement `xml:"uniqueid,omitempty"`
+}
+
+// uniqueIDElement 生成 Kodi/Emby 兼容的 <uniqueid type="number">番号</uniqueid>。
+type uniqueIDElement struct {
+	Type  string `xml:"type,attr"`
+	Value string `xml:",chardata"`
+}
+
+type movieActorNFO struct {
+	Name  string `xml:"name"`
+	Role  string `xml:"role,omitempty"`
+	Thumb string `xml:"thumb,omitempty"`
 }
 
 type tvshowNFO struct {
@@ -164,14 +182,31 @@ func listLocalSeasonNumbers(showDir string) []int {
 	return out
 }
 
-func writeMovieNFO(path, title, tmdbID, plot string, year *int) error {
+func writeMovieNFO(path string, info tmdbInfo) error {
 	nfo := movieNFO{
-		Title:  strings.TrimSpace(title),
-		TMDBID: strings.TrimSpace(tmdbID),
-		Plot:   strings.TrimSpace(plot),
+		Title:    strings.TrimSpace(info.Title),
+		TMDBID:   strings.TrimSpace(info.TMDBID),
+		Plot:     strings.TrimSpace(info.Plot),
+		Runtime:  fmt.Sprintf("%d", info.Runtime),
+		Genres:   info.Genres,
+		Studio:   strings.TrimSpace(info.Studio),
+		Director: strings.TrimSpace(info.Director),
 	}
-	if year != nil && *year > 0 {
-		nfo.Year = fmt.Sprintf("%d", *year)
+	if info.Year != nil && *info.Year > 0 {
+		nfo.Year = fmt.Sprintf("%d", *info.Year)
+	}
+	if info.Runtime <= 0 {
+		nfo.Runtime = ""
+	}
+	for _, name := range info.Actors {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		nfo.Actors = append(nfo.Actors, movieActorNFO{Name: name})
+	}
+	if number := strings.TrimSpace(info.MetaTubeNumber); number != "" {
+		nfo.UniqueID = &uniqueIDElement{Type: "number", Value: number}
 	}
 	return writeXML(path, nfo)
 }

@@ -292,6 +292,8 @@ func NewRouter(d Deps) http.Handler {
 					r.Post("/rescrape", h.rescrapeStrmScrapeItem)
 					r.Post("/mark-normal", h.markStrmScrapeNormal)
 					r.Get("/poster", h.getStrmScrapePoster)
+					r.Get("/search", h.searchStrmScrape)
+					r.Post("/test", h.testStrmScrape)
 				})
 				r.Route("/automation", func(r chi.Router) {
 					r.Get("/rules", h.listAutomationRules)

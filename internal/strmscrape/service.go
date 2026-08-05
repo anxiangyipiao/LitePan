@@ -2,6 +2,7 @@ package strmscrape
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,8 @@ import (
 
 	"litepan/internal/domain"
 	"litepan/internal/eventbus"
+	"litepan/internal/mediaorganize"
+	"litepan/internal/metatube"
 	"litepan/internal/settings"
 	"litepan/internal/strm"
 )
@@ -236,8 +239,8 @@ func (s *Service) Rematch(ctx context.Context, req RematchRequest) (*Item, bool,
 	}
 	sameID := workTMDBIDMatches(g, mediaType, req.TMDBID)
 	overwrite := s.overwriteForMatch(sameID)
-	if s.newTMDBClient() == nil {
-		return nil, false, domain.Errorf(domain.CodeValidation, "未配置 TMDB API Key")
+	if _, err := s.requireScrapeClient(); err != nil {
+		return nil, false, err
 	}
 	display := strings.TrimSpace(req.Title)
 	if display == "" {
@@ -274,15 +277,15 @@ func (s *Service) Rematch(ctx context.Context, req RematchRequest) (*Item, bool,
 }
 
 func (s *Service) applyRematch(ctx context.Context, req RematchRequest, root string, g workGroup, mediaType string, overwrite bool) (*Item, error) {
-	client := s.newTMDBClient()
-	if client == nil {
-		return nil, domain.Errorf(domain.CodeValidation, "未配置 TMDB API Key")
+	client, err := s.requireScrapeClient()
+	if err != nil {
+		return nil, err
 	}
 	scrapeCtx, cancel := context.WithTimeout(ctx, 45*time.Minute)
 	defer cancel()
 	raw, err := client.Lookup(scrapeCtx, req.TMDBID, mediaType)
 	if err != nil {
-		return nil, domain.Errorf(domain.CodeDriverError, "TMDB 查询失败：%v", err)
+		return nil, domain.Errorf(domain.CodeDriverError, "元数据查询失败：%v", err)
 	}
 	info, err := decodeTMDBInfo(raw, mediaType)
 	if err != nil {
@@ -371,8 +374,8 @@ func (s *Service) Rescrape(ctx context.Context, req RescrapeRequest) (*Item, boo
 	}
 	current := buildItem(req.StrmTaskID, root, g)
 	overwrite := s.overwriteForMatch(true)
-	if s.newTMDBClient() == nil {
-		return nil, false, domain.Errorf(domain.CodeValidation, "未配置 TMDB API Key")
+	if _, err := s.requireScrapeClient(); err != nil {
+		return nil, false, err
 	}
 	err = s.startAsyncOperation(req.StrmTaskID, 1, "正在重新刮削："+display, "已重新刮削："+display, "strm rescrape failed", func(runCtx context.Context) error {
 		s.setProgress(func(p *Progress) {
@@ -444,9 +447,9 @@ func (s *Service) run(ctx context.Context, req RunRequest) error {
 	if strings.TrimSpace(req.WriteMode) != "" {
 		mode = normalizeWriteMode(req.WriteMode)
 	}
-	client := s.newTMDBClient()
-	if client == nil {
-		return domain.Errorf(domain.CodeValidation, "未配置 TMDB API Key，请先在设置中填写")
+	client, err := s.requireScrapeClient()
+	if err != nil {
+		return err
 	}
 	if abs, aerr := filepath.Abs(root); aerr == nil {
 		root = abs
@@ -592,4 +595,96 @@ func (s *Service) setProgress(fn func(*Progress)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	fn(&s.progress)
+}
+
+// Search 按当前刮削数据源搜索候选，返回带 media_type 的 TMDB 形状命中（手动重新匹配用）。
+func (s *Service) Search(ctx context.Context, query string, year *int, mediaType string) ([]json.RawMessage, error) {
+	client, err := s.requireScrapeClient()
+	if err != nil {
+		return nil, err
+	}
+	mt := strings.ToLower(strings.TrimSpace(mediaType))
+	if mt == "" {
+		mt = "auto"
+	}
+	if mt == "auto" {
+		// MetaTube 源仅电影，避免同一批结果按 movie/tv 各查一遍造成重复。
+		if s.GetSettings().Source == SourceMetaTube {
+			results, err := client.Search(ctx, query, year, MediaTypeMovie)
+			if err != nil {
+				return nil, err
+			}
+			return injectScrapeMediaType(results, MediaTypeMovie), nil
+		}
+		movies, err := client.Search(ctx, query, year, MediaTypeMovie)
+		if err != nil {
+			return nil, err
+		}
+		tvs, err := client.Search(ctx, query, year, MediaTypeTV)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]json.RawMessage, 0, len(movies)+len(tvs))
+		out = append(out, injectScrapeMediaType(movies, MediaTypeMovie)...)
+		out = append(out, injectScrapeMediaType(tvs, MediaTypeTV)...)
+		return out, nil
+	}
+	results, err := client.Search(ctx, query, year, mt)
+	if err != nil {
+		return nil, err
+	}
+	return injectScrapeMediaType(results, mt), nil
+}
+
+// TestProvider 测试当前刮削数据源连通性，返回可读的测试结果。
+// overrideMetaTubeURL 用于测试表单里尚未保存的地址（空则用已保存的配置）。
+func (s *Service) TestProvider(ctx context.Context, overrideMetaTubeURL string) (map[string]any, error) {
+	cfg := s.GetSettings()
+	if cfg.Source == SourceMetaTube {
+		baseURL := strings.TrimSpace(cfg.MetaTubeURL)
+		if url := strings.TrimSpace(overrideMetaTubeURL); url != "" {
+			baseURL = url
+		}
+		if baseURL == "" {
+			return nil, domain.Errorf(domain.CodeValidation, "请先填写 MetaTube API 地址再测试")
+		}
+		client := metatube.NewClient(metatube.Options{BaseURL: baseURL})
+		if !client.ValidateConnection(ctx) {
+			return nil, domain.Errorf(domain.CodeValidation, "MetaTube 不可达，请检查地址或网络")
+		}
+		return map[string]any{"ok": true, "source": SourceMetaTube, "url": baseURL}, nil
+	}
+	// TMDB 测试沿用目录整理的校验（共用同一套 TMDB/代理配置）。
+	enriched := mediaorganize.EnrichPlannerSettings(s.settings, nil)
+	tmdbClient := s.newTMDBClient()
+	if tmdbClient == nil {
+		return nil, domain.Errorf(domain.CodeValidation, "请先填写 TMDB API Key 再测试")
+	}
+	ok := tmdbClient.ValidateConnection(ctx)
+	if !ok {
+		return nil, domain.Errorf(domain.CodeValidation, "TMDB 不可达，请检查 API Key、网络或代理配置")
+	}
+	return map[string]any{"ok": true, "source": SourceTMDB, "language": mediaorganize.PlannerTMDBLanguage(enriched)}, nil
+}
+
+func injectScrapeMediaType(results []json.RawMessage, mediaType string) []json.RawMessage {
+	if len(results) == 0 {
+		return results
+	}
+	out := make([]json.RawMessage, 0, len(results))
+	for _, raw := range results {
+		var m map[string]any
+		if err := json.Unmarshal(raw, &m); err != nil {
+			out = append(out, raw)
+			continue
+		}
+		m["media_type"] = mediaType
+		b, err := json.Marshal(m)
+		if err != nil {
+			out = append(out, raw)
+			continue
+		}
+		out = append(out, b)
+	}
+	return out
 }

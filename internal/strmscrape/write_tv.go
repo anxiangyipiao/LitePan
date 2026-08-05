@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"litepan/internal/mediaorganize/rules"
-	"litepan/internal/mediaorganize/tmdb"
 )
 
 type tmdbSeasonDetail struct {
@@ -59,7 +58,7 @@ func (s *Service) writeOptionalArtwork(ctx context.Context, client tmdbImageDown
 	return nil
 }
 
-func (s *Service) writeTVExtras(ctx context.Context, client *tmdb.Client, g workGroup, info tmdbInfo, overwrite bool) error {
+func (s *Service) writeTVExtras(ctx context.Context, client scrapeSource, g workGroup, info tmdbInfo, overwrite bool) error {
 	if g.flatFile != "" || strings.TrimSpace(info.TMDBID) == "" {
 		return nil
 	}
@@ -222,7 +221,7 @@ func parseStrmSeasonEpisode(strmPath string) (season, episode *int) {
 	return season, episode
 }
 
-func fetchSeasonDetail(ctx context.Context, client *tmdb.Client, tmdbID string, season int) (*tmdbSeasonDetail, error) {
+func fetchSeasonDetail(ctx context.Context, client scrapeSource, tmdbID string, season int) (*tmdbSeasonDetail, error) {
 	raw, err := client.FetchTVSeason(ctx, tmdbID, season)
 	if err != nil {
 		return nil, err
