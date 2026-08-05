@@ -20,8 +20,7 @@ import { generateCurrentDirectoryStrm } from "@/api/strm";
 import { useStrmDirectoryPrompt } from "@/composables/useStrmDirectoryPrompt";
 import { fileKind } from "@/utils/fileIcon";
 import { publicApi } from "@/api/public";
-import AccountSelector from "./AccountSelector.vue";
-import FloatingAccountSwitcher from "./FloatingAccountSwitcher.vue";
+import DriveSidebar from "./DriveSidebar.vue";
 import BreadcrumbNav from "./BreadcrumbNav.vue";
 import FavoritesSidebar from "./FavoritesSidebar.vue";
 import FileToolbar from "./FileToolbar.vue";
@@ -43,7 +42,6 @@ type FocusableInput = {
 
 const BROWSER_LOCATION_STORAGE_KEY = "litepan:index:browser-location";
 const BROWSER_LOCATION_RESET_ONCE_KEY = "litepan:index:reset-once";
-const ACCOUNT_SWITCH_MODE_STORAGE_KEY = "litepan:index:account-switch-mode";
 
 interface BrowserLocationSnapshot {
   accountId: number;
@@ -65,7 +63,6 @@ const selectedIds = ref<string[]>([]);
 const createFolderRequest = ref(0);
 const uploadFileInput = ref<HTMLInputElement | null>(null);
 const uploadFolderInput = ref<HTMLInputElement | null>(null);
-const accountSwitchMode = ref<"dropdown" | "floating">(readSavedAccountSwitchMode());
 const favoriteNameModalOpen = ref(false);
 const favoriteNameInput = ref("");
 const favoriteNameInputRef = ref<FocusableInput | null>(null);
@@ -86,10 +83,6 @@ const nameAlignApplyTotal = ref(0);
 const nameAlignApplyProgress = ref(0);
 const activePreview = ref<ActiveFilePreview | null>(null);
 let nameAlignApplyTimer: number | undefined;
-
-const floatingAccountSwitchEnabled = computed(
-  () => accountSwitchMode.value === "floating" && accounts.value.length > 1,
-);
 
 const selectedAccountName = computed(
   () => accounts.value.find((a) => a.id === currentAccountId.value)?.name || "",
@@ -452,16 +445,6 @@ function hasPendingBrowserLocationReset() {
   return sessionStorage.getItem(BROWSER_LOCATION_RESET_ONCE_KEY) === "1";
 }
 
-function readSavedAccountSwitchMode(): "dropdown" | "floating" {
-  return localStorage.getItem(ACCOUNT_SWITCH_MODE_STORAGE_KEY) === "floating"
-    ? "floating"
-    : "dropdown";
-}
-
-function saveAccountSwitchMode(mode: "dropdown" | "floating") {
-  localStorage.setItem(ACCOUNT_SWITCH_MODE_STORAGE_KEY, mode);
-}
-
 async function restoreBrowserLocation() {
   const saved = loadSavedBrowserLocation();
   if (!saved) return false;
@@ -478,13 +461,8 @@ async function restoreBrowserLocation() {
 async function loadPublicSystemConfig() {
   try {
     const cfg = await publicApi.systemConfig();
-    const mode = cfg.index_account_switch_mode === "floating" ? "floating" : "dropdown";
-    accountSwitchMode.value = mode;
-    saveAccountSwitchMode(mode);
     strmAutoDetectEnabled.value = cfg.index_strm_auto_detect_enabled ?? true;
   } catch {
-    const mode = readSavedAccountSwitchMode();
-    accountSwitchMode.value = mode;
     strmAutoDetectEnabled.value = true;
   }
 }
@@ -817,22 +795,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="browser" :class="{ 'browser--floating-accounts': floatingAccountSwitchEnabled }">
-    <FloatingAccountSwitcher
-      v-if="floatingAccountSwitchEnabled"
-      :accounts="accounts"
-      :model-value="currentAccountId"
-      @update:model-value="store.selectAccount"
-    />
-
+  <div class="browser">
     <div class="browser__nav">
-      <AccountSelector
-        v-if="accountSwitchMode === 'dropdown'"
-        :accounts="accounts"
-        :model-value="currentAccountId"
-        @update:model-value="store.selectAccount"
-      />
-      <div v-if="accountSwitchMode === 'dropdown'" class="browser__divider" />
       <BreadcrumbNav :items="breadcrumb" @navigate="store.goTo" />
     </div>
 
@@ -899,28 +863,40 @@ onUnmounted(() => {
       <div
         class="browser__content"
         :class="{
-          'browser__content--with-favorites': showFavorites,
+          'browser__content--with-sidebar': accounts.length > 0,
           'browser__content--favorites-transition-ready': favoritesTransitionReady,
         }"
       >
-        <div v-if="isAdmin" class="browser__favorites-slot">
-          <div class="browser__favorites-panel" :class="{ 'is-open': showFavorites }">
-            <FavoritesSidebar
-              :items="favorites"
-              :current-crumb-ids="currentCrumbIds"
-              :current-folder-favorited="currentFolderFavorited"
-              :drag-active="dragMove.active"
-              :active-drop-target-id="dragMove.targetId"
-              :can-drop-on-favorite="canDropOnFavorite"
-              @add-current="openFavoriteNameModal"
-              @open="store.openFavorite"
-              @rename="openFavoriteRenameModal"
-              @remove="store.removeFavorite"
-              @move="store.moveFavorite"
-              @drag-enter="handleFavoriteDragEnter"
-              @drag-leave="handleFavoriteDragLeave"
-              @drop="handleFavoriteDrop"
+        <div class="browser__sidebar-slot">
+          <div class="browser__sidebar-panel">
+            <DriveSidebar
+              v-if="accounts.length > 0"
+              :accounts="accounts"
+              :model-value="currentAccountId"
+              @update:model-value="store.selectAccount"
             />
+            <div
+              v-if="isAdmin"
+              class="browser__favorites-section"
+              :class="{ 'is-open': showFavorites }"
+            >
+              <FavoritesSidebar
+                :items="favorites"
+                :current-crumb-ids="currentCrumbIds"
+                :current-folder-favorited="currentFolderFavorited"
+                :drag-active="dragMove.active"
+                :active-drop-target-id="dragMove.targetId"
+                :can-drop-on-favorite="canDropOnFavorite"
+                @add-current="openFavoriteNameModal"
+                @open="store.openFavorite"
+                @rename="openFavoriteRenameModal"
+                @remove="store.removeFavorite"
+                @move="store.moveFavorite"
+                @drag-enter="handleFavoriteDragEnter"
+                @drag-leave="handleFavoriteDragLeave"
+                @drop="handleFavoriteDrop"
+              />
+            </div>
           </div>
         </div>
 
@@ -1074,11 +1050,6 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-soft);
 }
-.browser__divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border);
-}
 .browser__frame {
   position: relative;
   background: var(--surface);
@@ -1091,41 +1062,42 @@ onUnmounted(() => {
   grid-template-columns: 0 minmax(0, 1fr);
   gap: 0;
 }
-.browser__content--with-favorites {
+.browser__content--with-sidebar {
   grid-template-columns: 168px minmax(0, 1fr);
 }
 .browser__content--favorites-transition-ready {
   transition: grid-template-columns 0.22s ease;
 }
-.browser__favorites-slot {
+.browser__sidebar-slot {
   min-width: 0;
   overflow: hidden;
 }
-.browser__content--with-favorites .browser__favorites-slot {
+.browser__content--with-sidebar .browser__sidebar-slot {
   border-right: 1px solid var(--border-soft);
 }
-.browser__favorites-slot :deep(.favorites-sidebar) {
-  height: 100%;
-  border-right: none;
-}
-.browser__favorites-panel {
+.browser__sidebar-panel {
   width: 168px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+.browser__favorites-section {
+  flex: 0 1 auto;
+  min-height: 0;
   height: 0;
   overflow: hidden;
   opacity: 0;
-  transform: translateX(-14px);
-  pointer-events: none;
 }
-.browser__content--favorites-transition-ready .browser__favorites-panel {
-  transition:
-    opacity 0.18s ease,
-    transform 0.22s ease;
-}
-.browser__favorites-panel.is-open {
-  height: 100%;
+.browser__favorites-section.is-open {
+  flex: 1 1 0;
+  min-height: 0;
+  height: auto;
   opacity: 1;
-  transform: translateX(0);
-  pointer-events: auto;
+}
+.browser__favorites-section :deep(.favorites-sidebar) {
+  height: 100%;
+  border-right: none;
 }
 .browser__main {
   min-width: 0;
@@ -1197,32 +1169,10 @@ onUnmounted(() => {
     padding: 12px 0;
   }
 
-  .browser--floating-accounts {
-    padding-bottom: 74px;
-  }
-
   .browser__nav {
     align-items: stretch;
     gap: 10px;
     padding: 12px;
-  }
-
-  .browser__nav :deep(.account-selector) {
-    width: 100%;
-  }
-
-  .browser__nav :deep(.account-selector__control) {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .browser__nav :deep(.select),
-  .browser__nav :deep(.select__trigger) {
-    width: 100%;
-  }
-
-  .browser__divider {
-    display: none;
   }
 
   .browser__nav :deep(.breadcrumb) {
@@ -1230,37 +1180,35 @@ onUnmounted(() => {
     min-width: 0;
   }
 
-  .browser__content--with-favorites {
+  .browser__content--with-sidebar {
     grid-template-columns: 1fr;
   }
 
-  .browser__content--with-favorites .browser__favorites-slot {
+  .browser__content--with-sidebar .browser__sidebar-slot {
     border-right: none;
+    border-bottom: 1px solid var(--border-soft);
   }
 
-  .browser__favorites-slot {
+  .browser__sidebar-slot {
     max-height: 0;
     opacity: 0;
   }
 
-  .browser__content--favorites-transition-ready .browser__favorites-slot {
+  .browser__content--favorites-transition-ready .browser__sidebar-slot {
     transition:
       max-height 0.22s ease,
       opacity 0.18s ease;
   }
 
-  .browser__content--with-favorites .browser__favorites-slot {
+  .browser__content--with-sidebar .browser__sidebar-slot {
     max-height: 360px;
     opacity: 1;
   }
 
-  .browser__favorites-panel {
+  .browser__sidebar-panel {
     width: 100%;
-    transform: translateY(-8px);
-  }
-
-  .browser__favorites-panel.is-open {
-    transform: translateY(0);
+    max-height: 360px;
+    overflow-y: auto;
   }
 }
 

@@ -95,14 +95,12 @@ const securityOriginal = reactive({
 });
 const homepageForm = reactive({
   public_index_enabled: true,
-  index_account_switch_mode: "dropdown" as "dropdown" | "floating",
   admin_home_return_mode: "top_icon" as "sidebar" | "top_icon",
   header_effects_enabled: true,
   index_strm_auto_detect_enabled: true,
 });
 const homepageOriginal = reactive({
   public_index_enabled: true,
-  index_account_switch_mode: "dropdown" as "dropdown" | "floating",
   admin_home_return_mode: "top_icon" as "sidebar" | "top_icon",
   header_effects_enabled: true,
   index_strm_auto_detect_enabled: true,
@@ -141,7 +139,6 @@ const securityDirty = computed(
 const homepageDirty = computed(
   () =>
     homepageForm.public_index_enabled !== homepageOriginal.public_index_enabled ||
-    homepageForm.index_account_switch_mode !== homepageOriginal.index_account_switch_mode ||
     homepageForm.admin_home_return_mode !== homepageOriginal.admin_home_return_mode ||
     homepageForm.header_effects_enabled !== homepageOriginal.header_effects_enabled ||
     homepageForm.index_strm_auto_detect_enabled !== homepageOriginal.index_strm_auto_detect_enabled ||
@@ -250,7 +247,6 @@ function applySystemConfig(config: {
   admin_username: string;
   session_timeout: number;
   public_index_enabled: boolean;
-  index_account_switch_mode?: string;
   admin_home_return_mode?: string;
   header_effects_enabled?: boolean;
   index_strm_auto_detect_enabled?: boolean;
@@ -261,9 +257,6 @@ function applySystemConfig(config: {
   securityOriginal.session_timeout = securityForm.session_timeout;
   homepageForm.public_index_enabled = config.public_index_enabled ?? true;
   homepageOriginal.public_index_enabled = homepageForm.public_index_enabled;
-  const mode = config.index_account_switch_mode === "floating" ? "floating" : "dropdown";
-  homepageForm.index_account_switch_mode = mode;
-  homepageOriginal.index_account_switch_mode = mode;
   const homeReturn = config.admin_home_return_mode === "sidebar" ? "sidebar" : "top_icon";
   homepageForm.admin_home_return_mode = homeReturn;
   homepageOriginal.admin_home_return_mode = homeReturn;
@@ -360,7 +353,6 @@ async function saveHomepage() {
     await updateCredentials({
       admin_username: securityForm.admin_username.trim(),
       public_index_enabled: homepageForm.public_index_enabled,
-      index_account_switch_mode: homepageForm.index_account_switch_mode,
       admin_home_return_mode: homepageForm.admin_home_return_mode,
       header_effects_enabled: homepageForm.header_effects_enabled,
       index_strm_auto_detect_enabled: homepageForm.index_strm_auto_detect_enabled,
@@ -580,27 +572,6 @@ async function submit() {
               label="主题风格"
               :options="SKIN_OPTIONS.map((opt) => ({ value: opt.id, label: opt.label }))"
               @update:model-value="changeSkin($event as SkinPref)"
-            />
-          </template>
-        </SettingsRow>
-
-        <SettingsRow
-          :show-changed-badge="true"
-          :changed="homepageForm.index_account_switch_mode !== homepageOriginal.index_account_switch_mode"
-        >
-          <template #info>
-            <div class="settings-row__label">
-              <span>账号切换方式</span>
-            </div>
-          </template>
-          <template #control>
-            <SettingsSegment
-              v-model="homepageForm.index_account_switch_mode"
-              label="账号切换方式"
-              :options="[
-                { value: 'dropdown', label: '顶栏切换' },
-                { value: 'floating', label: '悬浮切换' },
-              ]"
             />
           </template>
         </SettingsRow>
