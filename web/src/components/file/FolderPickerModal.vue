@@ -144,9 +144,10 @@ async function loadFavorites(accountId: number | null) {
   }
   favoritesLoading.value = true;
   try {
-    const data = await filesApi.getFavorites(accountId);
+    // 全局收藏夹：加载后按当前选中账号过滤
+    const data = await filesApi.getFavorites();
     if (requestSeq !== favoritesSeq || !props.open || selAccount.value !== accountId) return;
-    favorites.value = data.items;
+    favorites.value = data.items.filter((it) => it.account_id === accountId);
   } catch {
     if (requestSeq !== favoritesSeq || !props.open || selAccount.value !== accountId) return;
     favorites.value = [];

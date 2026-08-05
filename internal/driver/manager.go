@@ -107,6 +107,12 @@ func (m *Manager) buildDriver(ctx context.Context, accountID int64, acc *domain.
 	if c, ok := drv.(RequestIntervalConsumer); ok {
 		c.SetRequestIntervalGate(m.delays.Gate(accountID))
 	}
+	if c, ok := drv.(AccountResolverConsumer); ok {
+		c.SetAccountResolver(AccountRefResolver{
+			ByName: m.resolveAccountByName,
+			ByID:   m.resolveAccountByID,
+		})
+	}
 	m.injectAuth(ctx, accountID, drv)
 	if err := drv.Init(ctx); err != nil {
 		_ = drv.Drop(ctx)
@@ -135,6 +141,35 @@ func (m *Manager) oauthServerURL(ctx context.Context) string {
 		}
 	}
 	return domain.NormalizeOAuthServerURL("")
+}
+
+// resolveAccountByID 按账号 ID 获取驱动实例。
+func (m *Manager) resolveAccountByID(ctx context.Context, accountID int64) (Driver, error) {
+	return m.Get(ctx, accountID)
+}
+
+// resolveAccountByName 按账号名（大小写不敏感）解析另一个账号的驱动实例，供 alias 等聚合驱动使用。
+func (m *Manager) resolveAccountByName(ctx context.Context, name string) (int64, Driver, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return 0, nil, domain.Errorf(domain.CodeValidation, "别名目标账号名为空")
+	}
+	accounts, err := m.repo.List(ctx)
+	if err != nil {
+		return 0, nil, err
+	}
+	lower := strings.ToLower(name)
+	for _, a := range accounts {
+		if !a.IsActive || strings.ToLower(strings.TrimSpace(a.Name)) != lower {
+			continue
+		}
+		drv, err := m.Get(ctx, a.ID)
+		if err != nil {
+			return 0, nil, err
+		}
+		return a.ID, drv, nil
+	}
+	return 0, nil, domain.Errorf(domain.CodeNotFound, "找不到别名目标账号：%s", name)
 }
 
 func (m *Manager) injectAuth(ctx context.Context, accountID int64, drv Driver) {

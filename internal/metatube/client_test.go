@@ -43,6 +43,9 @@ func TestSearchItemToTMDBShapeUsesNumberAsMatchKey(t *testing.T) {
 	if out["_metatube_id"] != "ssis00123" || out["_metatube_provider"] != "JAV321" {
 		t.Fatalf("provider/id 翻译错误：%v", out)
 	}
+	if out["title"] != "SSIS-123 無自覚なフリして" {
+		t.Fatalf("搜索命中标题应带番号前缀，got %v", out["title"])
+	}
 	if out["poster_path"] != "https://example.com/t.jpg" {
 		t.Fatalf("搜索命中 poster_path 应为缩略图 URL，got %v", out["poster_path"])
 	}
@@ -72,6 +75,9 @@ func TestDetailToTMDBShapeMergesRichFields(t *testing.T) {
 	})
 	if out["overview"] != "这是一个简介" {
 		t.Fatalf("overview 未合并，got %v", out["overview"])
+	}
+	if out["title"] != "SSIS-123 無自覚なフリして誘惑" {
+		t.Fatalf("详情标题应带番号前缀，got %v", out["title"])
 	}
 	if out["poster_path"] != "JAV321/ssis00123" {
 		t.Fatalf("详情 poster_path 应为 provider/id 供图片端点下载，got %v", out["poster_path"])

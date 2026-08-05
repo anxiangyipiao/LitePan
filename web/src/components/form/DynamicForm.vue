@@ -93,6 +93,15 @@ function fieldString(name: string): string {
           @browse="openBrowse(f.name)"
         />
 
+        <textarea
+          v-else-if="f.type === 'textarea'"
+          class="dyn-form__textarea"
+          rows="5"
+          :value="(modelValue[f.name] as string) ?? ''"
+          :placeholder="f.default ? `默认：${f.default}` : ''"
+          @input="(e) => setField(f.name, (e.target as HTMLTextAreaElement).value)"
+        />
+
         <AppInput
           v-else
           :type="f.type === 'password' ? 'password' : f.type === 'number' ? 'number' : 'text'"
@@ -134,6 +143,25 @@ function fieldString(name: string): string {
   .dyn-form__row-half {
     grid-template-columns: 1fr;
   }
+}
+
+.dyn-form__textarea {
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.55;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.dyn-form__textarea:focus {
+  outline: none;
+  border-color: var(--brand);
 }
 
 .switch {

@@ -20,20 +20,38 @@ type Crumb struct {
 	Name string `json:"name"`
 }
 
+// Item 一条收藏。收藏夹全局共享（跨账号一份列表），AccountID 记录该收藏所属的存储盘。
 type Item struct {
-	ID     string  `json:"id"`
-	Name   string  `json:"name"`
-	Crumbs []Crumb `json:"crumbs"`
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	AccountID int64   `json:"account_id"`
+	Crumbs    []Crumb `json:"crumbs"`
 }
 
-type AccountState struct {
+// State 全局收藏夹状态。
+type State struct {
 	Open  bool   `json:"open"`
 	Items []Item `json:"items"`
 }
 
+// snapshot 落盘结构。Version 2 为全局收藏；旧版（Version 1）为按账号结构，读取时迁移。
 type snapshot struct {
+	Version int    `json:"version"`
+	Open    bool   `json:"open"`
+	Items   []Item `json:"items"`
+}
+
+// rawSnapshot 兼容新老两种格式解析。
+type rawSnapshot struct {
 	Version  int                     `json:"version"`
-	Accounts map[string]AccountState `json:"accounts"`
+	Open     bool                    `json:"open"`
+	Items    []Item                  `json:"items"`
+	Accounts map[string]accountState `json:"accounts"`
+}
+
+type accountState struct {
+	Open  bool   `json:"open"`
+	Items []Item `json:"items"`
 }
 
 type Service struct {
@@ -52,35 +70,36 @@ func NewService(dbPath string, log *slog.Logger) *Service {
 	}
 }
 
-func (s *Service) Get(ctx context.Context, accountID int64) (AccountState, error) {
+func (s *Service) Get(ctx context.Context) (State, error) {
 	_ = ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	data, err := s.readUnlocked()
 	if err != nil {
-		return AccountState{}, err
+		return State{}, err
 	}
-	return cloneAccountState(data.Accounts[accountKey(accountID)]), nil
+	return cloneState(stateOf(data)), nil
 }
 
-func (s *Service) Put(ctx context.Context, accountID int64, state AccountState) (AccountState, error) {
+func (s *Service) Put(ctx context.Context, state State) (State, error) {
 	_ = ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	data, err := s.readUnlocked()
 	if err != nil {
-		return AccountState{}, err
+		return State{}, err
 	}
-	clean := sanitizeAccountState(state)
-	data.Accounts[accountKey(accountID)] = clean
+	clean := sanitizeState(state)
+	data.Open = clean.Open
+	data.Items = clean.Items
 	if err := s.writeUnlocked(data); err != nil {
-		return AccountState{}, err
+		return State{}, err
 	}
-	return cloneAccountState(clean), nil
+	return cloneState(clean), nil
 }
 
-// Delete 删除指定账号的全部收藏；账号无收藏时不改写文件。
+// Delete 移除指定账号的全部收藏（账号删除时清理）；该账号无收藏时不改写文件。
 func (s *Service) Delete(ctx context.Context, accountID int64) error {
 	_ = ctx
 	s.mu.Lock()
@@ -90,43 +109,77 @@ func (s *Service) Delete(ctx context.Context, accountID int64) error {
 	if err != nil {
 		return err
 	}
-	key := accountKey(accountID)
-	if _, ok := data.Accounts[key]; !ok {
+	filtered := make([]Item, 0, len(data.Items))
+	for _, item := range data.Items {
+		if item.AccountID != accountID {
+			filtered = append(filtered, item)
+		}
+	}
+	if len(filtered) == len(data.Items) {
 		return nil
 	}
-	delete(data.Accounts, key)
+	data.Items = filtered
 	return s.writeUnlocked(data)
+}
+
+func stateOf(data snapshot) State {
+	return State{Open: data.Open, Items: data.Items}
 }
 
 func (s *Service) readUnlocked() (snapshot, error) {
 	raw, err := os.ReadFile(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return snapshot{Version: 1, Accounts: map[string]AccountState{}}, nil
+			return snapshot{Version: 2, Open: true}, nil
 		}
 		return snapshot{}, fmt.Errorf("read favorites file: %w", err)
 	}
 
-	var data snapshot
-	if err := json.Unmarshal(raw, &data); err != nil {
-		backupPath, moveErr := s.moveCorruptedFileUnlocked()
-		if moveErr != nil {
-			s.log.Error("收藏夹文件解析失败，转移损坏文件失败", "path", s.path, "err", err, "move_err", moveErr)
-			return snapshot{}, fmt.Errorf("favorites file corrupted: %w; move corrupted file: %v", err, moveErr)
+	var rawData rawSnapshot
+	if err := json.Unmarshal(raw, &rawData); err != nil {
+		return s.handleCorruptedUnlocked()
+	}
+
+	data := snapshot{Version: 2, Open: rawData.Open, Items: rawData.Items}
+	if len(rawData.Accounts) > 0 {
+		// 旧版按账号结构 → 迁移为全局收藏（每条带所属账号）
+		data = migrateLegacy(rawData.Accounts)
+		if writeErr := s.writeUnlocked(data); writeErr != nil {
+			s.log.Warn("收藏夹旧格式迁移落盘失败", "err", writeErr)
 		}
-		s.log.Error("收藏夹文件解析失败，已转移损坏文件", "path", s.path, "backup", backupPath, "err", err)
-		return snapshot{}, fmt.Errorf("收藏夹文件已损坏，已转移到 %s，请检查或手动恢复", backupPath)
 	}
-	if data.Version <= 0 {
-		data.Version = 1
-	}
-	if data.Accounts == nil {
-		data.Accounts = map[string]AccountState{}
-	}
-	for key, state := range data.Accounts {
-		data.Accounts[key] = sanitizeAccountState(state)
-	}
+	data.Items = sanitizeItems(data.Items)
 	return data, nil
+}
+
+func (s *Service) handleCorruptedUnlocked() (snapshot, error) {
+	backupPath, moveErr := s.moveCorruptedFileUnlocked()
+	if moveErr != nil {
+		s.log.Error("收藏夹文件解析失败，转移损坏文件失败", "path", s.path, "move_err", moveErr)
+		return snapshot{}, fmt.Errorf("favorites file corrupted")
+	}
+	s.log.Error("收藏夹文件解析失败，已转移损坏文件", "path", s.path, "backup", backupPath)
+	return snapshot{}, fmt.Errorf("收藏夹文件已损坏，已转移到 %s，请检查或手动恢复", backupPath)
+}
+
+// migrateLegacy 把旧版按账号收藏合并为全局收藏：每条记录所属账号，open 取任一账号展开。
+func migrateLegacy(accounts map[string]accountState) snapshot {
+	out := snapshot{Version: 2, Open: true}
+	var items []Item
+	for key, state := range accounts {
+		if state.Open {
+			out.Open = true
+		}
+		accountID, _ := strconv.ParseInt(key, 10, 64)
+		for _, item := range state.Items {
+			if item.AccountID == 0 {
+				item.AccountID = accountID
+			}
+			items = append(items, item)
+		}
+	}
+	out.Items = sanitizeItems(items)
+	return out
 }
 
 func (s *Service) moveCorruptedFileUnlocked() (string, error) {
@@ -148,10 +201,7 @@ func (s *Service) writeUnlocked(data snapshot) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return fmt.Errorf("create favorites dir: %w", err)
 	}
-	data.Version = 1
-	if data.Accounts == nil {
-		data.Accounts = map[string]AccountState{}
-	}
+	data.Version = 2
 	body, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal favorites: %w", err)
@@ -166,19 +216,23 @@ func (s *Service) writeUnlocked(data snapshot) error {
 	return nil
 }
 
-func sanitizeAccountState(state AccountState) AccountState {
-	out := AccountState{
-		Open:  state.Open,
-		Items: make([]Item, 0, len(state.Items)),
-	}
-	seen := make(map[string]struct{}, len(state.Items))
-	for _, item := range state.Items {
+// sanitizeState 校验并规范化收藏夹状态，返回新的 State。
+func sanitizeState(state State) State {
+	return State{Open: state.Open, Items: sanitizeItems(state.Items)}
+}
+
+// sanitizeItems 校验单条收藏：ID/名称/所属账号必须有效，crumbs 非空，按 账号+ID 去重。
+func sanitizeItems(items []Item) []Item {
+	out := make([]Item, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
 		id := strings.TrimSpace(item.ID)
 		name := strings.TrimSpace(item.Name)
-		if id == "" || name == "" {
+		if id == "" || name == "" || item.AccountID <= 0 {
 			continue
 		}
-		if _, ok := seen[id]; ok {
+		key := strconv.FormatInt(item.AccountID, 10) + ":" + id
+		if _, ok := seen[key]; ok {
 			continue
 		}
 		crumbs := make([]Crumb, 0, len(item.Crumbs))
@@ -195,33 +249,31 @@ func sanitizeAccountState(state AccountState) AccountState {
 		if len(crumbs) == 0 {
 			continue
 		}
-		out.Items = append(out.Items, Item{
-			ID:     id,
-			Name:   name,
-			Crumbs: crumbs,
+		out = append(out, Item{
+			ID:        id,
+			Name:      name,
+			AccountID: item.AccountID,
+			Crumbs:    crumbs,
 		})
-		seen[id] = struct{}{}
+		seen[key] = struct{}{}
 	}
 	return out
 }
 
-func cloneAccountState(state AccountState) AccountState {
-	out := AccountState{
+func cloneState(state State) State {
+	out := State{
 		Open:  state.Open,
 		Items: make([]Item, 0, len(state.Items)),
 	}
 	for _, item := range state.Items {
 		cloned := Item{
-			ID:     item.ID,
-			Name:   item.Name,
-			Crumbs: make([]Crumb, len(item.Crumbs)),
+			ID:        item.ID,
+			Name:      item.Name,
+			AccountID: item.AccountID,
+			Crumbs:    make([]Crumb, len(item.Crumbs)),
 		}
 		copy(cloned.Crumbs, item.Crumbs)
 		out.Items = append(out.Items, cloned)
 	}
 	return out
-}
-
-func accountKey(accountID int64) string {
-	return strconv.FormatInt(accountID, 10)
 }

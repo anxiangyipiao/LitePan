@@ -299,8 +299,8 @@ func buildItemListWhere(query ItemListQuery) (string, []any) {
 	args := make([]any, 0, 8)
 	if query.Keyword != "" {
 		kw := "%" + strings.ToLower(query.Keyword) + "%"
-		clauses = append(clauses, `(LOWER(title) LIKE ? OR LOWER(folder_name) LIKE ? OR LOWER(strm_name) LIKE ?)`)
-		args = append(args, kw, kw, kw)
+		clauses = append(clauses, `(LOWER(title) LIKE ? OR LOWER(folder_name) LIKE ? OR LOWER(strm_name) LIKE ? OR LOWER(tmdb_id) LIKE ?)`)
+		args = append(args, kw, kw, kw, kw)
 	}
 	if query.Status != "" {
 		clauses = append(clauses, `status = ?`)

@@ -352,7 +352,8 @@ func dedupeSearchItems(items []map[string]any) []map[string]any {
 }
 
 // searchItemToTMDBShape 把搜索命中翻译成 TMDB 兼容形状。
-// id=番号、original_title=番号（保证番号查询能被标题匹配逻辑命中）、poster_path=缩略图 URL（前端可直接渲染）。
+// id=番号、original_title=番号（保证番号查询能被标题匹配逻辑命中）、
+// title=「番号 标题」（海报墙/搜索结果都能看到番号，按番号可检索）、poster_path=缩略图 URL（前端可直接渲染）。
 func searchItemToTMDBShape(item map[string]any) map[string]any {
 	number := strings.TrimSpace(anyString(item["number"]))
 	if number == "" {
@@ -364,7 +365,7 @@ func searchItemToTMDBShape(item map[string]any) map[string]any {
 	}
 	out := map[string]any{
 		"id":              number,
-		"title":           strings.TrimSpace(anyString(item["title"])),
+		"title":           javDisplayTitle(number, strings.TrimSpace(anyString(item["title"]))),
 		"original_title":  number,
 		"release_date":    strings.TrimSpace(anyString(item["release_date"])),
 		"poster_path":     strings.TrimSpace(anyString(item["thumb_url"])),
@@ -411,7 +412,7 @@ func detailToTMDBShape(hit map[string]any, detail map[string]any) map[string]any
 		out["poster_path"] = provider + "/" + metaID
 	}
 	if t := strings.TrimSpace(anyString(detail["title"])); t != "" {
-		out["title"] = t
+		out["title"] = javDisplayTitle(number, t)
 	}
 	if s := strings.TrimSpace(anyString(detail["summary"])); s != "" {
 		out["overview"] = s
@@ -435,6 +436,22 @@ func detailToTMDBShape(hit map[string]any, detail map[string]any) map[string]any
 		out["runtime"] = n
 	}
 	return out
+}
+
+// javDisplayTitle 把 JAV 标题统一成「番号 标题」：海报墙/搜索结果都能看到番号，且按番号可检索。
+func javDisplayTitle(number, title string) string {
+	number = strings.TrimSpace(number)
+	title = strings.TrimSpace(title)
+	if number == "" {
+		return title
+	}
+	if title == "" {
+		return number
+	}
+	if strings.HasPrefix(strings.ToLower(title), strings.ToLower(number)) {
+		return title
+	}
+	return number + " " + title
 }
 
 func isRetryableHTTPStatus(status int) bool {

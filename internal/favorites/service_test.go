@@ -2,6 +2,7 @@ package favorites
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"os"
@@ -10,44 +11,61 @@ import (
 	"testing"
 )
 
-func TestDeleteRemovesOnlyTargetAccount(t *testing.T) {
+func TestPutGetRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 	svc := newTestFavoritesService(dir)
 	ctx := context.Background()
-	for _, accountID := range []int64{11, 22} {
-		if _, err := svc.Put(ctx, accountID, AccountState{
-			Open: true,
-			Items: []Item{{
-				ID:   "folder",
-				Name: "收藏目录",
-				Crumbs: []Crumb{{
-					ID:   "root",
-					Name: "根目录",
-				}},
-			}},
-		}); err != nil {
-			t.Fatalf("保存账号 %d 收藏失败: %v", accountID, err)
-		}
+	state := State{
+		Open: true,
+		Items: []Item{{
+			ID:        "folder",
+			Name:      "收藏目录",
+			AccountID: 11,
+			Crumbs:    []Crumb{{ID: "root", Name: "根目录"}},
+		}},
+	}
+	saved, err := svc.Put(ctx, state)
+	if err != nil {
+		t.Fatalf("保存收藏失败: %v", err)
+	}
+	if !saved.Open || len(saved.Items) != 1 || saved.Items[0].AccountID != 11 {
+		t.Fatalf("保存结果异常: %#v", saved)
+	}
+
+	got, err := svc.Get(ctx)
+	if err != nil {
+		t.Fatalf("读取收藏失败: %v", err)
+	}
+	if !got.Open || len(got.Items) != 1 || got.Items[0].Name != "收藏目录" {
+		t.Fatalf("读取结果异常: %#v", got)
+	}
+}
+
+func TestDeleteRemovesTargetAccount(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	svc := newTestFavoritesService(dir)
+	ctx := context.Background()
+	mk := func(id string, accountID int64) Item {
+		return Item{ID: id, Name: id + "收藏", AccountID: accountID,
+			Crumbs: []Crumb{{ID: "root", Name: "根目录"}}}
+	}
+	if _, err := svc.Put(ctx, State{Open: true, Items: []Item{mk("a", 11), mk("b", 22)}}); err != nil {
+		t.Fatalf("保存收藏失败: %v", err)
 	}
 
 	if err := svc.Delete(ctx, 11); err != nil {
 		t.Fatalf("删除账号收藏失败: %v", err)
 	}
-	deleted, err := svc.Get(ctx, 11)
+	got, err := svc.Get(ctx)
 	if err != nil {
-		t.Fatalf("读取已删除账号收藏失败: %v", err)
+		t.Fatalf("读取收藏失败: %v", err)
 	}
-	if deleted.Open || len(deleted.Items) != 0 {
-		t.Fatalf("目标账号收藏未清空: %#v", deleted)
-	}
-	kept, err := svc.Get(ctx, 22)
-	if err != nil {
-		t.Fatalf("读取其他账号收藏失败: %v", err)
-	}
-	if !kept.Open || len(kept.Items) != 1 || kept.Items[0].Name != "收藏目录" {
-		t.Fatalf("其他账号收藏被误改: %#v", kept)
+	if len(got.Items) != 1 || got.Items[0].AccountID != 22 {
+		t.Fatalf("删除账号 11 后应只剩账号 22 的收藏: %#v", got.Items)
 	}
 }
 
@@ -57,8 +75,11 @@ func TestDeleteMissingAccountDoesNotRewriteFile(t *testing.T) {
 	dir := t.TempDir()
 	svc := newTestFavoritesService(dir)
 	ctx := context.Background()
-	if _, err := svc.Put(ctx, 11, AccountState{Open: true}); err != nil {
-		t.Fatalf("保存收藏状态失败: %v", err)
+	if _, err := svc.Put(ctx, State{Open: true, Items: []Item{{
+		ID: "a", Name: "收藏", AccountID: 11,
+		Crumbs: []Crumb{{ID: "root", Name: "根目录"}},
+	}}}); err != nil {
+		t.Fatalf("保存收藏失败: %v", err)
 	}
 	path := filepath.Join(dir, fileName)
 	before, err := os.Stat(path)
@@ -67,7 +88,7 @@ func TestDeleteMissingAccountDoesNotRewriteFile(t *testing.T) {
 	}
 
 	if err := svc.Delete(ctx, 999); err != nil {
-		t.Fatalf("删除不存在账号的收藏应幂等成功: %v", err)
+		t.Fatalf("删除无收藏账号应幂等成功: %v", err)
 	}
 	after, err := os.Stat(path)
 	if err != nil {
@@ -87,7 +108,7 @@ func TestGetMovesCorruptedFavoritesFileAndReturnsError(t *testing.T) {
 		t.Fatalf("写入损坏收藏夹文件失败: %v", err)
 	}
 
-	_, err := svc.Get(context.Background(), 1)
+	_, err := svc.Get(context.Background())
 	if err == nil {
 		t.Fatalf("期望返回损坏错误")
 	}
@@ -122,15 +143,11 @@ func TestPutDoesNotSilentlyOverwriteCorruptedFavoritesFile(t *testing.T) {
 		t.Fatalf("写入损坏收藏夹文件失败: %v", err)
 	}
 
-	_, err := svc.Put(context.Background(), 1, AccountState{
+	_, err := svc.Put(context.Background(), State{
 		Open: true,
 		Items: []Item{{
-			ID:   "1",
-			Name: "电影",
-			Crumbs: []Crumb{{
-				ID:   "root",
-				Name: "根目录",
-			}},
+			ID: "1", Name: "电影", AccountID: 11,
+			Crumbs: []Crumb{{ID: "root", Name: "根目录"}},
 		}},
 	})
 	if err == nil {
@@ -145,6 +162,50 @@ func TestPutDoesNotSilentlyOverwriteCorruptedFavoritesFile(t *testing.T) {
 	}
 	if len(matches) != 1 {
 		t.Fatalf("期望保留 1 份损坏备份，实际 %d 个: %#v", len(matches), matches)
+	}
+}
+
+// 旧版按账号收藏格式迁移：合并为全局收藏，每条带上所属账号。
+func TestMigrateLegacyAccountFormat(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	legacy := map[string]accountState{
+		"11": {Open: true, Items: []Item{{ID: "a", Name: "A盘收藏", Crumbs: []Crumb{{ID: "root", Name: "根目录"}}}}},
+		"22": {Open: false, Items: []Item{{ID: "b", Name: "B盘收藏", Crumbs: []Crumb{{ID: "root", Name: "根目录"}}}}},
+	}
+	raw, _ := json.Marshal(map[string]any{"version": 1, "accounts": legacy})
+	if err := os.WriteFile(filepath.Join(dir, fileName), raw, 0o644); err != nil {
+		t.Fatalf("写入旧版收藏文件失败: %v", err)
+	}
+
+	svc := newTestFavoritesService(dir)
+	got, err := svc.Get(context.Background())
+	if err != nil {
+		t.Fatalf("读取迁移后收藏失败: %v", err)
+	}
+	if !got.Open {
+		t.Fatalf("迁移后 open 应为 true")
+	}
+	if len(got.Items) != 2 {
+		t.Fatalf("迁移后应保留 2 条收藏，实际 %d: %#v", len(got.Items), got.Items)
+	}
+	byID := map[string]Item{}
+	for _, it := range got.Items {
+		byID[it.ID] = it
+	}
+	if byID["a"].AccountID != 11 || byID["b"].AccountID != 22 {
+		t.Fatalf("迁移后收藏账号归属错误: %#v", got.Items)
+	}
+
+	// 落盘应为新版全局格式
+	body, _ := os.ReadFile(filepath.Join(dir, fileName))
+	var rawData rawSnapshot
+	if err := json.Unmarshal(body, &rawData); err != nil {
+		t.Fatalf("迁移后文件无法解析: %v", err)
+	}
+	if rawData.Version != 2 || len(rawData.Accounts) != 0 || len(rawData.Items) != 2 {
+		t.Fatalf("迁移后文件格式异常: %#v", rawData)
 	}
 }
 

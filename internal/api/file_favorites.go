@@ -14,9 +14,10 @@ type favoriteCrumbDTO struct {
 }
 
 type favoriteItemDTO struct {
-	ID     string             `json:"id"`
-	Name   string             `json:"name"`
-	Crumbs []favoriteCrumbDTO `json:"crumbs"`
+	ID        string             `json:"id"`
+	Name      string             `json:"name"`
+	AccountID int64              `json:"account_id"`
+	Crumbs    []favoriteCrumbDTO `json:"crumbs"`
 }
 
 type favoritesStateDTO struct {
@@ -25,18 +26,12 @@ type favoritesStateDTO struct {
 }
 
 type saveFavoritesReq struct {
-	AccountID int64             `json:"account_id"`
-	Open      bool              `json:"open"`
-	Items     []favoriteItemDTO `json:"items"`
+	Open  bool              `json:"open"`
+	Items []favoriteItemDTO `json:"items"`
 }
 
 func (h *Handler) getFavorites(w http.ResponseWriter, r *http.Request) {
-	accountID, err := parseQueryInt64(r, "account_id")
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	state, err := h.favorites.Get(r.Context(), accountID)
+	state, err := h.favorites.Get(r.Context())
 	if err != nil {
 		writeErr(w, domain.Errorf(domain.CodeInternal, "读取收藏夹失败"))
 		return
@@ -50,11 +45,7 @@ func (h *Handler) saveFavorites(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	if req.AccountID <= 0 {
-		writeErr(w, domain.Errorf(domain.CodeValidation, "非法 account_id"))
-		return
-	}
-	state, err := h.favorites.Put(r.Context(), req.AccountID, favorites.AccountState{
+	state, err := h.favorites.Put(r.Context(), favorites.State{
 		Open:  req.Open,
 		Items: favoriteItemsFromDTO(req.Items),
 	})
@@ -69,16 +60,17 @@ func (h *Handler) saveFavorites(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func favoriteStateToDTO(state favorites.AccountState) favoritesStateDTO {
+func favoriteStateToDTO(state favorites.State) favoritesStateDTO {
 	out := favoritesStateDTO{
 		Open:  state.Open,
 		Items: make([]favoriteItemDTO, 0, len(state.Items)),
 	}
 	for _, item := range state.Items {
 		dto := favoriteItemDTO{
-			ID:     item.ID,
-			Name:   item.Name,
-			Crumbs: make([]favoriteCrumbDTO, 0, len(item.Crumbs)),
+			ID:        item.ID,
+			Name:      item.Name,
+			AccountID: item.AccountID,
+			Crumbs:    make([]favoriteCrumbDTO, 0, len(item.Crumbs)),
 		}
 		for _, crumb := range item.Crumbs {
 			dto.Crumbs = append(dto.Crumbs, favoriteCrumbDTO{
@@ -100,9 +92,10 @@ func favoriteItemsFromDTO(items []favoriteItemDTO) []favorites.Item {
 			continue
 		}
 		next := favorites.Item{
-			ID:     id,
-			Name:   name,
-			Crumbs: make([]favorites.Crumb, 0, len(item.Crumbs)),
+			ID:        id,
+			Name:      name,
+			AccountID: item.AccountID,
+			Crumbs:    make([]favorites.Crumb, 0, len(item.Crumbs)),
 		}
 		for _, crumb := range item.Crumbs {
 			crumbName := strings.TrimSpace(crumb.Name)

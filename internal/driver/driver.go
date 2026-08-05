@@ -117,6 +117,17 @@ type RequestIntervalConsumer interface {
 	SetRequestIntervalGate(gate RequestIntervalGate)
 }
 
+// AccountRefResolver 按账号名或账号 ID 解析另一个账号的驱动实例（alias 等聚合驱动用）。
+type AccountRefResolver struct {
+	ByName func(ctx context.Context, accountName string) (accountID int64, drv Driver, err error)
+	ByID   func(ctx context.Context, accountID int64) (drv Driver, err error)
+}
+
+// AccountResolverConsumer 可选：接收按账号名/ID 解析其他驱动实例的回调。
+type AccountResolverConsumer interface {
+	SetAccountResolver(r AccountRefResolver)
+}
+
 // Driver 最小契约：元信息 + 列目录；其余能力走可选接口。
 type Driver interface {
 	Meta

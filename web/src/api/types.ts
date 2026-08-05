@@ -18,7 +18,7 @@ export interface FieldOption {
 export interface FieldSchema {
   name: string;
   label: string;
-  type: "string" | "select" | "number" | "bool" | "password" | "local_dir";
+  type: "string" | "select" | "number" | "bool" | "password" | "local_dir" | "textarea";
   required: boolean;
   default?: string;
   options?: FieldOption[];
@@ -162,6 +162,7 @@ export interface BrowserFavoriteCrumb {
 export interface BrowserFavoriteItem {
   id: string;
   name: string;
+  account_id?: number;
   crumbs: BrowserFavoriteCrumb[];
 }
 
@@ -170,6 +171,7 @@ export interface BrowserFavoritesState {
   items: BrowserFavoriteItem[];
 }
 
-export interface BrowserFavoritesPayload extends BrowserFavoritesState {
-  account_id: number;
+export interface BrowserFavoritesPayload {
+  open: boolean;
+  items: BrowserFavoriteItem[];
 }

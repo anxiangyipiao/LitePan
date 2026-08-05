@@ -175,10 +175,7 @@ export const filesApi = {
   renameFile: (payload: FileRenamePayload) =>
     http.put<{ file_id: string; new_name: string }>("/files/rename", payload),
 
-  getFavorites: (accountId: number) =>
-    http.get<BrowserFavoritesState>("/files/favorites", {
-      account_id: accountId,
-    }),
+  getFavorites: () => http.get<BrowserFavoritesState>("/files/favorites"),
 
   saveFavorites: (payload: BrowserFavoritesPayload) =>
     http.put<BrowserFavoritesState>("/files/favorites", payload),

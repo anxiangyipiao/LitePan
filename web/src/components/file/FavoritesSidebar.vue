@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import type { BrowserFavoriteItem } from "@/api/types";
+import type { Account, BrowserFavoriteItem } from "@/api/types";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
 
 const props = defineProps<{
   items: BrowserFavoriteItem[];
+  accounts: Account[];
   currentCrumbIds: string[];
+  currentAccountId: number | null;
   currentFolderFavorited: boolean;
   dragActive?: boolean;
   activeDropTargetId?: string;
@@ -16,14 +18,24 @@ const emit = defineEmits<{
   "add-current": [];
   open: [item: BrowserFavoriteItem];
   rename: [item: BrowserFavoriteItem];
-  remove: [folderId: string];
-  move: [folderId: string, direction: -1 | 1];
+  remove: [item: BrowserFavoriteItem];
+  move: [item: BrowserFavoriteItem, direction: -1 | 1];
   "drag-enter": [item: BrowserFavoriteItem];
   "drag-leave": [item: BrowserFavoriteItem];
   drop: [item: BrowserFavoriteItem];
 }>();
 
 const editing = ref(false);
+
+// 全局收藏跨账号，用 账号+文件夹ID 作为唯一键
+function favoriteKey(item: BrowserFavoriteItem) {
+  return `${item.account_id ?? 0}:${item.id}`;
+}
+
+function accountName(item: BrowserFavoriteItem) {
+  if (item.account_id == null) return "";
+  return props.accounts.find((a) => a.id === item.account_id)?.name || "";
+}
 
 function formatFavoritePath(item: BrowserFavoriteItem) {
   const names = item.crumbs
@@ -33,6 +45,7 @@ function formatFavoritePath(item: BrowserFavoriteItem) {
 }
 
 function isFavoriteActive(item: BrowserFavoriteItem, currentCrumbIds: string[]) {
+  if (item.account_id != null && item.account_id !== props.currentAccountId) return false;
   const favoriteCrumbIds = item.crumbs.map((crumb) => crumb.id);
   return (
     favoriteCrumbIds.length === currentCrumbIds.length &&
@@ -41,7 +54,7 @@ function isFavoriteActive(item: BrowserFavoriteItem, currentCrumbIds: string[]) 
 }
 
 function isDropTarget(item: BrowserFavoriteItem) {
-  return props.activeDropTargetId === item.id;
+  return props.activeDropTargetId === favoriteKey(item);
 }
 
 function canDrop(item: BrowserFavoriteItem) {
@@ -112,7 +125,7 @@ function handleDrop(event: DragEvent, item: BrowserFavoriteItem) {
       <tbody v-if="items.length">
         <tr
           v-for="item in items"
-          :key="item.id"
+          :key="favoriteKey(item)"
           class="favorites-sidebar__row"
           :class="{
             active: isFavoriteActive(item, currentCrumbIds),
@@ -133,7 +146,10 @@ function handleDrop(event: DragEvent, item: BrowserFavoriteItem) {
               @click="!editing && emit('open', item)"
             >
               <span class="favorites-sidebar__label">{{ item.name }}</span>
-              <span v-if="!editing" class="favorites-sidebar__path">{{ formatFavoritePath(item) }}</span>
+              <span v-if="!editing" class="favorites-sidebar__path">
+                <span v-if="accountName(item)" class="favorites-sidebar__account">{{ accountName(item) }}</span>
+                <span>{{ formatFavoritePath(item) }}</span>
+              </span>
               <span v-else class="favorites-sidebar__actions-row">
                 <button
                   type="button"
@@ -149,8 +165,8 @@ function handleDrop(event: DragEvent, item: BrowserFavoriteItem) {
                   class="favorites-sidebar__action favorites-sidebar__action--up"
                   title="上移"
                   aria-label="上移"
-                  :disabled="items[0]?.id === item.id"
-                  @click.stop="emit('move', item.id, -1)"
+                  :disabled="items[0] ? favoriteKey(items[0]) === favoriteKey(item) : true"
+                  @click.stop="emit('move', item, -1)"
                 >
                   <SvgIcon name="chevron-down" :size="12" class-name="favorites-sidebar__action-icon favorites-sidebar__action-icon--up" />
                 </button>
@@ -159,8 +175,8 @@ function handleDrop(event: DragEvent, item: BrowserFavoriteItem) {
                   class="favorites-sidebar__action favorites-sidebar__action--down"
                   title="下移"
                   aria-label="下移"
-                  :disabled="items[items.length - 1]?.id === item.id"
-                  @click.stop="emit('move', item.id, 1)"
+                  :disabled="items[items.length - 1] ? favoriteKey(items[items.length - 1]) === favoriteKey(item) : true"
+                  @click.stop="emit('move', item, 1)"
                 >
                   <SvgIcon name="chevron-down" :size="12" class-name="favorites-sidebar__action-icon" />
                 </button>
@@ -169,7 +185,7 @@ function handleDrop(event: DragEvent, item: BrowserFavoriteItem) {
                   class="favorites-sidebar__action favorites-sidebar__action--remove"
                   title="移除收藏"
                   aria-label="移除收藏"
-                  @click.stop="emit('remove', item.id)"
+                  @click.stop="emit('remove', item)"
                 />
               </span>
             </component>
@@ -446,6 +462,12 @@ function handleDrop(event: DragEvent, item: BrowserFavoriteItem) {
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.2;
+}
+
+.favorites-sidebar__account {
+  color: var(--brand);
+  font-weight: 600;
+  margin-right: 6px;
 }
 
 .favorites-sidebar__actions-row {

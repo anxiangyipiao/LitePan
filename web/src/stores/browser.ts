@@ -36,12 +36,10 @@ export const useBrowserStore = defineStore("browser", () => {
   const cacheRate = ref("-");
   const favorites = ref<BrowserFavoriteItem[]>([]);
   const favoritesOpen = ref(false);
-  const favoritesAccountId = ref<number | null>(null);
-  // 会话内是否已加载过一次收藏夹：首次加载恢复历史开合状态，之后切换账号保留当前状态
+  // 会话内是否已加载过一次全局收藏夹：首次加载恢复历史开合状态
   let favoritesLoadedOnce = false;
   let loadFilesSeq = 0;
   let refreshFilesSeq = 0;
-  let favoritesStateSeq = 0;
   let favoritesSaveChain = Promise.resolve();
 
   const accounts = computed(() => accountsStore.accounts.filter((a) => a.is_active));
@@ -50,21 +48,9 @@ export const useBrowserStore = defineStore("browser", () => {
   );
   const currentParentId = computed(() => breadcrumb.value[breadcrumb.value.length - 1]?.id ?? "");
 
-  function clearFavoritesState() {
-    favorites.value = [];
-    // favoritesOpen 是会话级偏好：切换存储盘时保留，避免收藏夹被收起
-    favoritesAccountId.value = null;
-  }
-
   function setCurrentAccount(accountId: number | null) {
     if (currentAccountId.value === accountId) return;
     currentAccountId.value = accountId;
-    favoritesStateSeq += 1;
-    clearFavoritesState();
-  }
-
-  function isCurrentFavoritesOperation(operationSeq: number, accountId: number) {
-    return operationSeq === favoritesStateSeq && currentAccountId.value === accountId;
   }
 
   function enqueueFavoritesSave(payload: Parameters<typeof filesApi.saveFavorites>[0]) {
@@ -73,26 +59,17 @@ export const useBrowserStore = defineStore("browser", () => {
     return request;
   }
 
-  async function loadFavorites(accountId = currentAccountId.value, opts?: { silent?: boolean }) {
-    if (accountId == null) {
-      favoritesStateSeq += 1;
-      clearFavoritesState();
-      return;
-    }
-    const operationSeq = ++favoritesStateSeq;
+  // 全局收藏夹：启动时加载一次，切换存储盘不再重新加载（各账号共享同一份列表）
+  async function loadFavorites(opts?: { silent?: boolean }) {
     try {
-      const data = await filesApi.getFavorites(accountId);
-      if (!isCurrentFavoritesOperation(operationSeq, accountId)) return;
+      const data = await filesApi.getFavorites();
       favorites.value = data.items;
-      // 切换存储盘时不因新盘的历史 open 状态把收藏夹收起，仅首次加载恢复
+      // 首次加载恢复历史开合状态；切换存储盘时保留当前状态
       if (!favoritesLoadedOnce) {
         favoritesOpen.value = data.open;
         favoritesLoadedOnce = true;
       }
-      favoritesAccountId.value = accountId;
     } catch (e) {
-      if (!isCurrentFavoritesOperation(operationSeq, accountId)) return;
-      clearFavoritesState();
       if (!opts?.silent) {
         toast.error(getApiErrorMessage(e, "收藏夹加载失败"));
       }
@@ -100,29 +77,22 @@ export const useBrowserStore = defineStore("browser", () => {
   }
 
   async function persistFavoritesState(nextState: BrowserFavoritesState, opts?: { successMessage?: string; silent?: boolean }) {
-    const accountId = currentAccountId.value;
-    if (accountId == null) return false;
-    const operationSeq = ++favoritesStateSeq;
     const prevItems = favorites.value;
     const prevOpen = favoritesOpen.value;
     favorites.value = nextState.items;
     favoritesOpen.value = nextState.open;
     try {
       const saved = await enqueueFavoritesSave({
-        account_id: accountId,
         open: nextState.open,
         items: nextState.items,
       });
-      if (!isCurrentFavoritesOperation(operationSeq, accountId)) return true;
       favorites.value = saved.items;
       favoritesOpen.value = saved.open;
-      favoritesAccountId.value = accountId;
       if (opts?.successMessage) {
         toast.success(opts.successMessage);
       }
       return true;
     } catch (e) {
-      if (!isCurrentFavoritesOperation(operationSeq, accountId)) return false;
       favorites.value = prevItems;
       favoritesOpen.value = prevOpen;
       if (!opts?.silent) {
@@ -143,12 +113,23 @@ export const useBrowserStore = defineStore("browser", () => {
     await setFavoritesOpen(!favoritesOpen.value);
   }
 
+  // 全局收藏：收藏项跨账号，用 账号+文件夹ID 作为唯一键
+  function favoriteKey(item: Pick<BrowserFavoriteItem, "id" | "account_id">) {
+    return `${item.account_id ?? 0}:${item.id}`;
+  }
+
   async function addCurrentDirectoryFavorite(customName?: string) {
     if (currentParentId.value === "") {
       toast.info("根目录无需加入收藏夹");
       return;
     }
-    if (favorites.value.some((item) => item.id === currentParentId.value)) {
+    const accountId = currentAccountId.value;
+    if (accountId == null) return;
+    if (
+      favorites.value.some(
+        (item) => item.account_id === accountId && item.id === currentParentId.value,
+      )
+    ) {
       toast.info("当前文件夹已在收藏夹中");
       return;
     }
@@ -165,21 +146,24 @@ export const useBrowserStore = defineStore("browser", () => {
         {
           id: currentParentId.value,
           name: nextName,
+          account_id: accountId,
           crumbs: breadcrumb.value.map((item) => ({ id: item.id, name: item.name })),
         },
       ],
     }, { successMessage: "已加入收藏夹" });
   }
 
-  async function removeFavorite(folderId: string) {
+  async function removeFavorite(item: BrowserFavoriteItem) {
+    const key = favoriteKey(item);
     await persistFavoritesState({
       open: favoritesOpen.value,
-      items: favorites.value.filter((item) => item.id !== folderId),
+      items: favorites.value.filter((it) => favoriteKey(it) !== key),
     });
   }
 
-  async function moveFavorite(folderId: string, direction: -1 | 1) {
-    const idx = favorites.value.findIndex((item) => item.id === folderId);
+  async function moveFavorite(item: BrowserFavoriteItem, direction: -1 | 1) {
+    const key = favoriteKey(item);
+    const idx = favorites.value.findIndex((it) => favoriteKey(it) === key);
     if (idx < 0) return;
     const next = idx + direction;
     if (next < 0 || next >= favorites.value.length) return;
@@ -191,24 +175,24 @@ export const useBrowserStore = defineStore("browser", () => {
     }, { silent: true });
   }
 
-  async function renameFavorite(folderId: string, name: string) {
+  async function renameFavorite(item: BrowserFavoriteItem, name: string) {
     const nextName = name.trim();
     if (!nextName) {
       toast.info("收藏名不能为空");
       return;
     }
+    const key = favoriteKey(item);
     await persistFavoritesState({
       open: favoritesOpen.value,
-      items: favorites.value.map((item) =>
-        item.id === folderId ? { ...item, name: nextName } : item,
+      items: favorites.value.map((it) =>
+        favoriteKey(it) === key ? { ...it, name: nextName } : it,
       ),
     }, { successMessage: "收藏名已更新" });
   }
 
   async function openFavorite(favorite: BrowserFavoriteItem) {
-    const accountId = currentAccountId.value;
-    if (accountId == null) return;
-    await openDirectory(accountId, favorite.crumbs, { silent: true });
+    if (favorite.account_id == null) return;
+    await openDirectory(favorite.account_id, favorite.crumbs, { silent: true });
   }
 
   async function ensureValidCurrentAccount() {
@@ -271,7 +255,7 @@ export const useBrowserStore = defineStore("browser", () => {
     }
     setCurrentAccount(id);
     breadcrumb.value = [ROOT];
-    await Promise.all([loadFiles(), loadFavorites(id, { silent: true })]);
+    await loadFiles();
   }
 
   async function openDirectory(
@@ -283,11 +267,7 @@ export const useBrowserStore = defineStore("browser", () => {
       await ensureValidCurrentAccount();
       if (currentAccountId.value === null) return;
     } else {
-      const changedAccount = currentAccountId.value !== accountId;
       setCurrentAccount(accountId);
-      if (changedAccount || favoritesAccountId.value !== accountId) {
-        await loadFavorites(accountId, { silent: true });
-      }
     }
     breadcrumb.value = crumbs.length ? cloneCrumbs(crumbs) : [ROOT];
     await loadFiles(opts);

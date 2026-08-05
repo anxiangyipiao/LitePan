@@ -67,7 +67,7 @@ const favoriteNameModalOpen = ref(false);
 const favoriteNameInput = ref("");
 const favoriteNameInputRef = ref<FocusableInput | null>(null);
 const favoriteNameMode = ref<"create" | "rename">("create");
-const favoriteRenameTargetId = ref("");
+const favoriteRenameTarget = ref<BrowserFavoriteItem | null>(null);
 const browserBootstrapping = ref(true);
 const favoritesTransitionReady = ref(false);
 const nameAlignOpen = ref(false);
@@ -180,8 +180,12 @@ const uploadTaskSuccess = computed(() =>
 );
 const showFavorites = computed(() => isAdmin.value && favoritesOpen.value);
 const currentCrumbIds = computed(() => breadcrumb.value.map((item) => item.id));
-const currentFolderFavorited = computed(() =>
-  favorites.value.some((item) => item.id === currentParentId.value) && currentParentId.value !== "",
+const currentFolderFavorited = computed(
+  () =>
+    favorites.value.some(
+      (item) =>
+        item.account_id === currentAccountId.value && item.id === currentParentId.value,
+    ) && currentParentId.value !== "",
 );
 const currentFolderName = computed(() => breadcrumb.value[breadcrumb.value.length - 1]?.name || "");
 
@@ -245,7 +249,14 @@ function canDropOnFolder(file: FileItem) {
   return file.is_dir && canDropToParent(file.id);
 }
 
+// 全局收藏跨账号，用 账号+文件夹ID 作为拖放目标键
+function favoriteDropKey(item: BrowserFavoriteItem) {
+  return `${item.account_id ?? 0}:${item.id}`;
+}
+
 function canDropOnFavorite(item: BrowserFavoriteItem) {
+  // 仅当前账号的收藏可作为拖放目标，跨盘收藏不接受文件拖入
+  if (item.account_id != null && item.account_id !== currentAccountId.value) return false;
   return canDropToParent(item.id, item.crumbs.map((crumb) => crumb.id));
 }
 
@@ -286,14 +297,14 @@ async function handleFolderDrop(file: FileItem) {
 
 function handleFavoriteDragEnter(item: BrowserFavoriteItem) {
   if (!canDropOnFavorite(item)) {
-    if (dragMove.targetId === item.id) dragMove.targetId = "";
+    if (dragMove.targetId === favoriteDropKey(item)) dragMove.targetId = "";
     return;
   }
-  dragMove.targetId = item.id;
+  dragMove.targetId = favoriteDropKey(item);
 }
 
 function handleFavoriteDragLeave(item: BrowserFavoriteItem) {
-  if (dragMove.targetId === item.id) {
+  if (dragMove.targetId === favoriteDropKey(item)) {
     dragMove.targetId = "";
   }
 }
@@ -520,15 +531,15 @@ function openFavoriteNameModal() {
     return;
   }
   favoriteNameMode.value = "create";
-  favoriteRenameTargetId.value = "";
+  favoriteRenameTarget.value = null;
   favoriteNameInput.value = currentFolderName.value || "当前目录";
   favoriteNameModalOpen.value = true;
   focusFavoriteNameInput();
 }
 
-function openFavoriteRenameModal(item: { id: string; name: string }) {
+function openFavoriteRenameModal(item: BrowserFavoriteItem) {
   favoriteNameMode.value = "rename";
-  favoriteRenameTargetId.value = item.id;
+  favoriteRenameTarget.value = item;
   favoriteNameInput.value = item.name;
   favoriteNameModalOpen.value = true;
   focusFavoriteNameInput();
@@ -537,7 +548,7 @@ function openFavoriteRenameModal(item: { id: string; name: string }) {
 function closeFavoriteNameModal() {
   favoriteNameModalOpen.value = false;
   favoriteNameMode.value = "create";
-  favoriteRenameTargetId.value = "";
+  favoriteRenameTarget.value = null;
 }
 
 async function focusFavoriteNameInput() {
@@ -555,14 +566,14 @@ async function confirmFavoriteName() {
     return;
   }
   if (favoriteNameMode.value === "rename") {
-    if (!favoriteRenameTargetId.value) return;
-    await store.renameFavorite(favoriteRenameTargetId.value, next);
+    if (!favoriteRenameTarget.value) return;
+    await store.renameFavorite(favoriteRenameTarget.value, next);
   } else {
     await store.addCurrentDirectoryFavorite(next);
   }
   favoriteNameModalOpen.value = false;
   favoriteNameMode.value = "create";
-  favoriteRenameTargetId.value = "";
+  favoriteRenameTarget.value = null;
 }
 
 function resetNameAlignState() {
@@ -780,6 +791,8 @@ onMounted(async () => {
       }
     }
   }
+  // 全局收藏夹与账号无关，启动时加载一次即可
+  await store.loadFavorites({ silent: true });
   browserBootstrapping.value = false;
   await nextTick();
   window.requestAnimationFrame(() => {
@@ -868,20 +881,13 @@ onUnmounted(() => {
           'browser__content--favorites-transition-ready': favoritesTransitionReady,
         }"
       >
-        <div class="browser__drives-slot">
-          <DriveSidebar
-            v-if="accounts.length > 0"
-            :accounts="accounts"
-            :model-value="currentAccountId"
-            @update:model-value="store.selectAccount"
-          />
-        </div>
-
         <div class="browser__favorites-slot">
           <FavoritesSidebar
             v-if="isAdmin"
             :items="favorites"
+            :accounts="accounts"
             :current-crumb-ids="currentCrumbIds"
+            :current-account-id="currentAccountId"
             :current-folder-favorited="currentFolderFavorited"
             :drag-active="dragMove.active"
             :active-drop-target-id="dragMove.targetId"
@@ -894,6 +900,15 @@ onUnmounted(() => {
             @drag-enter="handleFavoriteDragEnter"
             @drag-leave="handleFavoriteDragLeave"
             @drop="handleFavoriteDrop"
+          />
+        </div>
+
+        <div class="browser__drives-slot">
+          <DriveSidebar
+            v-if="accounts.length > 0"
+            :accounts="accounts"
+            :model-value="currentAccountId"
+            @update:model-value="store.selectAccount"
           />
         </div>
 
@@ -1059,10 +1074,13 @@ onUnmounted(() => {
   grid-template-columns: 0 0 minmax(0, 1fr);
   gap: 0;
 }
-.browser__content--with-sidebar {
+.browser__content--with-favorites {
   grid-template-columns: 168px 0 minmax(0, 1fr);
 }
-.browser__content--with-sidebar.browser__content--with-favorites {
+.browser__content--with-sidebar {
+  grid-template-columns: 0 168px minmax(0, 1fr);
+}
+.browser__content--with-favorites.browser__content--with-sidebar {
   grid-template-columns: 168px 168px minmax(0, 1fr);
 }
 .browser__content--favorites-transition-ready {
@@ -1073,10 +1091,10 @@ onUnmounted(() => {
   min-width: 0;
   overflow: hidden;
 }
-.browser__content--with-sidebar .browser__drives-slot {
+.browser__content--with-favorites .browser__favorites-slot {
   border-right: 1px solid var(--border-soft);
 }
-.browser__content--with-favorites .browser__favorites-slot {
+.browser__content--with-sidebar .browser__drives-slot {
   border-right: 1px solid var(--border-soft);
 }
 .browser__favorites-slot :deep(.favorites-sidebar) {
@@ -1164,8 +1182,9 @@ onUnmounted(() => {
     min-width: 0;
   }
 
+  .browser__content--with-favorites,
   .browser__content--with-sidebar,
-  .browser__content--with-sidebar.browser__content--with-favorites {
+  .browser__content--with-favorites.browser__content--with-sidebar {
     grid-template-columns: 1fr;
   }
 
