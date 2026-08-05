@@ -80,12 +80,9 @@ func (d *Driver) Init(ctx context.Context) error {
 
 func (d *Driver) Drop(context.Context) error { return nil }
 
-func (d *Driver) Ping(ctx context.Context) error {
-	if d.resolver.ByName == nil || d.resolver.ByID == nil {
-		return domain.Errorf(domain.CodeInternal, "别名驱动未注入账号解析器")
-	}
-	return nil
-}
+// Ping 别名是虚拟驱动，无可连通的真实服务；配置合法性已在 Init 校验。
+// 注意：创建账号的临时实例不会注入账号解析器，这里必须返回 nil，否则添加账号会误报认证失败。
+func (d *Driver) Ping(context.Context) error { return nil }
 
 // ---------- 目录与文件 ----------
 
@@ -426,6 +423,7 @@ func resolvePath(ctx context.Context, drv driver.Driver, segments []string) (str
 	return current, nil
 }
 
+// parseTargets 解析目标列表。目标形如「账号名:路径」或「账号名/路径」（路径可省略=根目录）。
 func parseTargets(raw string) []aliasTarget {
 	var out []aliasTarget
 	for _, part := range strings.Split(raw, ",") {
@@ -433,7 +431,14 @@ func parseTargets(raw string) []aliasTarget {
 		if part == "" {
 			continue
 		}
-		name, pathPart, _ := strings.Cut(part, ":")
+		name, pathPart, hasColon := strings.Cut(part, ":")
+		if !hasColon {
+			// 兼容「账号名/路径」写法（冒号与斜杠都可作账号/路径分隔符）
+			if i := strings.Index(part, "/"); i >= 0 {
+				name = part[:i]
+				pathPart = part[i:]
+			}
+		}
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue

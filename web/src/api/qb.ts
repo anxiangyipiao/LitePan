@@ -35,6 +35,10 @@ export function addQBDownload(input: { urls: string[]; save_path?: string }) {
   return http.post<{ ok: boolean }>("/admin/qb/add", input);
 }
 
+export function addQBFileDownload(input: { account_id: number; file_id: string; save_path?: string }) {
+  return http.post<{ ok: boolean; name?: string }>("/admin/qb/add-file", input);
+}
+
 export function fetchQBDownloads() {
   return http.get<QBDownloadTask[]>("/admin/qb/tasks");
 }

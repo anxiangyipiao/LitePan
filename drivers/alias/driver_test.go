@@ -10,6 +10,7 @@ import (
 )
 
 func TestParseTargets(t *testing.T) {
+	// 冒号分隔：账号名:路径
 	got := parseTargets("网盘A:/电影/悬疑, 网盘B")
 	if len(got) != 2 {
 		t.Fatalf("targets=%d, want 2", len(got))
@@ -19,6 +20,17 @@ func TestParseTargets(t *testing.T) {
 	}
 	if got[1].accountName != "网盘B" || len(got[1].segments) != 0 {
 		t.Fatalf("target[1]=%+v", got[1])
+	}
+
+	// 斜杠分隔：账号名/路径（兼容写法）
+	slash := parseTargets("联通云盘/视频")
+	if len(slash) != 1 || slash[0].accountName != "联通云盘" || len(slash[0].segments) != 1 || slash[0].segments[0] != "视频" {
+		t.Fatalf("斜杠写法解析错误: %+v", slash)
+	}
+
+	// 空目标
+	if len(parseTargets("")) != 0 {
+		t.Fatal("空目标应返回空")
 	}
 }
 

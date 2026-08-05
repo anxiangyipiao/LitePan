@@ -928,6 +928,7 @@ onUnmounted(() => {
             :create-folder="fileActions.createFolder"
             :delete-file="fileActions.deleteFile"
             :download-file="fileActions.downloadFile"
+            :qb-download-file="fileActions.qbDownload"
             :move-file="fileActions.requestSingleMove"
             :copy-file="fileActions.requestSingleCopy"
             :name-align-file="openNameAlign"

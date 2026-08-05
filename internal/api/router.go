@@ -375,6 +375,7 @@ func NewRouter(d Deps) http.Handler {
 					r.Put("/settings", h.updateQBSettings)
 					r.Post("/test", h.testQB)
 					r.Post("/add", h.addQBDownload)
+					r.Post("/add-file", h.addFileToQBDownload)
 					r.Get("/tasks", h.listQBDownloads)
 					r.Post("/tasks/delete", h.deleteQBDownloads)
 				})

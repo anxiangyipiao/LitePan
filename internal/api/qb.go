@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"litepan/internal/domain"
 	"litepan/internal/qb"
@@ -100,4 +101,44 @@ func (h *Handler) deleteQBDownloads(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeOK(w, map[string]any{"ok": true})
+}
+
+// addFileToQBDownload 把文件浏览器里选中的文件直链发送到 qBittorrent 下载。
+// .torrent 文件会以磁力/种子链接形式交给 qB 解析；普通文件按直链拉取。
+func (h *Handler) addFileToQBDownload(w http.ResponseWriter, r *http.Request) {
+	if !ensureServiceReady(w, h.qb != nil) || !ensureServiceReady(w, h.playback != nil) {
+		return
+	}
+	var req struct {
+		AccountID int64  `json:"account_id"`
+		FileID    string `json:"file_id"`
+		SavePath  string `json:"save_path"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if req.AccountID <= 0 || strings.TrimSpace(req.FileID) == "" {
+		writeErr(w, domain.Errorf(domain.CodeValidation, "参数不完整"))
+		return
+	}
+	res, err := h.playback.Resolve(r.Context(), req.AccountID, req.FileID, "", false)
+	if err != nil {
+		writeErr(w, domain.Errorf(domain.CodeDriverError, "解析下载直链失败：%v", err))
+		return
+	}
+	if res.File.IsDir {
+		writeErr(w, domain.Errorf(domain.CodeValidation, "不能将文件夹发送到 qB"))
+		return
+	}
+	url := strings.TrimSpace(res.Link.URL)
+	if url == "" || !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		writeErr(w, domain.Errorf(domain.CodeValidation, "该文件不支持直链，无法发送到 qB，请改用代理下载"))
+		return
+	}
+	if err := h.qb.Add(r.Context(), []string{url}, strings.TrimSpace(req.SavePath)); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeOK(w, map[string]any{"ok": true, "name": res.File.Name})
 }
