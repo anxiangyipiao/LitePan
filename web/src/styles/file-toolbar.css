@@ -276,8 +276,18 @@
   .file-toolbar__left,
   .file-toolbar__right {
     margin-left: 0;
-    flex-wrap: nowrap;
     gap: 6px;
+  }
+
+  .file-toolbar__left {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .file-toolbar__right {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
   }
 
   /* 隐藏文字标签与下拉箭头，只留图标（语义靠 title） */
@@ -305,6 +315,7 @@
   }
 
   .file-toolbar__batch {
+    flex: 0 0 100%;
     margin-left: 0;
     padding-left: 0;
     border-left: none;

@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"litepan/internal/account"
 	"litepan/internal/driver"
@@ -45,6 +46,11 @@ func viewToDTO(v account.View) accountDTO {
 		dto.DriverCardColor = info.CardColor
 		dto.DriverCardLogo = info.CardLogo
 	}
+	// 账号级自定义图标覆盖：config 里的保留键 _card_logo（图片 URL 或 data URL），
+	// 有值则优先于驱动注册表默认图标；清空后回退默认。
+	if logo := cardLogoOverride(v.Config); logo != "" {
+		dto.DriverCardLogo = logo
+	}
 	if !a.CreatedAt.IsZero() {
 		dto.CreatedAt = FormatAPITime(a.CreatedAt)
 	}
@@ -52,6 +58,26 @@ func viewToDTO(v account.View) accountDTO {
 		dto.UpdatedAt = FormatAPITime(a.UpdatedAt)
 	}
 	return dto
+}
+
+// cardLogoOverride 从账号 config JSON 中读取自定义盘条图标。
+func cardLogoOverride(configJSON string) string {
+	if strings.TrimSpace(configJSON) == "" {
+		return ""
+	}
+	var cfg map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return ""
+	}
+	raw, ok := cfg["_card_logo"]
+	if !ok {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(s)
 }
 
 func viewToPublicDTO(v account.View) accountDTO {
