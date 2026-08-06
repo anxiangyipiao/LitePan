@@ -353,6 +353,13 @@
   font-size: 18px;
 }
 
+/* qb 下载任务图标：品牌色区分 */
+.upload-task-file-icon.qb-task-file-icon {
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--brand) 28%, var(--border));
+}
+
 .upload-task-file-info {
   min-width: 0;
   flex: 1;

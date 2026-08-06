@@ -49,6 +49,19 @@
                 :class="{ 'is-empty': offline.activeTasks.value.length === 0 }"
               >{{ offline.activeTasks.value.length || 0 }}</span>
             </button>
+            <button
+              type="button"
+              class="upload-task-nav-item"
+              :class="{ active: taskPanelCategory === 'qb' }"
+              @click="taskPanelCategory = 'qb'"
+            >
+              <span class="upload-task-nav-icon"><SvgIcon name="download" :size="16" /></span>
+              <span class="upload-task-nav-label">qb 下载</span>
+              <span
+                class="upload-task-nav-badge"
+                :class="{ 'is-empty': qb.activeTasks.value.length === 0 }"
+              >{{ qb.activeTasks.value.length || 0 }}</span>
+            </button>
             </div>
 
             <div v-if="taskPanelCategory === 'offline'" class="upload-task-sidebar__footer upload-task-sidebar__footer--note">
@@ -312,7 +325,7 @@
               />
             </template>
 
-            <template v-else>
+            <template v-else-if="taskPanelCategory === 'offline'">
               <div class="upload-task-toolbar">
                 <div class="upload-task-batch-actions">
                   <button
@@ -432,6 +445,105 @@
                 min-height="220px"
               />
             </template>
+
+            <template v-else>
+              <div class="upload-task-toolbar">
+                <div class="upload-task-batch-actions">
+                  <button
+                    type="button"
+                    class="task-toolbar-btn"
+                    :disabled="qb.refreshing.value"
+                    @click="qb.refreshTasks"
+                  >
+                    <span class="task-btn-icon" :class="{ spin: qb.refreshing.value }"><SvgIcon name="refresh" :size="14" /></span>
+                    刷新
+                  </button>
+                  <button
+                    type="button"
+                    class="task-toolbar-btn danger"
+                    :disabled="qb.filteredTasks.value.length === 0"
+                    @click="qb.batchDelete"
+                  >
+                    <span class="task-btn-icon"><SvgIcon name="trash-button" :size="14" /></span>
+                    {{ qb.taskView.value === 'completed' ? '全部清空' : '全部删除' }}
+                  </button>
+                </div>
+                <div class="upload-task-tabs">
+                  <button
+                    type="button"
+                    class="upload-task-tab"
+                    :class="{ active: qb.taskView.value === 'running' }"
+                    @click="qb.taskView.value = 'running'"
+                  >
+                    进行中
+                    <span class="upload-task-tab-count">{{ qb.runningTasks.value.length }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="upload-task-tab"
+                    :class="{ active: qb.taskView.value === 'completed' }"
+                    @click="qb.taskView.value = 'completed'"
+                  >
+                    已完成
+                    <span class="upload-task-tab-count">{{ qb.completedTasks.value.length }}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="qb.filteredTasks.value.length > 0" class="upload-task-list">
+                <div
+                  v-for="task in qb.filteredTasks.value"
+                  :key="task.hash"
+                  class="upload-task-item"
+                  :class="{ completed: ['finished', 'seeding', 'paused'].includes(task.state) }"
+                >
+                  <div class="upload-task-item-main">
+                    <span class="upload-task-file-icon qb-task-file-icon">
+                      <SvgIcon name="download" :size="18" />
+                    </span>
+                    <div class="upload-task-file-info">
+                      <div class="upload-task-title-row">
+                        <span class="upload-task-name" :title="task.name">{{ task.name }}</span>
+                        <span
+                          v-if="['finished', 'seeding', 'paused', 'error'].includes(task.state)"
+                          class="upload-task-status"
+                          :class="`status-${task.state === 'error' ? 'failed' : task.state === 'finished' ? 'success' : 'paused'}`"
+                        >{{ qb.statusText(task) }}</span>
+                      </div>
+                      <div v-if="['pending', 'running'].includes(task.state)" class="upload-task-meta">
+                        <span class="task-phase-pill is-download"><span class="phase-dot"></span>{{ qb.statusText(task) }}</span>
+                        <span class="task-chip is-percent">{{ task.progress || 0 }}%</span>
+                        <span v-if="task.size > 0" class="task-chip">{{ formatSize(task.size) }}</span>
+                        <span v-if="task.save_path" class="task-chip" :title="task.save_path">{{ task.save_path }}</span>
+                      </div>
+                      <div v-else class="upload-task-meta">
+                        <span v-if="task.size > 0" class="task-chip">{{ formatSize(task.size) }}</span>
+                        <span v-if="task.save_path" class="task-chip" :title="task.save_path">{{ task.save_path }}</span>
+                      </div>
+                      <div v-if="task.error" class="upload-task-error">{{ task.error }}</div>
+                    </div>
+                  </div>
+                  <div v-if="['pending', 'running'].includes(task.state)" class="upload-task-hairline">
+                    <span class="upload-task-progress-inner" :style="{ width: `${task.progress || 0}%` }" />
+                  </div>
+                  <div class="upload-task-item-actions">
+                    <AppIconButton
+                      icon="trash-button"
+                      label="删除任务"
+                      variant="danger"
+                      size="sm"
+                      title="删除任务"
+                      @click="qb.deleteTask(task)"
+                    />
+                  </div>
+                </div>
+              </div>
+              <AppStateBlock
+                v-else
+                :message="qb.taskView.value === 'completed' ? '暂无已完成 qb 下载任务' : '暂无进行中的 qb 下载任务'"
+                min-height="220px"
+              />
+            </template>
           </div>
         </div>
       </div>
@@ -453,11 +565,13 @@ const props = defineProps<{
   uploadApi: Record<string, unknown>;
   relay: Record<string, unknown>;
   offline: Record<string, unknown>;
+  qb: Record<string, unknown>;
 }>();
 
 const api = props.uploadApi as Record<string, any>;
 const relay = props.relay as Record<string, any>;
 const offline = props.offline as Record<string, any>;
+const qb = props.qb as Record<string, any>;
 
 const {
   activeUploadTasks,
@@ -512,8 +626,8 @@ const {
 } = relay;
 
 const taskPanelCategory = computed({
-  get: () => api.taskPanelCategory.value as "upload" | "relay" | "offline",
-  set: (v: "upload" | "relay" | "offline") => {
+  get: () => api.taskPanelCategory.value as "upload" | "relay" | "offline" | "qb",
+  set: (v: "upload" | "relay" | "offline" | "qb") => {
     api.taskPanelCategory.value = v;
   },
 });
