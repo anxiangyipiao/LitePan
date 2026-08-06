@@ -79,8 +79,7 @@
 
   --transition: 0.2s ease;
 
-  --admin-sidebar-bg: linear-gradient(180deg, var(--brand-start), var(--brand-end));
-  --admin-sidebar-border: transparent;
+  --admin-sidebar-bg: linear-gradient(180deg, var(--brand-start), var(--brand-end));  --admin-sidebar-border: transparent;
   --admin-sidebar-shadow: none;
   --admin-nav-hover-bg: rgba(255, 255, 255, 0.15);
   --admin-nav-active-bg: #fff;
@@ -96,6 +95,14 @@
   --z-toast: 100200;
 
   color-scheme: light;
+}
+
+/* 移动端压缩顶栏：100px 装饰天空在手机上占太多，压到 64px（logo/传输抽屉 top 同步跟随变量） */
+@media (max-width: 768px) {
+  :root {
+    --header-height: 64px;
+    --header-logo-height: 36px;
+  }
 }
 
 :root[data-theme="dark"] {

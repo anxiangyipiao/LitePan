@@ -152,4 +152,36 @@ function driverText(a: Account): string {
 .drive-sidebar__card--active .drive-sidebar__name {
   color: var(--brand-strong);
 }
+
+/* 移动端压缩盘条卡片：更小更紧凑，让出竖向空间给文件区 */
+@media (max-width: 768px) {
+  .drive-sidebar__list {
+    gap: 8px;
+    padding: 8px 2px 2px;
+  }
+
+  .drive-sidebar__card {
+    width: 72px;
+    min-height: 54px;
+    gap: 4px;
+    padding: 6px 4px;
+    border-radius: 10px;
+  }
+
+  .drive-sidebar__badge {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    font-size: 11px;
+  }
+
+  .drive-sidebar__badge-text {
+    max-width: 24px;
+  }
+
+  .drive-sidebar__name {
+    max-width: 64px;
+    font-size: 11px;
+  }
+}
 </style>

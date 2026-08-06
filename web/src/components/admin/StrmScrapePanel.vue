@@ -1853,6 +1853,74 @@ defineExpose({
   justify-content: flex-end;
   gap: 8px;
 }
+@media (max-width: 768px) {
+  /* 头部：任务选择弹性伸缩，避免标题+选择+操作按钮在窄屏挤爆 */
+  .scrape-panel__head {
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    padding: 10px 12px;
+  }
+  .scrape-panel__head-left {
+    gap: 8px;
+  }
+  .scrape-panel__task-select {
+    flex: 1 1 auto;
+    width: min(150px, 40vw);
+    min-width: 0;
+  }
+  .scrape-panel__head-actions {
+    gap: 4px;
+  }
+  .scrape-search-expand--open .scrape-search-expand__input {
+    width: 120px;
+    max-width: 120px;
+    padding: 0 10px;
+  }
+
+  /* 筛选区：单行横向滚动，避免状态+类型 9 个 chip 换行堆叠 */
+  .scrape-toolbar {
+    gap: 6px;
+    padding: 8px 12px;
+  }
+  .scrape-filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .scrape-filters::-webkit-scrollbar {
+    display: none;
+  }
+  .scrape-filter {
+    flex: 0 0 auto;
+    padding: 6px 8px;
+    font-size: 12.5px;
+  }
+  .scrape-type-tv,
+  .scrape-toolbar__sep {
+    flex: 0 0 auto;
+  }
+
+  .scrape-wall {
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  /* 触屏无 hover：卡片操作条常显，避免手机上点不到「确认/完结/重刮/匹配」 */
+  .scrape-card__actions {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+  .scrape-card__shade {
+    opacity: 1;
+  }
+  .scrape-card--busy .scrape-card__actions,
+  .scrape-card--busy .scrape-card__shade {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
 @media (max-width: 560px) {
   .scrape-match__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1861,6 +1929,12 @@ defineExpose({
   .scrape-match__type {
     width: 84px;
     flex-basis: 84px;
+  }
+  .scrape-match__row {
+    flex-wrap: wrap;
+  }
+  .scrape-match__query {
+    flex: 1 1 auto;
   }
 }
 .scrape-poster-preview {
