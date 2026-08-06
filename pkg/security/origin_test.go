@@ -118,3 +118,65 @@ func TestRequestOriginAllowedFrontendScheme(t *testing.T) {
 		})
 	}
 }
+
+// 反代改写 Host 头的场景（如飞牛 app 经 FN Connect 隧道访问）：
+// r.Host 与 X-Forwarded-Host 都是公网域名，但浏览器 Origin 是 http 内网入口。
+// 仅靠主机比对无法识别，需靠登录时记录的会话可信来源兜底。
+func TestRequestOriginAllowedTrustedOrigin(t *testing.T) {
+	cases := []struct {
+		name      string
+		host      string
+		xhost     string
+		origin    string
+		trusted   string
+		wantAllow bool
+	}{
+		{
+			name:      "host rewritten to public domain, origin is app internal entry",
+			host:      "litepan.anxiangyi.fnos.net",
+			xhost:     "litepan.anxiangyi.fnos.net",
+			origin:    "http://192.168.1.10:5211",
+			trusted:   "192.168.1.10:5211",
+			wantAllow: true,
+		},
+		{
+			name:      "no trusted origin recorded",
+			host:      "litepan.anxiangyi.fnos.net",
+			xhost:     "litepan.anxiangyi.fnos.net",
+			origin:    "http://192.168.1.10:5211",
+			trusted:   "",
+			wantAllow: false,
+		},
+		{
+			name:      "cross-site origin still denied with trusted host present",
+			host:      "litepan.anxiangyi.fnos.net",
+			xhost:     "litepan.anxiangyi.fnos.net",
+			origin:    "https://evil.example.com",
+			trusted:   "192.168.1.10:5211",
+			wantAllow: false,
+		},
+		{
+			name:      "trusted origin host matches https public origin",
+			host:      "litepan.anxiangyi.fnos.net",
+			xhost:     "litepan.anxiangyi.fnos.net",
+			origin:    "https://litepan.anxiangyi.fnos.net",
+			trusted:   "litepan.anxiangyi.fnos.net",
+			wantAllow: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("PUT", "https://"+tc.host+"/api/admin/strm/scrape/run", nil)
+			req.Host = tc.host
+			if tc.xhost != "" {
+				req.Header.Set("X-Forwarded-Host", tc.xhost)
+			}
+			if tc.origin != "" {
+				req.Header.Set("Origin", tc.origin)
+			}
+			if got := RequestOriginAllowed(req, nil, tc.trusted); got != tc.wantAllow {
+				t.Fatalf("RequestOriginAllowed(trusted=%q) = %v, want %v", tc.trusted, got, tc.wantAllow)
+			}
+		})
+	}
+}

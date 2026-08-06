@@ -51,6 +51,9 @@ type Session struct {
 	PasswordChangeReason string `json:"password_change_reason"`
 	CreatedAt            string `json:"created_at"`
 	Remember             bool   `json:"remember"`
+	// TrustedOriginHost 记录登录时浏览器来源主机（含端口）。反代可能改写 Host 头，
+	// 写请求的来源校验用它识别「登录时那个前端来源」，兼容飞牛 app http 内网入口。
+	TrustedOriginHost string `json:"trusted_origin_host,omitempty"`
 }
 
 type Status struct {
@@ -248,6 +251,7 @@ func (s *Service) Login(ctx context.Context, r *http.Request, w http.ResponseWri
 		Username:             username,
 		MustChangePassword:   mustChange,
 		PasswordChangeReason: reason,
+		TrustedOriginHost:    security.RequestOriginHost(r),
 	}
 	if err := s.WriteSession(w, r, sess, remember); err != nil {
 		return nil, domain.Wrap(domain.CodeInternal, err)
@@ -312,7 +316,7 @@ func (s *Service) EnsureAdminAccess(ctx context.Context, r *http.Request, sess *
 	if sess == nil || !sess.IsAdmin {
 		return domain.Errorf(domain.CodeAdminAuthRequired, "需要管理员权限")
 	}
-	if isWriteMethod(r.Method) && !security.RequestOriginAllowed(r, nil) {
+	if isWriteMethod(r.Method) && !security.RequestOriginAllowed(r, nil, sess.TrustedOriginHost) {
 		return domain.Errorf(domain.CodePermissionDenied, "请求来源不受信任，请从受信任的后台页面重新登录后再试")
 	}
 	path := r.URL.Path
@@ -495,6 +499,7 @@ func (s *Service) refreshSession(ctx context.Context, r *http.Request, w http.Re
 	if sess != nil {
 		remember = sess.Remember
 		newSess.CreatedAt = sess.CreatedAt
+		newSess.TrustedOriginHost = sess.TrustedOriginHost
 	}
 	state := s.credentialState(ctx)
 	newSess.MustChangePassword = state.MustChangePassword

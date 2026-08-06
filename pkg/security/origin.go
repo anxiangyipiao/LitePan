@@ -38,13 +38,37 @@ func AllowedCORSOrigins() []string {
 	return out
 }
 
-func RequestOriginAllowed(r *http.Request, allowed []string) bool {
+// RequestOriginHost 返回请求来源的主机（含端口）：优先 Origin，其次 Referer，最后回退到
+// 反代推导的 BaseURL 主机。登录时用它记录前端真实来源，供后续写请求的来源校验使用——
+// 反代可能改写 Host 头，但浏览器 Origin/Referer 反映的是前端实际地址（如飞牛 app 的 http 内网入口）。
+func RequestOriginHost(r *http.Request) string {
+	origin := requestOrigin(r)
+	if origin == "" {
+		origin = requestBaseURL(r)
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return strings.ToLower(u.Host)
+}
+
+func RequestOriginAllowed(r *http.Request, allowed []string, trustedOriginHost ...string) bool {
 	requestOrigin := requestOrigin(r)
 	if requestOrigin == "" {
 		return true
 	}
 	if originHostMatches(r, requestOrigin) {
 		return true
+	}
+	if len(trustedOriginHost) > 0 {
+		trusted := strings.TrimSpace(trustedOriginHost[0])
+		if trusted != "" {
+			if u, err := url.Parse(requestOrigin); err == nil && u.Host != "" &&
+				strings.EqualFold(u.Host, trusted) {
+				return true
+			}
+		}
 	}
 	if requestOrigin == normalizeOrigin(requestBaseURL(r)) {
 		return true
