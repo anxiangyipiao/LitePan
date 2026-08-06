@@ -41,7 +41,7 @@
 - **双视图切换**：列表 / 卡片两种视图自由切换，偏好自动记忆。
 
 <!-- TODO: 重构完成后替换为真实截图 -->
-![前端预览](docs/preview.png)
+![前端预览](docs/pictures/preview.png)
 
 ### 📦 下载 fnOS `.fpk` 安装包
 
