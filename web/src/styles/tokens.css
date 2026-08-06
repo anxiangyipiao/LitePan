@@ -1,14 +1,14 @@
 /* 全局视觉令牌，主题和皮肤只覆盖变量值。 */
 :root {
-  --brand-start: #4c74df;
-  --brand-end: #02a6f0;
+  --brand-start: #4f8ef7;
+  --brand-end: #38bdf8;
   --brand-gradient: linear-gradient(135deg, var(--brand-start), var(--brand-end));
   --brand-gradient-h: linear-gradient(90deg, var(--brand-start), var(--brand-end));
-  --brand-gradient-h-hover: linear-gradient(90deg, #3b5bdb, #1e88e5);
-  --brand: #4c74df;
-  --brand-strong: #3b5bdb;
+  --brand-gradient-h-hover: linear-gradient(90deg, #3b82f6, #0ea5e9);
+  --brand: #4f8ef7;
+  --brand-strong: #3b82f6;
 
-  --bg: #f5f7fa;
+  --bg: #f3f6fb;
   --surface: #ffffff;
   --surface-muted: #fafafa;
   --surface-sunken: #f8f9fa;
@@ -27,16 +27,30 @@
   --info: #1976d2;
   --info-soft: #e3f2fd;
 
+  /* 文件类型差异化图标色（FileIcon 消费） */
+  --type-folder: #f59e0b;
+  --type-video: #d946ef;
+  --type-audio: #10b981;
+  --type-image: #38bdf8;
+  --type-pdf: #ef4444;
+  --type-doc: #3b82f6;
+  --type-sheet: #22c55e;
+  --type-slide: #f97316;
+  --type-archive: #f97316;
+  --type-code: #8b5cf6;
+  --type-text: #64748b;
+  --type-file: #64748b;
+
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 18px;
   --radius-pill: 999px;
 
-  --shadow-card: 0 2px 8px rgba(15, 23, 42, 0.08);
+  --shadow-card: 0 8px 24px rgba(15, 23, 42, 0.06);
   --shadow-soft: 0 2px 4px rgba(0, 0, 0, 0.1);
   --shadow-pop: 0 8px 24px rgba(15, 23, 42, 0.16);
-  --shadow-brand: 0 2px 4px rgba(76, 116, 223, 0.3);
+  --shadow-brand: 0 2px 4px rgba(79, 142, 247, 0.3);
 
   --space-1: 4px;
   --space-2: 8px;
@@ -53,7 +67,7 @@
   --panel-head-bg: #f9fafb;
   --overlay-scrim: color-mix(in srgb, var(--surface) 75%, transparent);
   --surface-hover: #f5f7fb;
-  --accent-soft: rgba(76, 116, 223, 0.12);
+  --accent-soft: rgba(79, 142, 247, 0.12);
   --accent-text: #2563eb;
   --tab-active-bg: #eff6ff;
   --tab-active-border: #bfdbfe;
@@ -85,11 +99,11 @@
 }
 
 :root[data-theme="dark"] {
-  --brand-start: #1e40af;
-  --brand-end: #0f766e;
-  --brand: #3b82f6;
-  --brand-strong: #2563eb;
-  --brand-gradient-h-hover: linear-gradient(90deg, #1d4ed8, #0e7490);
+  --brand-start: #3b82f6;
+  --brand-end: #0ea5e9;
+  --brand: #60a5fa;
+  --brand-strong: #3b82f6;
+  --brand-gradient-h-hover: linear-gradient(90deg, #2563eb, #0284c7);
 
   --bg: #101215;
   --surface: #181b20;
@@ -112,9 +126,9 @@
 
   --admin-sidebar-bg: linear-gradient(
     135deg,
-    rgba(28, 51, 111, 0.98) 0%,
-    rgba(24, 92, 139, 0.96) 52%,
-    rgba(8, 145, 178, 0.92) 100%
+    rgba(37, 99, 235, 0.98) 0%,
+    rgba(14, 165, 233, 0.96) 52%,
+    rgba(56, 189, 248, 0.92) 100%
   );
   --admin-sidebar-border: rgba(148, 163, 184, 0.14);
   --admin-sidebar-shadow: 0 18px 46px rgba(2, 6, 23, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
@@ -127,7 +141,7 @@
   --panel-head-bg: #1d2127;
   --overlay-scrim: color-mix(in srgb, var(--bg) 82%, transparent);
   --surface-hover: #23272e;
-  --accent-soft: rgba(59, 130, 246, 0.18);
+  --accent-soft: rgba(96, 165, 250, 0.18);
   --accent-text: #93c5fd;
   --tab-active-bg: rgba(59, 130, 246, 0.15);
   --tab-active-border: rgba(59, 130, 246, 0.35);
@@ -137,12 +151,12 @@
 
 /* 野兽派皮肤独立于主题并通过源码顺序覆盖暗色变量。 */
 :root[data-skin="brutal"] {
-  --brand-start: #4c74df;
-  --brand-end: #02a6f0;
+  --brand-start: #4f8ef7;
+  --brand-end: #38bdf8;
   --brand-gradient: linear-gradient(135deg, var(--brand-start), var(--brand-end));
   --brand-gradient-h: linear-gradient(90deg, var(--brand-start), var(--brand-end));
-  --brand-gradient-h-hover: linear-gradient(90deg, #3b5bdb, #1e88e5);
-  --brand: #4c74df;
+  --brand-gradient-h-hover: linear-gradient(90deg, #3b82f6, #0ea5e9);
+  --brand: #4f8ef7;
   --brand-strong: #111111;
 
   --bg: #f4f1e8;

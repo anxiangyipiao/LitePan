@@ -126,6 +126,78 @@
   font-size: 13px;
 }
 
+/* 行内操作列 + 悬停操作条 */
+.file-list .actions-col {
+  width: 96px;
+  min-width: 96px;
+  text-align: right;
+}
+.file-list .file-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.file-list .file-row:hover .file-row-actions,
+.file-list .file-row:focus-within .file-row-actions {
+  opacity: 1;
+}
+.file-list .file-row-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.file-list .file-row-action:hover {
+  background: var(--surface-sunken);
+  color: var(--brand-strong);
+}
+
+/* 卡片悬停操作条 */
+.file-card-actions {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: var(--shadow-soft);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.file-card:hover .file-card-actions,
+.file-card:focus-within .file-card-actions {
+  opacity: 1;
+}
+.file-card-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-regular);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.file-card-action:hover {
+  background: var(--surface-sunken);
+  color: var(--brand-strong);
+}
+
 .file-list .checkbox-col input[type="checkbox"],
 .file-list .grid-select-all input[type="checkbox"],
 .file-list .file-card-checkbox input[type="checkbox"] {

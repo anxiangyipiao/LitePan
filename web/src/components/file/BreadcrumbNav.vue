@@ -136,8 +136,11 @@ onUnmounted(() => {
   max-width: min(180px, 16vw);
   flex-shrink: 1;
   cursor: pointer;
-  transition: color 0.2s;
+  transition: color 0.2s, background-color 0.2s;
   font-weight: 400;
+  padding: 6px 10px;
+  margin: -6px 0;
+  border-radius: var(--radius-sm);
 }
 
 .breadcrumb-item.active {
@@ -157,6 +160,7 @@ onUnmounted(() => {
 
 .breadcrumb-item:hover:not(.active) {
   color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
 }
 
 .breadcrumb-item:not(:last-child)::after {

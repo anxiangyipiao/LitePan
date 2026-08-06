@@ -37,6 +37,7 @@ const props = defineProps<{
   dragActive?: boolean;
   activeDropTargetId?: string;
   canDropOnFolder?: (file: FileItem) => boolean;
+  accountId?: number | null;
 }>();
 
 const INITIAL_LIST_RENDER_COUNT = 200;
@@ -88,6 +89,7 @@ const {
   isInlineProcessing,
   getRowOperationText,
   openContextMenu,
+  runRowAction,
   cancelInlineRename,
   submitInlineRename,
   cancelInlineCreateFolder,
@@ -404,22 +406,48 @@ function handleFolderDrop(event: DragEvent, file: FileItem) {
 }
 
 function onRowClick(event: MouseEvent, file: FileItem) {
+  // 单击 = 选中；双击 = 进文件夹/预览（由 onRowDblClick 处理）
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('input[type="checkbox"]')) return;
+  if (target?.closest(".file-row-actions")) return;
+  if (target?.closest(".inline-rename-wrap")) return;
   if (!props.isAdmin) {
     emit("open", file);
     return;
   }
-  const target = event.target as HTMLElement | null;
-  if (target?.closest('input[type="checkbox"]')) return;
-  if (target?.closest(".file-name")) {
+  toggleSelection(fileKey(file), !selectedSet.value.has(fileKey(file)));
+}
+
+function onRowDblClick(_event: MouseEvent, file: FileItem) {
+  if (isInlineRenaming(file)) return;
+  if (!props.isAdmin) return; // 非 admin 单击即打开，双击不再重复触发
+  toggleSelection(fileKey(file), true);
+  emit("open", file);
+}
+
+function onCardClick(file: FileItem) {
+  if (!props.isAdmin) {
     emit("open", file);
     return;
   }
-  if (target?.closest(".inline-rename-wrap")) return;
-  const row = event.currentTarget as HTMLElement | null;
-  if (!row) return;
-  const clickX = event.clientX - row.getBoundingClientRect().left;
-  if (clickX > 70) return;
   toggleSelection(fileKey(file), !selectedSet.value.has(fileKey(file)));
+}
+
+function onCardDblClick(file: FileItem) {
+  if (!props.isAdmin) return;
+  toggleSelection(fileKey(file), true);
+  emit("open", file);
+}
+
+function clearSelection() {
+  if (props.selectedIds.length) emit("update:selectedIds", []);
+}
+
+function handleGlobalKeydown(event: KeyboardEvent) {
+  if (event.key !== "Escape") return;
+  const target = event.target as HTMLElement | null;
+  if (target?.closest("input, textarea")) return;
+  clearSelection();
 }
 
 watch(
@@ -439,6 +467,7 @@ watch(hasMoreListFiles, async () => {
 onMounted(() => {
   void nextTick(updateListLoadMoreObserver);
   document.addEventListener("keydown", handleHeaderMenuKeydown);
+  document.addEventListener("keydown", handleGlobalKeydown);
   window.addEventListener("resize", closeDirectoryContextMenu);
   window.addEventListener("scroll", closeDirectoryContextMenu, true);
 });
@@ -446,6 +475,7 @@ onMounted(() => {
 onUnmounted(() => {
   disconnectListLoadMoreObserver();
   document.removeEventListener("keydown", handleHeaderMenuKeydown);
+  document.removeEventListener("keydown", handleGlobalKeydown);
   window.removeEventListener("resize", closeDirectoryContextMenu);
   window.removeEventListener("scroll", closeDirectoryContextMenu, true);
 });
@@ -540,6 +570,7 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
           :class="{ processing: isInlineProcessing(f), 'drag-target': isActiveDropTarget(f) }"
           :draggable="isAdmin && !isInlineProcessing(f) && !isInlineRenaming(f)"
           @click="onRowClick($event, f)"
+          @dblclick="onRowDblClick($event, f)"
           @contextmenu.prevent.stop="openContextMenu($event, f)"
           @dragstart="handleDragStart($event, f)"
           @dragend="handleDragEnd"
@@ -593,7 +624,7 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
                 ×
               </button>
             </div>
-            <div v-else class="file-name" @click.stop="emit('open', f)">
+            <div v-else class="file-name">
               <span class="file-icon-wrap"><FileIcon :file="f" :size="18" /></span>
               <span class="file-text">
                 <span class="file-label" :title="f.name">{{ f.name }}</span>
@@ -609,6 +640,38 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
           </td>
           <td class="size-col">{{ formatSize(f.size, f.is_dir) }}</td>
           <td class="time-col">{{ formatTime(f.mod_time) }}</td>
+          <td v-if="isAdmin" class="actions-col">
+            <div class="file-row-actions" @click.stop>
+              <button
+                v-if="!f.is_dir"
+                type="button"
+                class="file-row-action"
+                title="下载"
+                aria-label="下载"
+                @click="runRowAction('download', f)"
+              >
+                <SvgIcon name="download" :size="15" />
+              </button>
+              <button
+                type="button"
+                class="file-row-action"
+                title="重命名"
+                aria-label="重命名"
+                @click="runRowAction('rename', f)"
+              >
+                <SvgIcon name="pencil" :size="14" />
+              </button>
+              <button
+                type="button"
+                class="file-row-action"
+                title="更多"
+                aria-label="更多"
+                @click="openContextMenu($event, f)"
+              >
+                <SvgIcon name="dots-h" :size="15" />
+              </button>
+            </div>
+          </td>
         </tr>
         <tr
           v-if="hasMoreListFiles && !showEmptyRow"
@@ -770,15 +833,55 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
             </div>
           </div>
 
-          <button v-else type="button" class="file-card-main" @click="emit('open', f)">
-            <span class="file-card-icon"><FileIcon :file="f" :size="40" /></span>
+          <div
+            v-else
+            role="button"
+            tabindex="0"
+            class="file-card-main"
+            @click="onCardClick(f)"
+            @dblclick="onCardDblClick(f)"
+            @keydown.enter="onCardClick(f)"
+          >
+            <span class="file-card-icon">
+              <FileIcon :file="f" :size="56" thumbnail :account-id="props.accountId ?? null" />
+            </span>
             <span class="file-card-name" :title="f.name">{{ f.name }}</span>
             <span v-if="isInlineProcessing(f)" class="inline-delete-status">
               <span class="inline-rename-spinner" :aria-label="getRowOperationText(f)" />
               {{ getRowOperationText(f) }}
             </span>
             <span v-else class="file-card-time">{{ formatTime(f.mod_time) }}</span>
-          </button>
+            <span v-if="isAdmin && !isInlineProcessing(f) && !isInlineRenaming(f)" class="file-card-actions" @click.stop>
+              <button
+                v-if="!f.is_dir"
+                type="button"
+                class="file-card-action"
+                title="下载"
+                aria-label="下载"
+                @click="runRowAction('download', f)"
+              >
+                <SvgIcon name="download" :size="14" />
+              </button>
+              <button
+                type="button"
+                class="file-card-action"
+                title="重命名"
+                aria-label="重命名"
+                @click="runRowAction('rename', f)"
+              >
+                <SvgIcon name="pencil" :size="13" />
+              </button>
+              <button
+                type="button"
+                class="file-card-action"
+                title="更多"
+                aria-label="更多"
+                @click="openContextMenu($event, f)"
+              >
+                <SvgIcon name="dots-h" :size="14" />
+              </button>
+            </span>
+          </div>
         </article>
       </div>
     </div>

@@ -21,16 +21,13 @@ function driverText(a: Account): string {
 
 <template>
   <div class="drive-sidebar">
-    <div class="drive-sidebar__head">
-      <span class="drive-sidebar__title">存储盘</span>
-    </div>
     <div class="drive-sidebar__list">
       <button
         v-for="a in props.accounts"
         :key="a.id"
         type="button"
-        class="drive-sidebar__row"
-        :class="{ 'drive-sidebar__row--active': modelValue === a.id }"
+        class="drive-sidebar__card"
+        :class="{ 'drive-sidebar__card--active': modelValue === a.id }"
         :style="{ '--driver-color': driverColor(a) }"
         :title="a.name"
         @click="emit('update:modelValue', a.id)"
@@ -54,73 +51,70 @@ function driverText(a: Account): string {
 .drive-sidebar {
   display: flex;
   flex-direction: column;
-  background: var(--surface);
   min-width: 0;
-  height: 100%;
-}
-
-.drive-sidebar__head {
-  height: 52px;
-  display: flex;
-  align-items: center;
-  padding: 0 12px 0 16px;
-  background: var(--surface-muted);
-  border-bottom: 1px solid var(--border-soft);
-  flex: 0 0 auto;
-}
-
-.drive-sidebar__title {
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1;
 }
 
 .drive-sidebar__list {
   display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.drive-sidebar__row {
-  appearance: none;
-  display: flex;
-  align-items: center;
+  flex-direction: row;
+  align-items: stretch;
   gap: 10px;
-  width: 100%;
-  padding: 10px 12px 10px 16px;
-  border: 0;
-  border-left: 2px solid transparent;
-  background: transparent;
-  text-align: left;
+  padding: 12px 4px 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.drive-sidebar__card {
+  appearance: none;
+  flex: 0 0 auto;
+  width: 96px;
+  min-height: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--surface);
   cursor: pointer;
-  transition: background 0.18s ease, border-left-color 0.18s ease;
-  min-width: 0;
+  transition: transform var(--transition), box-shadow var(--transition);
 }
 
-.drive-sidebar__row:hover {
-  background: var(--surface-hover);
-  border-left-color: var(--brand);
+.drive-sidebar__card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-card);
 }
 
-.drive-sidebar__row--active {
-  background: color-mix(in srgb, var(--brand) 10%, var(--surface));
-  border-left-color: var(--brand);
+.drive-sidebar__card:active {
+  transform: translateY(0);
+}
+
+/* 选中态：浅蓝底 + 渐变描边（background-origin 双层实现渐变边框） */
+.drive-sidebar__card--active {
+  background-color: color-mix(in srgb, var(--brand) 9%, var(--surface));
+  background-image: linear-gradient(var(--surface), var(--surface)),
+    linear-gradient(90deg, var(--brand-start), var(--brand-end));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  border-color: transparent;
+  box-shadow: 0 0 0 1px rgba(79, 142, 247, 0.18);
 }
 
 .drive-sidebar__badge {
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: var(--driver-color, #6366f1);
   color: #fff;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1;
   overflow: hidden;
@@ -138,46 +132,24 @@ function driverText(a: Account): string {
 }
 
 .drive-sidebar__badge-text {
-  max-width: 24px;
+  max-width: 30px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .drive-sidebar__name {
-  flex: 1 1 auto;
-  min-width: 0;
+  max-width: 84px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-regular);
   line-height: 1.2;
 }
 
-:root[data-theme="dark"] .drive-sidebar__row--active {
-  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
-}
-
-@media (max-width: 768px) {
-  .drive-sidebar__list {
-    flex-direction: row;
-    overflow-x: auto;
-    gap: 8px;
-    padding: 8px 12px;
-  }
-
-  .drive-sidebar__row {
-    flex: 0 0 auto;
-    width: auto;
-    padding: 8px 10px;
-    border-left: none;
-    border-radius: 8px;
-  }
-
-  .drive-sidebar__row--active {
-    background: color-mix(in srgb, var(--brand) 12%, var(--surface));
-  }
+.drive-sidebar__card--active .drive-sidebar__name {
+  color: var(--brand-strong);
 }
 </style>

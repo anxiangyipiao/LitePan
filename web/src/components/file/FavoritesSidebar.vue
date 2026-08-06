@@ -16,6 +16,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "add-current": [];
+  collapse: [];
   open: [item: BrowserFavoriteItem];
   rename: [item: BrowserFavoriteItem];
   remove: [item: BrowserFavoriteItem];
@@ -98,6 +99,15 @@ function handleDrop(event: DragEvent, item: BrowserFavoriteItem) {
             <div class="favorites-sidebar__head">
               <span class="favorites-sidebar__title">收藏夹</span>
               <span class="favorites-sidebar__head-actions">
+                <button
+                  type="button"
+                  class="favorites-sidebar__collapse"
+                  :title="'收起收藏夹'"
+                  :aria-label="'收起收藏夹'"
+                  @click="emit('collapse')"
+                >
+                  <SvgIcon name="chevron-down" :size="14" class-name="favorites-sidebar__collapse-icon" />
+                </button>
                 <button
                   v-if="items.length"
                   type="button"
@@ -284,6 +294,30 @@ function handleDrop(event: DragEvent, item: BrowserFavoriteItem) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.favorites-sidebar__collapse {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--text-muted);
+  flex: 0 0 auto;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.favorites-sidebar__collapse:hover {
+  color: var(--brand);
+}
+
+.favorites-sidebar__collapse-icon {
+  transform: rotate(90deg);
 }
 
 .favorites-sidebar__edit-icon {

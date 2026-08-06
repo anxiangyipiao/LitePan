@@ -34,6 +34,10 @@
 .btn--primary:not(:disabled):hover {
   background: var(--brand-gradient-h-hover);
 }
+.btn--primary:not(:disabled):active {
+  transform: translateY(1px);
+  filter: brightness(0.96);
+}
 
 .btn--secondary {
   background: var(--surface);
@@ -51,6 +55,9 @@
   border-color: var(--brand);
   color: var(--brand);
 }
+.btn--secondary:not(:disabled):active {
+  transform: translateY(1px);
+}
 
 .btn--cancel {
   background: var(--surface-sunken);
@@ -59,6 +66,9 @@
 .btn--cancel:not(:disabled):hover {
   background: var(--border);
   color: var(--text);
+}
+.btn--cancel:not(:disabled):active {
+  transform: translateY(1px);
 }
 
 .btn--ghost {
@@ -69,6 +79,9 @@
   background: var(--border-soft);
   color: var(--text);
 }
+.btn--ghost:not(:disabled):active {
+  transform: translateY(1px);
+}
 
 .btn--danger {
   background: var(--danger);
@@ -76,4 +89,8 @@
 }
 .btn--danger:not(:disabled):hover {
   filter: brightness(1.05);
+}
+.btn--danger:not(:disabled):active {
+  transform: translateY(1px);
+  filter: brightness(0.94);
 }

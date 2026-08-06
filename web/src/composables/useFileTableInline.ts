@@ -50,7 +50,7 @@ export function useFileTableInline(options: {
     file: null as FileItem | null,
   });
 
-  const emptyColSpan = computed(() => (options.isAdmin.value ? 4 : 3));
+  const emptyColSpan = computed(() => (options.isAdmin.value ? 5 : 3));
 
   const emptyStateText = computed(() => {
     if (inlineCreatingFolder.value) return "";
@@ -245,7 +245,11 @@ export function useFileTableInline(options: {
     const file = contextMenu.value.file;
     closeContextMenu();
     if (!file) return;
+    runRowAction(action, file);
+  }
 
+  /** 行/卡悬停操作条复用：按动作分发到同一个业务 handler */
+  function runRowAction(action: string, file: FileItem) {
     if (action === "download") options.downloadFile(file);
     if (action === "qb-download") options.qbDownload(file);
     if (action === "name-align") options.nameAlignFile(file);
@@ -306,6 +310,7 @@ export function useFileTableInline(options: {
     getRowOperation,
     getRowOperationText,
     openContextMenu,
+    runRowAction,
     cancelInlineRename,
     submitInlineRename,
     cancelInlineCreateFolder,

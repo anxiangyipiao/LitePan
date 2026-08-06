@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch, watchEffect } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useBrowserStore, type Crumb } from "@/stores/browser";
@@ -11,6 +11,7 @@ import { showConfirm } from "@/composables/useConfirm";
 import { useRelayTasks } from "@/composables/useRelayTasks";
 import { useUploadTasks } from "@/composables/useUploadTasks";
 import { useOfflineDownloads } from "@/composables/useOfflineDownloads";
+import { useTransferBadge, type TransferBadgeKind } from "@/composables/upload/useTransferBadge";
 import { toast } from "@/composables/useToast";
 import { filesApi } from "@/api/files";
 import type { Account, BrowserFavoriteItem, FileItem, FileNameAlignPreviewResult } from "@/api/types";
@@ -152,22 +153,6 @@ const offline = useOfflineDownloads({
   currentParentId,
   refreshFiles: () => store.loadFiles({ forceRefresh: true, silent: true }),
 });
-const transferTaskText = computed(() => {
-  if (uploadApi.activeUploadTasks.value.length > 0 || uploadApi.activeRelayCount.value > 0) {
-    return uploadApi.uploadTaskLabel.value;
-  }
-  if (offline.activeTasks.value.length > 0) return `离线中 ${offline.activeTasks.value.length}`;
-  if (uploadApi.displayUploadTasks.value.length > 0) return uploadApi.uploadTaskLabel.value;
-  if (offline.failedTasks.value.length > 0) return `离线失败 ${offline.failedTasks.value.length}`;
-  if (offline.successfulTasks.value.length > 0) return `离线完成 ${offline.successfulTasks.value.length}`;
-  return uploadApi.uploadTaskLabel.value;
-});
-const uploadTaskTitleText = transferTaskText;
-const uploadTaskLabelText = transferTaskText;
-
-const uploadTaskActive = computed(
-  () => uploadApi.activeUploadTasks.value.length > 0 || uploadApi.activeRelayCount.value > 0 || offline.activeTasks.value.length > 0,
-);
 const uploadTaskFailed = computed(
   () =>
     uploadApi.displayUploadTasks.value.some((task) => task.status === "failed") ||
@@ -177,6 +162,27 @@ const uploadTaskFailed = computed(
 );
 const uploadTaskSuccess = computed(() =>
   uploadApi.displayUploadTasks.value.some((task) => task.status === "success") || offline.successfulTasks.value.length > 0,
+);
+
+// 顶栏传输角标：任务计数喂给 useTransferBadge（AppHeader 读取）；点击顶栏角标时打开任务面板。
+const transferBadge = useTransferBadge();
+watchEffect(() => {
+  const active =
+    uploadApi.activeUploadTasks.value.length + uploadApi.activeRelayCount.value + offline.activeTasks.value.length;
+  let kind: TransferBadgeKind = "";
+  if (active > 0) kind = "active";
+  else if (uploadTaskFailed.value) kind = "failed";
+  else if (uploadTaskSuccess.value) kind = "success";
+  transferBadge.setBadge(active, kind);
+});
+watch(
+  () => transferBadge.open.value,
+  (v) => {
+    if (v) {
+      transferBadge.setOpen(false);
+      void openTaskPanel();
+    }
+  },
 );
 const showFavorites = computed(() => isAdmin.value && favoritesOpen.value);
 const currentCrumbIds = computed(() => breadcrumb.value.map((item) => item.id));
@@ -809,8 +815,12 @@ onUnmounted(() => {
 
 <template>
   <div class="browser">
-    <div class="browser__nav">
-      <BreadcrumbNav :items="breadcrumb" @navigate="store.goTo" />
+    <div v-if="accounts.length > 0" class="browser__drives-strip">
+      <DriveSidebar
+        :accounts="accounts"
+        :model-value="currentAccountId"
+        @update:model-value="store.selectAccount"
+      />
     </div>
 
     <div v-if="!browserBootstrapping && !accounts.length && !loading" class="browser__empty">
@@ -824,32 +834,29 @@ onUnmounted(() => {
         <BusySpinner variant="notch" :size="28" color="var(--brand)" />
         <span class="browser__refresh-text">正在强制刷新…</span>
       </div>
-      <FileToolbar
-        :is-admin="isAdmin"
-        :selected-count="selectedCount"
-        :view="view"
-        :refreshing="refreshing"
-        :response-time="responseTime"
-        :cache-rate="cacheRate"
-        :upload-task-active="uploadTaskActive"
-        :upload-task-failed="uploadTaskFailed"
-        :upload-task-success="uploadTaskSuccess"
-        :upload-task-title="uploadTaskTitleText"
-        :upload-task-label="uploadTaskLabelText"
-        :favorites-open="favoritesOpen"
-        :offline-download-supported="offline.capability.value?.supported"
-        @refresh="store.refreshFiles"
-        @update:view="setView"
-        @create-folder="startCreateFolder"
-        @upload-file="uploadApi.handleUploadFile"
-        @upload-folder="uploadApi.handleUploadFolder"
-        @offline-download="offline.openModal"
-        @batch-delete="fileActions.requestBatchDelete"
-        @batch-move="fileActions.requestBatchMove"
-        @batch-copy="fileActions.requestBatchCopy"
-        @open-upload-tasks="openTaskPanel"
-        @toggle-favorites="store.toggleFavoritesOpen"
-      />
+      <div class="browser__panel-top">
+        <BreadcrumbNav class="browser__breadcrumb" :items="breadcrumb" @navigate="store.goTo" />
+        <FileToolbar
+          :is-admin="isAdmin"
+          :selected-count="selectedCount"
+          :view="view"
+          :refreshing="refreshing"
+          :response-time="responseTime"
+          :cache-rate="cacheRate"
+          :favorites-open="favoritesOpen"
+          :offline-download-supported="offline.capability.value?.supported"
+          @refresh="store.refreshFiles"
+          @update:view="setView"
+          @create-folder="startCreateFolder"
+          @upload-file="uploadApi.handleUploadFile"
+          @upload-folder="uploadApi.handleUploadFolder"
+          @offline-download="offline.openModal"
+          @batch-delete="fileActions.requestBatchDelete"
+          @batch-move="fileActions.requestBatchMove"
+          @batch-copy="fileActions.requestBatchCopy"
+          @toggle-favorites="store.toggleFavoritesOpen"
+        />
+      </div>
       <div v-if="strmPrompt.showPrompt.value && !strmGenerating" class="strm-prompt-bar">
         <div class="strm-prompt-bar__main">
           <span class="strm-prompt-bar__dot" aria-hidden="true" />
@@ -876,7 +883,6 @@ onUnmounted(() => {
       <div
         class="browser__content"
         :class="{
-          'browser__content--with-sidebar': accounts.length > 0,
           'browser__content--with-favorites': showFavorites,
           'browser__content--favorites-transition-ready': favoritesTransitionReady,
         }"
@@ -893,6 +899,7 @@ onUnmounted(() => {
             :active-drop-target-id="dragMove.targetId"
             :can-drop-on-favorite="canDropOnFavorite"
             @add-current="openFavoriteNameModal"
+            @collapse="store.toggleFavoritesOpen"
             @open="store.openFavorite"
             @rename="openFavoriteRenameModal"
             @remove="store.removeFavorite"
@@ -903,21 +910,13 @@ onUnmounted(() => {
           />
         </div>
 
-        <div class="browser__drives-slot">
-          <DriveSidebar
-            v-if="accounts.length > 0"
-            :accounts="accounts"
-            :model-value="currentAccountId"
-            @update:model-value="store.selectAccount"
-          />
-        </div>
-
         <div class="browser__main">
           <FileTable
             :files="files"
             :view="view"
             :loading="loading"
             :is-admin="isAdmin"
+            :account-id="currentAccountId"
             :sort-key="sortKey"
             :sort-order="sortOrder"
             :sort-class="sortClass"
@@ -1053,15 +1052,9 @@ onUnmounted(() => {
   gap: 16px;
   padding: 20px 0;
 }
-.browser__nav {
+.browser__drives-strip {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 14px 18px;
-  background: var(--surface);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-soft);
+  min-width: 0;
 }
 .browser__frame {
   position: relative;
@@ -1070,32 +1063,42 @@ onUnmounted(() => {
   box-shadow: var(--shadow-card);
   overflow: hidden;
 }
+.browser__panel-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface-muted);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+.browser__breadcrumb {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.browser__panel-top :deep(.file-toolbar) {
+  flex: 0 1 auto;
+  padding: 0;
+  border-bottom: none;
+  border-radius: 0;
+  background: transparent;
+}
 .browser__content {
   display: grid;
-  grid-template-columns: 0 0 minmax(0, 1fr);
+  grid-template-columns: 0 minmax(0, 1fr);
   gap: 0;
 }
 .browser__content--with-favorites {
-  grid-template-columns: 168px 0 minmax(0, 1fr);
-}
-.browser__content--with-sidebar {
-  grid-template-columns: 0 168px minmax(0, 1fr);
-}
-.browser__content--with-favorites.browser__content--with-sidebar {
-  grid-template-columns: 168px 168px minmax(0, 1fr);
+  grid-template-columns: 168px minmax(0, 1fr);
 }
 .browser__content--favorites-transition-ready {
   transition: grid-template-columns 0.22s ease;
 }
-.browser__drives-slot,
 .browser__favorites-slot {
   min-width: 0;
   overflow: hidden;
 }
 .browser__content--with-favorites .browser__favorites-slot {
-  border-right: 1px solid var(--border-soft);
-}
-.browser__content--with-sidebar .browser__drives-slot {
   border-right: 1px solid var(--border-soft);
 }
 .browser__favorites-slot :deep(.favorites-sidebar) {
@@ -1172,34 +1175,19 @@ onUnmounted(() => {
     padding: 12px 0;
   }
 
-  .browser__nav {
-    align-items: stretch;
+  .browser__panel-top {
+    flex-wrap: wrap;
     gap: 10px;
-    padding: 12px;
+    padding: 10px 12px;
   }
 
-  .browser__nav :deep(.breadcrumb) {
+  .browser__breadcrumb {
     width: 100%;
-    min-width: 0;
+    flex-basis: 100%;
   }
 
-  .browser__content--with-favorites,
-  .browser__content--with-sidebar,
-  .browser__content--with-favorites.browser__content--with-sidebar {
+  .browser__content--with-favorites {
     grid-template-columns: 1fr;
-  }
-
-  .browser__drives-slot {
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-    border-right: none;
-  }
-
-  .browser__content--with-sidebar .browser__drives-slot {
-    max-height: 220px;
-    opacity: 1;
-    border-bottom: 1px solid var(--border-soft);
   }
 
   .browser__favorites-slot {
@@ -1215,7 +1203,6 @@ onUnmounted(() => {
     border-bottom: 1px solid var(--border-soft);
   }
 
-  .browser__content--favorites-transition-ready .browser__drives-slot,
   .browser__content--favorites-transition-ready .browser__favorites-slot {
     transition:
       max-height 0.22s ease,

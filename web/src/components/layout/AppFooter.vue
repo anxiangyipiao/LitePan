@@ -55,23 +55,23 @@ const badges = [
 
 <style scoped>
 .footer {
-  margin-top: 16px;
-  background: var(--surface-sunken);
-  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  background: transparent;
+  border-top: none;
   width: 100%;
 }
 .footer__inner {
-  min-height: 56px;
+  min-height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 14px;
-  padding: 12px 0;
+  gap: 10px;
+  padding: 8px 0;
 }
 .footer__sep {
   color: var(--border);
-  font-size: 13px;
+  font-size: 11px;
   line-height: 1;
   user-select: none;
 }
@@ -79,12 +79,17 @@ const badges = [
 .footer-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   text-decoration: none;
   color: inherit;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.2;
   white-space: nowrap;
+  opacity: 0.62;
+  transition: opacity var(--transition);
+}
+.footer-item:hover {
+  opacity: 1;
 }
 .footer-item__icon {
   color: var(--text-muted);
@@ -102,10 +107,10 @@ const badges = [
 
 @media (max-width: 640px) {
   .footer__inner {
-    gap: 10px;
+    gap: 8px;
   }
   .footer-item {
-    font-size: 12px;
+    font-size: 11px;
   }
 }
 </style>

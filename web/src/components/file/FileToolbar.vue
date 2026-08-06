@@ -16,7 +16,6 @@ const emit = defineEmits<{
   "batch-move": [];
   "batch-copy": [];
   "batch-delete": [];
-  "open-upload-tasks": [];
   "toggle-favorites": [];
 }>();
 
@@ -32,11 +31,6 @@ const props = defineProps<{
   refreshing: boolean;
   responseTime: string;
   cacheRate: string;
-  uploadTaskActive?: boolean;
-  uploadTaskFailed?: boolean;
-  uploadTaskSuccess?: boolean;
-  uploadTaskLabel?: string;
-  uploadTaskTitle?: string;
   favoritesOpen?: boolean;
   offlineDownloadSupported?: boolean;
 }>();
@@ -154,39 +148,6 @@ function onTransferSelect(key: string) {
     </div>
 
     <div class="file-toolbar__right">
-      <button
-        v-if="isAdmin"
-        type="button"
-        class="transfer-status-chip"
-        :class="{
-          active: uploadTaskActive,
-          failed: uploadTaskFailed && !uploadTaskActive,
-          success: uploadTaskSuccess && !uploadTaskActive && !uploadTaskFailed,
-        }"
-        :title="uploadTaskTitle || '传输列表'"
-        @click="emit('open-upload-tasks')"
-      >
-        <span class="transfer-status-icon-wrap">
-          <svg
-            v-if="uploadTaskSuccess && !uploadTaskActive && !uploadTaskFailed"
-            class="transfer-status-icon success"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.75"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="m3.5 8.5 3 3 6-7" />
-          </svg>
-          <span v-else class="transfer-status-icon transfer-status-icon-svg">
-            <SvgIcon name="upload" :size="14" />
-          </span>
-        </span>
-        <span class="transfer-status-text">{{ uploadTaskLabel || "暂无传输任务" }}</span>
-      </button>
-
       <div class="performance-panel" :class="{ expanded: performanceExpanded }">
         <div class="performance-metrics" :aria-hidden="!performanceExpanded">
           <span class="performance-metric">

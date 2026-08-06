@@ -41,6 +41,7 @@ const emit = defineEmits<{
       <th class="time-col sortable" @click="emit('sort-by', 'modified')">
         修改时间<span class="sort-indicator" :class="sortClass('modified')" />
       </th>
+      <th v-if="isAdmin" class="actions-col">操作</th>
     </tr>
   </thead>
 </template>

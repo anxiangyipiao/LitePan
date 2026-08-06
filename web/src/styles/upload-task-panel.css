@@ -1,19 +1,27 @@
 .upload-task-panel {
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(780px, calc(100vw - 48px));
-  height: min(70vh, 720px);
-  max-height: min(70vh, 720px);
+  top: var(--header-height);
+  right: 0;
+  bottom: 0;
+  width: min(560px, 100vw);
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  border-left: 1px solid var(--border);
+  border-radius: 14px 0 0 14px;
   box-shadow: var(--shadow-pop);
-  z-index: 121;
+  z-index: var(--z-modal);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: uploadTaskPanelSlideIn 0.24s ease-out;
+}
+
+@keyframes uploadTaskPanelSlideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 .upload-task-panel-header {

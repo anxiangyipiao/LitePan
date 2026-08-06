@@ -6,6 +6,10 @@ const SVG_MAP = {
 
   'trash-button': `<svg viewBox="0 0 24 24"${NS}><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M4 7h16"/><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M9 7V5.6c0-.9.7-1.6 1.6-1.6h2.8c.9 0 1.6.7 1.6 1.6V7"/><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M7 7l.8 11c.1 1.1 1 2 2.1 2h4.2c1.1 0 2-.9 2.1-2L17 7"/><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M10 10.5v5.5M14 10.5v5.5"/></svg>`,
 
+  download: `<svg viewBox="0 0 24 24"${NS}><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="M12 4v10"/><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="m7 10 5 5 5-5"/><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M5 20h14"/></svg>`,
+
+  'dots-h': `<svg viewBox="0 0 24 24"${NS}><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg>`,
+
   // 任务面板暂停/继续：线框风，与 trash-button 一致（勿走阿里彩色播放器图标）
   pause: `<svg viewBox="0 0 24 24"${NS}><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M9 6.5v11M15 6.5v11"/></svg>`,
   play: `<svg viewBox="0 0 24 24"${NS}><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" d="M9 6.8v10.4L17.5 12 9 6.8z"/></svg>`,

@@ -5,6 +5,15 @@ import { publicApi } from "@/api/public";
 import { logout } from "@/api/auth";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/composables/useToast";
+import { useTransferBadge } from "@/composables/upload/useTransferBadge";
+import {
+  getNextThemePref,
+  getThemePref,
+  getThemeToggleTitle,
+  setThemePref,
+  supportsThemeToggle,
+  type ThemePref,
+} from "@/utils/theme";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
 
 type BrightStarShape = "dot" | "cross" | "penta" | "six";
@@ -163,6 +172,20 @@ const headerEffectsEnabled = ref(true);
 const auth = useAuthStore();
 const loggedIn = computed(() => auth.sessionAdmin);
 const loggingOut = ref(false);
+
+const theme = ref<ThemePref>(getThemePref());
+const themeToggleTitle = computed(() => getThemeToggleTitle(theme.value));
+const showThemeToggle = computed(() => supportsThemeToggle());
+const {
+  count: transferCount,
+  kind: transferKind,
+  setOpen: openTransferPanel,
+} = useTransferBadge();
+
+function toggleTheme() {
+  theme.value = getNextThemePref(theme.value);
+  setThemePref(theme.value);
+}
 
 async function handleLogout() {
   if (loggingOut.value) return;
@@ -339,6 +362,50 @@ onMounted(async () => {
       </RouterLink>
 
       <nav class="header__nav">
+        <button
+          v-if="loggedIn && auth.isAdmin"
+          type="button"
+          class="header-icon-btn header-transfer-btn"
+          :class="`header-transfer-btn--${transferKind || 'idle'}`"
+          :title="'传输任务'"
+          aria-label="传输任务"
+          @click="openTransferPanel(true)"
+        >
+          <SvgIcon name="upload" :size="17" class-name="header-transfer-btn__icon" />
+          <span v-if="transferCount > 0" class="header-transfer-btn__badge">
+            {{ transferCount > 99 ? "99+" : transferCount }}
+          </span>
+        </button>
+
+        <button
+          v-if="showThemeToggle"
+          type="button"
+          class="header-icon-btn"
+          :title="themeToggleTitle"
+          :aria-label="themeToggleTitle"
+          @click="toggleTheme"
+        >
+          <svg v-if="theme === 'light'" viewBox="0 0 24 24" class="header-theme-icon" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2" />
+            <path d="M12 20v2" />
+            <path d="m4.93 4.93 1.41 1.41" />
+            <path d="m17.66 17.66 1.41 1.41" />
+            <path d="M2 12h2" />
+            <path d="M20 12h2" />
+            <path d="m6.34 17.66-1.41 1.41" />
+            <path d="m19.07 4.93-1.41 1.41" />
+          </svg>
+          <svg v-else-if="theme === 'dark'" viewBox="0 0 24 24" class="header-theme-icon" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" class="header-theme-icon" aria-hidden="true">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <path d="M8 21h8" />
+            <path d="M12 17v4" />
+          </svg>
+        </button>
+
         <RouterLink v-if="!loggedIn" to="/login" class="header-auth" title="登录后台">
           <span class="header-auth__icon" aria-hidden="true">
             <SvgIcon name="sign-in" :size="15" />
@@ -359,7 +426,7 @@ onMounted(async () => {
             <SvgIcon name="sign-out" :size="15" />
           </button>
           <span class="header-auth__sep" aria-hidden="true" />
-          <RouterLink to="/admin" class="header-auth__text">管理后台</RouterLink>
+          <RouterLink to="/admin" class="header-auth__text header-auth__text--admin">管理后台</RouterLink>
         </div>
       </nav>
     </div>
@@ -1092,5 +1159,82 @@ onMounted(async () => {
   text-decoration: none;
   white-space: nowrap;
   letter-spacing: 0.01em;
+}
+
+/* 顶栏图标按钮（传输任务 / 暗色开关） */
+.header-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text-on-brand);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.header-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+.header-icon-btn:active {
+  transform: translateY(0.5px);
+}
+.header-theme-icon {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 传输任务角标按钮：小气泡计数 + 状态色 */
+.header-transfer-btn {
+  position: relative;
+}
+.header-transfer-btn__icon {
+  color: var(--text-on-brand);
+}
+.header-transfer-btn__badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.header-transfer-btn--active .header-transfer-btn__badge {
+  background: var(--success);
+}
+.header-transfer-btn--failed .header-transfer-btn__badge {
+  background: var(--danger);
+}
+
+/* 管理后台胶囊 */
+.header-auth__text--admin {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: var(--text-on-brand);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: filter var(--transition);
+}
+.header-auth__text--admin:hover {
+  filter: brightness(1.08);
 }
 </style>
