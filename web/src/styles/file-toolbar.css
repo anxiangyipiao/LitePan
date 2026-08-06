@@ -266,6 +266,7 @@
 @media (max-width: 768px) {
   /* 移动端工具栏单行横排 + 按钮图标化，避免在面包屑下方堆叠成多行 */
   .file-toolbar {
+    position: relative;
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
@@ -310,25 +311,23 @@
     gap: 6px;
   }
 
-  .file-toolbar .performance-panel.expanded {
-    order: 3;
-    flex: 0 0 100%;
-    width: 100%;
-    justify-content: space-between;
+  /* 性能指标展开：以整条工具栏为锚点下拉成卡片，避免撑破 nowrap 的右侧按钮组 */
+  .file-toolbar .performance-panel.expanded .performance-metrics {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
-    padding: 8px;
+    padding: 8px 10px;
     border: 1px solid var(--border-soft);
     border-radius: var(--radius-sm);
     background: var(--surface);
-  }
-
-  .file-toolbar .performance-panel.expanded .performance-metrics {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    flex: 1;
+    box-shadow: var(--shadow-card);
     max-width: none;
     min-width: 0;
-    gap: 8px;
     margin-right: 0;
     white-space: normal;
   }

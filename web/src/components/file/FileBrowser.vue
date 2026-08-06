@@ -1207,7 +1207,13 @@ onUnmounted(() => {
   .browser__content--with-favorites .browser__favorites-slot {
     max-height: 360px;
     opacity: 1;
+    overflow-y: auto;
     border-bottom: 1px solid var(--border-soft);
+  }
+
+  /* 移动端收藏夹是内容自适应高度（由槽位滚动），不再按列高撑满 */
+  .browser__favorites-slot :deep(.favorites-sidebar) {
+    height: auto;
   }
 
   .browser__content--favorites-transition-ready .browser__favorites-slot {
