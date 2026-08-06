@@ -276,18 +276,8 @@
   .file-toolbar__left,
   .file-toolbar__right {
     margin-left: 0;
-    gap: 6px;
-  }
-
-  .file-toolbar__left {
-    flex: 1 1 auto;
-    min-width: 0;
-    flex-wrap: wrap;
-  }
-
-  .file-toolbar__right {
-    flex: 0 0 auto;
     flex-wrap: nowrap;
+    gap: 6px;
   }
 
   /* 隐藏文字标签与下拉箭头，只留图标（语义靠 title） */
@@ -314,12 +304,27 @@
     max-width: min(220px, 52vw);
   }
 
+  /* 点选后批量按钮组：固定悬浮到底部，不占工具栏高度 → 目录不因选中下移，双击进目录不受影响 */
   .file-toolbar__batch {
-    flex: 0 0 100%;
-    margin-left: 0;
-    padding-left: 0;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 0;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
     border-left: none;
-    gap: 6px;
+    background: var(--surface);
+    border-top: 1px solid var(--border-soft);
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.1);
+  }
+  /* 底部栏里恢复文字标签，一眼可辨 */
+  .file-toolbar__batch .file-toolbar__label {
+    display: inline;
   }
 
   /* 性能指标展开：以整条工具栏为锚点下拉成卡片，避免撑破 nowrap 的右侧按钮组 */
