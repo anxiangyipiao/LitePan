@@ -426,7 +426,7 @@ onMounted(async () => {
             <SvgIcon name="sign-out" :size="15" />
           </button>
           <span class="header-auth__sep" aria-hidden="true" />
-          <RouterLink to="/admin" class="header-auth__text header-auth__text--admin">管理后台</RouterLink>
+          <RouterLink to="/admin" class="header-auth__text">管理后台</RouterLink>
         </div>
       </nav>
     </div>
@@ -1219,22 +1219,5 @@ onMounted(async () => {
 }
 .header-transfer-btn--failed .header-transfer-btn__badge {
   background: var(--danger);
-}
-
-/* 管理后台胶囊 */
-.header-auth__text--admin {
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: var(--brand);
-  color: var(--text-on-brand);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  transition: filter var(--transition);
-}
-.header-auth__text--admin:hover {
-  filter: brightness(1.08);
 }
 </style>
