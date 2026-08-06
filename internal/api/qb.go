@@ -103,8 +103,9 @@ func (h *Handler) deleteQBDownloads(w http.ResponseWriter, r *http.Request) {
 	writeOK(w, map[string]any{"ok": true})
 }
 
-// addFileToQBDownload 把文件浏览器里选中的文件直链发送到 qBittorrent 下载。
-// .torrent 文件会以磁力/种子链接形式交给 qB 解析；普通文件按直链拉取。
+// addFileToQBDownload 把文件浏览器里选中的文件发送到 qBittorrent 下载。
+// 统一走 LitePan 的签名播放代理（/api/strm/play）让 qB 拉取——播放层负责带上驱动要求的
+// Cookie/UA/Referer 头（裸直链无法被 qB 直接拉取）；URL 内容若是 .torrent 则 qB 按种子解析。
 func (h *Handler) addFileToQBDownload(w http.ResponseWriter, r *http.Request) {
 	if !ensureServiceReady(w, h.qb != nil) || !ensureServiceReady(w, h.playback != nil) {
 		return
@@ -131,9 +132,13 @@ func (h *Handler) addFileToQBDownload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, domain.Errorf(domain.CodeValidation, "不能将文件夹发送到 qB"))
 		return
 	}
-	url := strings.TrimSpace(res.Link.URL)
-	if url == "" || !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-		writeErr(w, domain.Errorf(domain.CodeValidation, "该文件不支持直链，无法发送到 qB，请改用代理下载"))
+	if h.strm == nil {
+		writeErr(w, domain.Errorf(domain.CodeInternal, "STRM 服务未装配，无法为 qB 生成下载代理地址"))
+		return
+	}
+	url, err := h.strm.PlayURL(r.Context(), req.AccountID, req.FileID, res.File.Name)
+	if err != nil {
+		writeErr(w, domain.Errorf(domain.CodeDriverError, "生成 qB 下载地址失败：%v", err))
 		return
 	}
 	if err := h.qb.Add(r.Context(), []string{url}, strings.TrimSpace(req.SavePath)); err != nil {
