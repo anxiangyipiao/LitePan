@@ -44,3 +44,77 @@ func TestSecureCookieFrontendScheme(t *testing.T) {
 		})
 	}
 }
+
+// 飞牛 app 应用入口场景：反代带 X-Forwarded-Proto:https，但前端真实走 http 内网。
+// 此时登录 cookie 已按前端真实协议(http)处理，写请求的 Origin 校验也必须放行同源。
+func TestRequestOriginAllowedFrontendScheme(t *testing.T) {
+	cases := []struct {
+		name      string
+		host      string
+		xhost     string
+		origin    string
+		referer   string
+		wantAllow bool
+	}{
+		{
+			name: "fnos app http origin + same host, https xproto",
+			host: "192.168.1.10:5211",
+			origin: "http://192.168.1.10:5211",
+			wantAllow: true,
+		},
+		{
+			name: "fnos app http referer + same host",
+			host: "192.168.1.10:5211",
+			referer: "http://192.168.1.10:5211/admin",
+			wantAllow: true,
+		},
+		{
+			name: "same host via x-forwarded-host",
+			host: "10.0.0.8:5211",
+			xhost: "litepan.anxiangyi.fnos.net",
+			origin: "https://litepan.anxiangyi.fnos.net",
+			wantAllow: true,
+		},
+		{
+			name: "http origin + https proto mismatch, same host still allowed",
+			host: "192.168.1.10:5211",
+			origin: "http://192.168.1.10:5211",
+			wantAllow: true,
+		},
+		{
+			name: "cross-site host denied",
+			host: "192.168.1.10:5211",
+			origin: "https://evil.example.com",
+			wantAllow: false,
+		},
+		{
+			name: "same host different port denied",
+			host: "192.168.1.10:5211",
+			origin: "http://192.168.1.10:9999",
+			wantAllow: false,
+		},
+		{
+			name: "no origin header allowed",
+			host: "192.168.1.10:5211",
+			wantAllow: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("PUT", "http://"+tc.host+"/api/admin/settings", nil)
+			req.Host = tc.host
+			if tc.xhost != "" {
+				req.Header.Set("X-Forwarded-Host", tc.xhost)
+			}
+			if tc.origin != "" {
+				req.Header.Set("Origin", tc.origin)
+			}
+			if tc.referer != "" {
+				req.Header.Set("Referer", tc.referer)
+			}
+			if got := RequestOriginAllowed(req, nil); got != tc.wantAllow {
+				t.Fatalf("RequestOriginAllowed() = %v, want %v", got, tc.wantAllow)
+			}
+		})
+	}
+}

@@ -43,6 +43,9 @@ func RequestOriginAllowed(r *http.Request, allowed []string) bool {
 	if requestOrigin == "" {
 		return true
 	}
+	if originHostMatches(r, requestOrigin) {
+		return true
+	}
 	if requestOrigin == normalizeOrigin(requestBaseURL(r)) {
 		return true
 	}
@@ -51,6 +54,27 @@ func RequestOriginAllowed(r *http.Request, allowed []string) bool {
 	}
 	for _, item := range allowed {
 		if requestOrigin == normalizeOrigin(item) {
+			return true
+		}
+	}
+	return false
+}
+
+// originHostMatches 判断请求来源（Origin/Referer）的主机（含端口）是否与后端实际承载主机一致，
+// 且不比较协议。原因：FN Connect 等反代对外 https、对内转发 http 并注入 X-Forwarded-Proto:https，
+// 飞牛 app 应用入口走 http 内网时 Origin 协议是 http，若同时要求协议一致会把同源写请求误判为
+// 不可信来源。CSRF 防护关注的是跨站，主机一致即同站；协议差异无法由后端感知，交给 Secure cookie 判定。
+func originHostMatches(r *http.Request, origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := strings.ToLower(u.Host)
+	for _, candidate := range []string{
+		strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Host"), ",")[0]),
+		strings.TrimSpace(r.Host),
+	} {
+		if candidate != "" && strings.EqualFold(candidate, host) {
 			return true
 		}
 	}

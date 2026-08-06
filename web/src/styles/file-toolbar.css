@@ -264,17 +264,38 @@
 }
 
 @media (max-width: 768px) {
+  /* 移动端工具栏单行横排 + 按钮图标化，避免在面包屑下方堆叠成多行 */
   .file-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 15px 14px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
   }
 
+  .file-toolbar__left,
   .file-toolbar__right {
     margin-left: 0;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-    gap: 8px;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  /* 隐藏文字标签与下拉箭头，只留图标（语义靠 title） */
+  .file-toolbar__label,
+  .file-toolbar__menu-label,
+  .file-toolbar__menu-arrow {
+    display: none;
+  }
+
+  .file-toolbar__btn,
+  .file-toolbar__menu-trigger {
+    height: 38px;
+    padding: 0 10px;
+    gap: 6px;
+  }
+
+  .file-toolbar__menu-trigger {
+    min-width: 0;
+    padding-right: 10px;
   }
 
   .file-toolbar .transfer-status-chip {
@@ -286,6 +307,7 @@
     margin-left: 0;
     padding-left: 0;
     border-left: none;
+    gap: 6px;
   }
 
   .file-toolbar .performance-panel.expanded {

@@ -99,6 +99,7 @@ function onTransferSelect(key: string) {
             variant="primary"
             class="file-toolbar__menu-trigger"
             :aria-expanded="open"
+            title="新建 / 上传 / 离线下载"
             @click="toggle"
           >
             <span class="file-toolbar__menu-main">
@@ -112,11 +113,17 @@ function onTransferSelect(key: string) {
         </template>
       </AppDropdown>
 
-      <AppButton variant="secondary" class="file-toolbar__btn file-toolbar__btn--refresh" :disabled="refreshing" @click="emit('refresh')">
+      <AppButton
+        variant="secondary"
+        class="file-toolbar__btn file-toolbar__btn--refresh"
+        :disabled="refreshing"
+        :title="refreshing ? '刷新中…' : '刷新'"
+        @click="emit('refresh')"
+      >
         <span class="file-toolbar__icon" :class="{ spin: refreshing }">
           <SvgIcon name="refresh" :size="17" />
         </span>
-        <span>刷新</span>
+        <span class="file-toolbar__label">刷新</span>
       </AppButton>
 
       <div v-if="isAdmin && selectedCount > 0" class="file-toolbar__batch">
@@ -130,9 +137,9 @@ function onTransferSelect(key: string) {
           @select="onTransferSelect"
         >
           <template #trigger="{ open, toggle }">
-            <AppButton variant="secondary" class="file-toolbar__btn" :aria-expanded="open" @click="toggle">
+            <AppButton variant="secondary" class="file-toolbar__btn" :aria-expanded="open" title="批量转移 / 复制" @click="toggle">
               <span class="file-toolbar__icon"><SvgIcon name="package" :size="17" /></span>
-              <span>转移/复制</span>
+              <span class="file-toolbar__label">转移/复制</span>
               <span class="file-toolbar__menu-arrow file-toolbar__menu-arrow--muted" :class="{ open }">
                 <SvgIcon name="chevron-down" :size="14" />
               </span>
@@ -140,9 +147,9 @@ function onTransferSelect(key: string) {
           </template>
         </AppDropdown>
 
-        <AppButton variant="danger" class="file-toolbar__btn" @click="emit('batch-delete')">
+        <AppButton variant="danger" class="file-toolbar__btn" title="批量删除" @click="emit('batch-delete')">
           <span class="file-toolbar__icon"><SvgIcon name="trash-button" :size="17" /></span>
-          <span>批量删除</span>
+          <span class="file-toolbar__label">批量删除</span>
         </AppButton>
       </div>
     </div>
