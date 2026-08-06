@@ -2,7 +2,6 @@ import { reactive, ref, type Ref } from "vue";
 import type { FileItem } from "@/api/types";
 import { filesApi } from "@/api/files";
 import { getApiErrorMessage } from "@/api/client";
-import { addQBFileDownload } from "@/api/qb";
 import { toast } from "@/composables/useToast";
 import { confirm } from "@/composables/useConfirm";
 import { fileKey } from "@/composables/useFileSelection";
@@ -318,17 +317,6 @@ export function useFileActions(options: {
     toast.success(`开始下载：${file.name}`);
   }
 
-  async function qbDownload(file: FileItem) {
-    const accountId = options.getAccountId();
-    if (accountId == null || file.is_dir) return;
-    try {
-      const result = await addQBFileDownload({ account_id: accountId, file_id: file.id });
-      toast.success(`已发送到 qBittorrent：${result.name || file.name}`);
-    } catch (e) {
-      toast.error(getApiErrorMessage(e, "发送到 qB 失败"));
-    }
-  }
-
   function requestSingleMove(file: FileItem) {
     openTransfer("move", [file]);
   }
@@ -406,7 +394,6 @@ export function useFileActions(options: {
     createFolder,
     deleteFile,
     downloadFile,
-    qbDownload,
     requestSingleMove,
     requestSingleCopy,
     moveTargetsToParent,

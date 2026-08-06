@@ -495,25 +495,6 @@ func (s *Service) VerifySignature(path, signature string) bool {
 	return VerifyPath(path, signature, s.secret)
 }
 
-// PlayURL 生成外部客户端（qBittorrent 等无会话进程）可直接拉取的播放代理地址。
-// 走 /api/strm/play 通道：用持久化 strm_token + 可选路径签名鉴权，播放层负责带上驱动要求的
-// Cookie/UA/Referer 等头。URL 若被解析为 .torrent 内容则 qB 按种子处理，普通文件按直链拉取。
-func (s *Service) PlayURL(ctx context.Context, accountID int64, fileID, fileName string) (string, error) {
-	token, err := s.ensureToken(ctx)
-	if err != nil {
-		return "", err
-	}
-	return BuildPlayURL(
-		s.scanBaseURL(),
-		accountID,
-		fileID,
-		fileName,
-		token,
-		s.SignatureEnabled(),
-		s.secret,
-	), nil
-}
-
 func (s *Service) normalizeTask(task domain.StrmTask) domain.StrmTask {
 	task.Name = strings.TrimSpace(task.Name)
 	if task.ParentID == "" {

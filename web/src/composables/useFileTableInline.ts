@@ -21,7 +21,6 @@ export function useFileTableInline(options: {
   createFolder: (name: string) => Promise<boolean>;
   deleteFile: (file: FileItem, hooks?: DeleteFileHooks) => Promise<boolean>;
   downloadFile: (file: FileItem) => void;
-  qbDownload: (file: FileItem) => void;
   moveFile: (file: FileItem) => void;
   copyFile: (file: FileItem) => void;
   nameAlignFile: (file: FileItem) => void;
@@ -132,7 +131,6 @@ export function useFileTableInline(options: {
     if (!options.isAdmin.value) return [];
     const items: ContextMenuItem[] = [];
     if (!file.is_dir) items.push({ action: "download", label: "下载" });
-    if (!file.is_dir) items.push({ action: "qb-download", label: "qb 下载" });
     if (!file.is_dir && options.files.value.filter((item) => !item.is_dir).length >= 3) {
       items.push({ action: "name-align", label: "命名对齐" });
     }
@@ -251,7 +249,6 @@ export function useFileTableInline(options: {
   /** 行/卡悬停操作条复用：按动作分发到同一个业务 handler */
   function runRowAction(action: string, file: FileItem) {
     if (action === "download") options.downloadFile(file);
-    if (action === "qb-download") options.qbDownload(file);
     if (action === "name-align") options.nameAlignFile(file);
     if (action === "rename") void startInlineRename(file);
     if (action === "delete") void startInlineDelete(file);

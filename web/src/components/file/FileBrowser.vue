@@ -11,7 +11,6 @@ import { showConfirm } from "@/composables/useConfirm";
 import { useRelayTasks } from "@/composables/useRelayTasks";
 import { useUploadTasks } from "@/composables/useUploadTasks";
 import { useOfflineDownloads } from "@/composables/useOfflineDownloads";
-import { useQBTasks } from "@/composables/useQBTasks";
 import { useTransferBadge, type TransferBadgeKind } from "@/composables/upload/useTransferBadge";
 import { toast } from "@/composables/useToast";
 import { filesApi } from "@/api/files";
@@ -154,19 +153,16 @@ const offline = useOfflineDownloads({
   currentParentId,
   refreshFiles: () => store.loadFiles({ forceRefresh: true, silent: true }),
 });
-const qbTasks = useQBTasks();
 const uploadTaskFailed = computed(
   () =>
     uploadApi.displayUploadTasks.value.some((task) => task.status === "failed") ||
     uploadApi.runningRelayTasks.value.some((task) => task.status === "failed") ||
     uploadApi.completedRelayTasks.value.some((task) => task.status === "failed") ||
-    offline.failedTasks.value.length > 0 ||
-    qbTasks.failedTasks.value.length > 0,
+    offline.failedTasks.value.length > 0,
 );
 const uploadTaskSuccess = computed(() =>
   uploadApi.displayUploadTasks.value.some((task) => task.status === "success") ||
-  offline.successfulTasks.value.length > 0 ||
-  qbTasks.successfulTasks.value.length > 0,
+  offline.successfulTasks.value.length > 0,
 );
 
 // 顶栏传输角标：任务计数喂给 useTransferBadge（AppHeader 读取）；点击顶栏角标时打开任务面板。
@@ -175,8 +171,7 @@ watchEffect(() => {
   const active =
     uploadApi.activeUploadTasks.value.length +
     uploadApi.activeRelayCount.value +
-    offline.activeTasks.value.length +
-    qbTasks.activeTasks.value.length;
+    offline.activeTasks.value.length;
   let kind: TransferBadgeKind = "";
   if (active > 0) kind = "active";
   else if (uploadTaskFailed.value) kind = "failed";
@@ -499,7 +494,6 @@ async function loadInitialTaskState() {
       uploadApi.fetchUploadTasks(),
       relay.fetchRelayTasks(),
       offline.fetchTasks(true, true),
-      qbTasks.loadTasks(true),
     ]);
     if (relay.activeRelayCount.value > 0) {
       await relay.openRelayMonitoring();
@@ -520,12 +514,9 @@ async function openTaskPanel() {
     offline.tasks.value.length > 0 &&
     uploadApi.displayUploadTasks.value.length === 0 &&
     uploadApi.runningRelayTasks.value.length === 0 &&
-    uploadApi.completedRelayTasks.value.length === 0 &&
-    qbTasks.tasks.value.length === 0;
+    uploadApi.completedRelayTasks.value.length === 0;
   await uploadApi.openUploadTaskPanel(preferOffline ? "offline" : "");
   if (preferOffline) await offline.fetchTasks(true, true);
-  qbTasks.startPolling();
-  await qbTasks.loadTasks(true);
 }
 
 function handleOfflineTasksCreated(tasks: OfflineDownloadTask[]) {
@@ -939,7 +930,6 @@ onUnmounted(() => {
             :create-folder="fileActions.createFolder"
             :delete-file="fileActions.deleteFile"
             :download-file="fileActions.downloadFile"
-            :qb-download-file="fileActions.qbDownload"
             :move-file="fileActions.requestSingleMove"
             :copy-file="fileActions.requestSingleCopy"
             :name-align-file="openNameAlign"
@@ -1049,7 +1039,6 @@ onUnmounted(() => {
       :upload-api="uploadApi"
       :relay="relay"
       :offline="offline"
-      :qb="qbTasks"
     />
 
     <FilePreviewHost

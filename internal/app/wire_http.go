@@ -61,7 +61,6 @@ func wireHTTPServer(cfg config.Config, logs *logx.Manager, st *storeBundle, core
 		Notifications:     notifySvc,
 		DataDir:           cfg.DataDir,
 		OnSettingsUpdated: cacheSettingsHook(core.cache, st.settings, cfg.DataDir),
-		QB:                svc.qb,
 	})
 
 	return &http.Server{
