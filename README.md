@@ -19,13 +19,7 @@
 
 </div>
 
-<br>
 
-> [!CAUTION]
-> 当前仓库是正在开发中的 **Go 版 LitePan**，首次发布可能问题较多，请谨慎测试。
-> Python 旧版已归档至 [LitePan-old](https://github.com/Ponphil/LitePan-old)。
-
-<br>
 
 ## ▎ 本分支说明（fork）
 
@@ -33,17 +27,25 @@
 
 | 差异 | 说明 |
 |------|------|
-| 🆕 **沃云盘驱动** | 新增中国联通「沃云盘」（pan.wo.cn）支持，个人空间 / 家庭空间均可挂载，refresh_token 直连换新、自动续期，302 直链与代理下载。上游 LitePan 暂无此驱动。 |
-| ⬆️ **天翼云盘增强** | 家庭云空间新增「家庭空间 ID」配置项，有多个家庭空间时可手动指定精确挂载；留空则沿用上游的自动选择逻辑。 |
+| 🆕 **联通云盘驱动** | 新增中国联通「沃云盘」（pan.wo.cn）支持：个人空间 / 家庭空间均可挂载，refresh_token 直连换新、自动续期，支持 302 直链与代理下载。上游 LitePan 暂无此驱动。 |
+| ⬆️ **天翼云盘增强** | 家庭空间新增「家庭空间 ID」配置项；账号下存在多个家庭空间时可手动指定、精确挂载；留空则回退上游自动选择逻辑，与上游完全兼容。 |
+| ⬆️ **strm 刮削增强** | strm 刮削新增 metatube 刮削源，元数据覆盖更全（可刮削小姐姐）。该功能需独立部署 metatube 服务；如需一对一付费部署协助，请加 QQ 1500404845。 |
+| 🎨 **前端重构** | 前端页面全新重构，布局更简单、交互更人性化（详见下方）。 |
 
-### 📦 下载（fnOS `.fpk` 安装包）
+### 前端重构亮点
 
-由 [LitePan-fpk](https://github.com/anxiangyipiao/LitePan-fpk) 自动构建的 x86 / arm64 两个平台安装包：
+- **存储盘顶部平铺**：全部网盘横向卡片条展示，一键切换，状态一目了然；
+- **双栏布局**：左侧收藏夹、右侧文件区，去掉多余栏目，视觉更聚焦；
+- **路径导航贴近文件**：面包屑紧贴文件列表上方，点击区域更大，跳目录更顺手；
+- **双视图切换**：列表 / 卡片两种视图自由切换，偏好自动记忆。
 
-| 平台 | 架构 | 下载 |
-|------|------|------|
-| x86 | amd64 | [LitePan_x86_0.4.6.fpk](https://github.com/anxiangyipiao/LitePan-fpk/releases/download/v0.4.6-fpk-1/LitePan_x86_0.4.6.fpk) |
-| arm | arm64 | [LitePan_arm_0.4.6.fpk](https://github.com/anxiangyipiao/LitePan-fpk/releases/download/v0.4.6-fpk-1/LitePan_arm_0.4.6.fpk) |
+<!-- TODO: 重构完成后替换为真实截图 -->
+![前端预览](docs/screenshots/preview.png)
+
+### 📦 下载 fnOS `.fpk` 安装包
+
+本项目提供由 [LitePan-fpk](https://github.com/anxiangyipiao/LitePan-fpk) 自动构建的 fnOS 安装包，支持 `x86` 与 `arm64` 两种平台，可前往下载页面获取对应版本。
+
 
 在 fnOS 中安装后，默认管理员账号密码均为 `admin`。
 
@@ -96,44 +98,6 @@
 
 ---
 
-## ▎ 快速开始
-
-**Docker Compose 部署** · 镜像标签：`Beta`或指定`v0.4.6-Beta`
-
-```yaml
-services:
-  litepan:
-    image: ponphil/litepan:beta
-    container_name: litepan
-    restart: unless-stopped
-    ports:
-      - "5211:5211"
-    environment:
-      - TZ=Asia/Shanghai
-    volumes:
-      - ./data:/app/data
-      - ./strm:/app/strm
-      - ./mounts:/app/mounts:shared
-
-      # 可选：将 FUSE 读缓存单独映射，建议放到更快的磁盘
-      # - ./fuse_read_cache:/app/data/fuse_read_cache
-    devices:
-      - /dev/fuse:/dev/fuse
-    pid: "host"
-    privileged: true
-    # 没有代理环境的，可以在下方配置tmdb的hosts
-    # extra_hosts:
-      # - "api.themoviedb.org:这里填写对应的ip"
-      # - "image.tmdb.org:这里填写对应的ip"
-```
-
-打开 `http://你的IP:5211`，默认管理员密码均为admin。  
-需要 FUSE 时请确保宿主机具备 `/dev/fuse` 权限。
-
-> [!WARNING]
-> **不要用 `ponphil/litepan:latest` 部署本仓库对应的 Go 版。**  
-> `latest` 仍是 Python 旧版镜像。若你需要旧版程序与 Compose 脚本，请前往归档仓库：[LitePan-old](https://github.com/Ponphil/LitePan-old)。
-
 ## ▎ 支持
 
 <table>
@@ -143,21 +107,12 @@ services:
       <p>如果这个项目对你有帮助，欢迎点右上角 <strong>Star</strong>，也欢迎自愿赞赏。</p>
       <img src="docs/pictures/wechat-tip.png" alt="微信赞赏" width="260">
     </td>
-    <td width="50%" valign="top">
-      <h3>赞助致谢</h3>
-      <p>感谢每一位支持 LitePan 的朋友。</p>
-      <p>完整致谢名单见官方网站：</p>
-      <p>
-        <a href="https://www.litepan.top/sponsor.html">https://www.litepan.top/sponsor.html</a>
-      </p>
-    </td>
+   
   </tr>
 </table>
 
 ## ▎ 反馈
 
-交流请到 <a href="https://space.bilibili.com/1501989416">B 站主页</a>。  
-暂不接受公开 PR；有维护意愿请私信。
 外部贡献致谢见 [ACKNOWLEDGEMENTS.md](./ACKNOWLEDGEMENTS.md)。
 
 ---
