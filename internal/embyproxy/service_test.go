@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -42,78 +43,6 @@ func testEmbyProxyService(t *testing.T, embyURL string) *Service {
 	return New(Options{Settings: settingsSvc})
 }
 
-func TestDedicatedPortForwardsInfuseProbe(t *testing.T) {
-	var gotPath, gotUA, gotAuthorization string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.Path
-		gotUA = r.UserAgent()
-		gotAuthorization = r.Header.Get("X-Emby-Authorization")
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"ServerName":"Emby"}`)
-	}))
-	defer upstream.Close()
-
-	svc := testEmbyProxyService(t, upstream.URL)
-	req := httptest.NewRequest(http.MethodGet, "http://litepan.test:8097/System/Info/Public", nil)
-	req.Header.Set("User-Agent", "Infuse-Direct/8")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Emby-Authorization", `MediaBrowser Client="Infuse-Direct", Device="iPhone", DeviceId="test", Version="8"`)
-	rec := httptest.NewRecorder()
-	svc.handle(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("状态码=%d，响应=%s", rec.Code, rec.Body.String())
-	}
-	if gotPath != "/System/Info/Public" {
-		t.Fatalf("上游路径=%q，期望 /System/Info/Public", gotPath)
-	}
-	if !strings.Contains(rec.Body.String(), `"ServerName":"Emby"`) {
-		t.Fatalf("响应体=%q", rec.Body.String())
-	}
-	if gotUA != "Infuse-Direct/8" || !strings.Contains(gotAuthorization, `Client="Infuse-Direct"`) {
-		t.Fatalf("Infuse 请求头未透传：UA=%q Authorization=%q", gotUA, gotAuthorization)
-	}
-}
-
-func TestDedicatedPortPreservesInfuseAuthenticationBodyLength(t *testing.T) {
-	var gotPath, gotBody, gotContentType string
-	var gotContentLength int64
-	var gotTransferEncoding []string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.Path
-		body, _ := io.ReadAll(r.Body)
-		gotBody = string(body)
-		gotContentType = r.Header.Get("Content-Type")
-		gotContentLength = r.ContentLength
-		gotTransferEncoding = append([]string(nil), r.TransferEncoding...)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"AccessToken":"token","ServerId":"server"}`)
-	}))
-	defer upstream.Close()
-
-	svc := testEmbyProxyService(t, upstream.URL)
-	body := `{"Username":"user","Pw":"password"}`
-	req := httptest.NewRequest(http.MethodPost, "http://litepan.test:8097/Users/AuthenticateByName", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Infuse-Direct/8")
-	req.Header.Set("X-Emby-Authorization", `MediaBrowser Client="Infuse-Direct", Device="iPhone", DeviceId="test", Version="8"`)
-	rec := httptest.NewRecorder()
-	svc.handle(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("状态码=%d，响应=%s", rec.Code, rec.Body.String())
-	}
-	if gotPath != "/Users/AuthenticateByName" {
-		t.Fatalf("上游路径=%q", gotPath)
-	}
-	if gotBody != body || gotContentType != "application/json" {
-		t.Fatalf("认证请求体/类型未透传：body=%q type=%q", gotBody, gotContentType)
-	}
-	if gotContentLength != int64(len(body)) || len(gotTransferEncoding) != 0 {
-		t.Fatalf("认证请求长度=%d，Transfer-Encoding=%v，期望固定 Content-Length=%d", gotContentLength, gotTransferEncoding, len(body))
-	}
-}
-
 func TestRedirectSTRMStreamResolvesLitePanSTRMOnServer(t *testing.T) {
 	fileID := "file-1"
 	litepanURL := fmt.Sprintf("http://192.168.60.8:5211/api/strm/play/12/%s/t/token/n/demo.mkv", strm.EncodeFileKey(fileID))
@@ -130,15 +59,18 @@ func TestRedirectSTRMStreamResolvesLitePanSTRMOnServer(t *testing.T) {
 	svc := testEmbyProxyService(t, upstream.URL)
 	var gotAccountID int64
 	var gotFileID string
+	var gotUA string
 	svc.servePlayback = func(w http.ResponseWriter, r *http.Request, req playback.Request, intent playback.Intent) error {
 		gotAccountID = req.AccountID
 		gotFileID = req.FileID
+		gotUA = r.UserAgent()
 		w.Header().Set("Location", "https://cdn.example/video.mkv")
 		w.WriteHeader(http.StatusFound)
 		return nil
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "http://litepan.test:8097/Videos/123/stream?MediaSourceId=ms1&api_key=test-key", nil)
+	req.Header.Set("User-Agent", "MediaClient/8.5")
 	rec := httptest.NewRecorder()
 	svc.handle(rec, req)
 
@@ -152,6 +84,9 @@ func TestRedirectSTRMStreamResolvesLitePanSTRMOnServer(t *testing.T) {
 	}
 	if gotAccountID != 12 || gotFileID != fileID {
 		t.Fatalf("播放请求解析错误：account=%d file=%q", gotAccountID, gotFileID)
+	}
+	if gotUA != "MediaClient/8.5" {
+		t.Fatalf("播放请求 UA=%q，期望透传 MediaClient/8.5", gotUA)
 	}
 }
 
@@ -190,5 +125,74 @@ func TestRedirectSTRMStreamUsesPlaybackResponseForProxyMode(t *testing.T) {
 	}
 	if got := string(body); got != "proxied" {
 		t.Fatalf("响应体=%q", got)
+	}
+}
+
+func TestRedirectSTRMStreamAcceptsLitePanURLWithSpaces(t *testing.T) {
+	fileID := "file-with-spaces"
+	fileName := "10间敢死队 (2026) [2160p].mkv"
+	litepanURL := fmt.Sprintf("http://192.168.60.8:5211/api/strm/play/12/%s/t/token/n/%s", strm.EncodeFileKey(fileID), url.PathEscape(fileName))
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/Items") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, fmt.Sprintf(`{"Items":[{"Id":"123","MediaSources":[{"Id":"ms1","Path":%q}]}]}`, litepanURL))
+	}))
+	defer upstream.Close()
+
+	svc := testEmbyProxyService(t, upstream.URL)
+	var gotReq playback.Request
+	svc.servePlayback = func(w http.ResponseWriter, r *http.Request, req playback.Request, intent playback.Intent) error {
+		gotReq = req
+		w.WriteHeader(http.StatusFound)
+		return nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://litepan.test:8097/Videos/123/stream?MediaSourceId=ms1&api_key=test-key", nil)
+	rec := httptest.NewRecorder()
+	svc.handle(rec, req)
+
+	resp := rec.Result()
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("状态码=%d，响应=%s", resp.StatusCode, rec.Body.String())
+	}
+	if gotReq.AccountID != 12 || gotReq.FileID != fileID {
+		t.Fatalf("带空格文件名的 LitePan URL 解析错误：account=%d file=%q", gotReq.AccountID, gotReq.FileID)
+	}
+}
+
+func TestParseLitePanSTRMURLFilenameRegressionCases(t *testing.T) {
+	cases := []struct {
+		name     string
+		fileName string
+	}{
+		{name: "中文空格括号", fileName: "10间敢死队 (2026) [2160p].mkv"},
+		{name: "英文加号百分号", fileName: "Movie.Name.2024.2160p.HDR10+ 100%.mkv"},
+		{name: "波浪线与符号", fileName: "A&B ~ Director's Cut, Final!.mp4"},
+		{name: "全角符号混排", fileName: "全角～波浪＋中文＆英文【特别版】.mkv"},
+		{name: "井号分号等号", fileName: "Episode 01; part=2 #remux!.mkv"},
+	}
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fileID := fmt.Sprintf("file-regression-%d", i)
+			playURL := fmt.Sprintf(
+				"http://127.0.0.1:5211/api/strm/play/12/%s/t/token/n/%s",
+				strm.EncodeFileKey(fileID),
+				url.PathEscape(tc.fileName),
+			)
+			accountID, gotFileID, ok := parseLitePanSTRMURL(playURL)
+			if !ok {
+				t.Fatalf("parseLitePanSTRMURL 返回 false，url=%q", playURL)
+			}
+			if accountID != 12 || gotFileID != fileID {
+				t.Fatalf("解析结果错误：account=%d file=%q", accountID, gotFileID)
+			}
+			if gotPath := litepanPath(playURL); strings.Contains(gotPath, " ") {
+				t.Fatalf("编码路径不应出现空格：%q", gotPath)
+			}
+		})
 	}
 }

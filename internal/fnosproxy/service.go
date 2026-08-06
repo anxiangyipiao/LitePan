@@ -61,6 +61,8 @@ type Service struct {
 	log      *slog.Logger
 	client   *http.Client
 
+	servePlayback func(w http.ResponseWriter, r *http.Request, req playback.Request, intent playback.Intent) error
+
 	mu     sync.Mutex
 	server *http.Server
 	port   int
@@ -114,12 +116,18 @@ func New(opts Options) *Service {
 		strmDir = "/app/strm"
 	}
 	return &Service{
-		settings:     opts.Settings,
-		playback:     opts.Playback,
-		strm:         opts.Strm,
-		strmDir:      strmDir,
-		log:          log,
-		client:       client,
+		settings: opts.Settings,
+		playback: opts.Playback,
+		strm:     opts.Strm,
+		strmDir:  strmDir,
+		log:      log,
+		client:   client,
+		servePlayback: func(w http.ResponseWriter, r *http.Request, req playback.Request, intent playback.Intent) error {
+			if opts.Playback == nil {
+				return domain.Errf(domain.CodeNotImplement)
+			}
+			return opts.Playback.ServeHTTP(w, r, req, intent)
+		},
 		byMS:         map[string]*cachedSource{},
 		byItem:       map[string]*cachedSource{},
 		cacheEntries: map[*cachedSource]struct{}{},
@@ -438,7 +446,7 @@ func (s *Service) serveSTRM(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	name, _ := url.PathUnescape(m[4])
-	if err := s.playback.ServeHTTP(w, r, playback.Request{AccountID: accountID, FileID: fileID}, playback.Intent{FileName: name}); err != nil {
+	if err := s.servePlaybackHTTP(w, r, playback.Request{AccountID: accountID, FileID: fileID}, playback.Intent{FileName: name}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -465,20 +473,9 @@ func (s *Service) redirectSTRMStream(w http.ResponseWriter, r *http.Request, cfg
 		}
 	}
 	if playURL != "" {
-		// Infuse 无法跟随媒体库 302，按客户端名识别后强制 Range 代理。
-		if isInfuseRequest(r) && s.playback != nil {
-			if accountID, fileID, ok := parseLitePanSTRMURL(playURL); ok {
-				name := strmFileNameFromPlayURL(playURL)
-				if err := s.playback.ServeHTTP(w, r, playback.Request{
-					AccountID: accountID,
-					FileID:    fileID,
-				}, playback.Intent{ForceProxy: true, FileName: name}); err != nil {
-					http.Error(w, err.Error(), http.StatusBadGateway)
-				}
-				return
-			}
+		if s.serveLitePanPlayback(w, r, playURL) {
+			return
 		}
-		// 其它客户端直接跟随 STRM 地址，避免服务端预解自身地址造成阻塞。
 		w.Header().Set("Location", playURL)
 		w.WriteHeader(http.StatusFound)
 		return
@@ -487,6 +484,28 @@ func (s *Service) redirectSTRMStream(w http.ResponseWriter, r *http.Request, cfg
 		s.log.Warn("飞牛反代无法读取 strm，透传上游", "path", strmPath, "media_source_id", mediaSourceID, "item_id", itemID)
 	}
 	s.proxyRequest(w, r, cfg, fullPath)
+}
+
+func (s *Service) serveLitePanPlayback(w http.ResponseWriter, r *http.Request, playURL string) bool {
+	if !isLitePanSTRMURL(playURL) {
+		return false
+	}
+	accountID, fileID, ok := parseLitePanSTRMURL(playURL)
+	if !ok {
+		s.log.Warn("飞牛反代无法解析 LitePan STRM", "url", playURL)
+		http.Error(w, "invalid litepan strm url", http.StatusBadGateway)
+		return true
+	}
+	name := strmFileNameFromPlayURL(playURL)
+	if err := s.servePlaybackHTTP(w, r, playback.Request{
+		AccountID: accountID,
+		FileID:    fileID,
+	}, playback.Intent{FileName: name}); err != nil {
+		s.log.Warn("飞牛反代解析 LitePan STRM 失败", "url", playURL, "error", err)
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return true
+	}
+	return true
 }
 
 func (s *Service) resolvePlayURL(mediaSourceID, itemID string, cfg Config) (playURL, strmPath string) {
@@ -522,6 +541,9 @@ func (s *Service) redirectItemFile(w http.ResponseWriter, r *http.Request, cfg C
 		}
 	}
 	if playURL != "" {
+		if s.serveLitePanPlayback(w, r, playURL) {
+			return
+		}
 		w.Header().Set("Location", playURL)
 		w.WriteHeader(http.StatusFound)
 		return
@@ -623,14 +645,17 @@ func (s *Service) modifyPlaybackInfo(w http.ResponseWriter, r *http.Request, cfg
 		itemID = strings.TrimSpace(anyString(payload["ItemId"]))
 	}
 
-	infuse := isInfuseRequest(r)
 	changed := false
+	strmSourceCount := 0
 	for _, mediaSource := range mediaSources(payload) {
 		// 补齐客户端要求非空的 MediaStream 字段。
 		if normalizeEmbyMediaStreams(mediaSource) {
 			changed = true
 		}
-		if s.rewriteStrmMediaSource(mediaSource, itemID, r, cfg, infuse) {
+		if isStrmPath(strings.TrimSpace(stringValue(mediaSource, "Path"))) {
+			strmSourceCount++
+		}
+		if s.rewriteStrmMediaSource(mediaSource, itemID, r, cfg) {
 			changed = true
 		}
 	}
@@ -649,7 +674,7 @@ func (s *Service) modifyPlaybackInfo(w http.ResponseWriter, r *http.Request, cfg
 }
 
 // rewriteStrmMediaSource 缓存并预热 STRM 播放地址，同时改写播放能力字段。
-func (s *Service) rewriteStrmMediaSource(mediaSource map[string]any, itemID string, r *http.Request, cfg Config, infuse bool) bool {
+func (s *Service) rewriteStrmMediaSource(mediaSource map[string]any, itemID string, r *http.Request, cfg Config) bool {
 	mediaSourceID := stringValue(mediaSource, "Id", "ID")
 	rawPath := strings.TrimSpace(stringValue(mediaSource, "Path"))
 	if !isStrmPath(rawPath) {
@@ -658,32 +683,17 @@ func (s *Service) rewriteStrmMediaSource(mediaSource map[string]any, itemID stri
 	playURL := s.readStrmURL(rawPath, cfg)
 	s.rememberSource(mediaSourceID, itemID, rawPath, playURL)
 	s.prewarmPlayback(playURL, r.UserAgent())
-	// Infuse 禁用 DirectPlay 并走 Range，其它客户端允许 302。
 	id := firstNonEmpty(itemID, stripMediaSourcePrefix(mediaSourceID))
 	mediaSource["SupportsDirectStream"] = true
+	mediaSource["SupportsDirectPlay"] = true
 	mediaSource["SupportsTranscoding"] = false
 	mediaSource["DirectStreamUrl"] = proxiedVideoPath(r, id, mediaSourceID)
 	mediaSource["Protocol"] = "Http"
 	mediaSource["IsRemote"] = true
-	if infuse {
-		mediaSource["SupportsDirectPlay"] = false
-	} else {
-		mediaSource["SupportsDirectPlay"] = true
-	}
 	delete(mediaSource, "TranscodingUrl")
 	delete(mediaSource, "TranscodingSubProtocol")
 	delete(mediaSource, "TranscodingContainer")
 	return true
-}
-
-func isInfuseRequest(r *http.Request) bool {
-	if r == nil {
-		return false
-	}
-	if strings.Contains(strings.ToLower(r.UserAgent()), "infuse") {
-		return true
-	}
-	return strings.Contains(strings.ToLower(embyClientName(r)), "infuse")
 }
 
 func embyClientName(r *http.Request) string {
@@ -921,6 +931,13 @@ func (s *Service) prewarmPlayback(playURL, ua string) {
 	}()
 }
 
+func (s *Service) servePlaybackHTTP(w http.ResponseWriter, r *http.Request, req playback.Request, intent playback.Intent) error {
+	if s == nil || s.servePlayback == nil {
+		return domain.Errf(domain.CodeNotImplement)
+	}
+	return s.servePlayback(w, r, req, intent)
+}
+
 func (s *Service) rememberSource(mediaSourceID, itemID, strmPath, playURL string) {
 	now := time.Now()
 	mediaSourceID = strings.TrimSpace(mediaSourceID)
@@ -1055,8 +1072,8 @@ func (s *Service) readStrmURL(rawPath string, cfg Config) string {
 		if err != nil {
 			continue
 		}
-		for _, line := range strings.Split(string(data), "\n") {
-			line = strings.TrimSpace(line)
+		for _, rawLine := range strings.Split(string(data), "\n") {
+			line := cleanWrappedURL(rawLine)
 			if line == "" || strings.HasPrefix(line, "#") {
 				continue
 			}
@@ -1242,7 +1259,7 @@ func isLitePanSTRMURL(value string) bool {
 }
 
 func litepanPath(value string) string {
-	text := strings.TrimSpace(value)
+	text := cleanWrappedURL(value)
 	if text == "" {
 		return ""
 	}
@@ -1251,10 +1268,21 @@ func litepanPath(value string) string {
 		if err != nil {
 			return ""
 		}
-		return u.Path
+		return u.EscapedPath()
 	}
 	pathOnly, _, _ := strings.Cut(text, "?")
 	return pathOnly
+}
+
+func cleanWrappedURL(value string) string {
+	text := strings.TrimSpace(value)
+	for {
+		trimmed := strings.Trim(text, "`\"' ")
+		if trimmed == text {
+			return trimmed
+		}
+		text = strings.TrimSpace(trimmed)
+	}
 }
 
 func extractItemID(fullPath string) string {

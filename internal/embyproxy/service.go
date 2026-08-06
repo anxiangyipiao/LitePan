@@ -887,7 +887,7 @@ func anyString(v any) string {
 }
 
 func normalizeMediaURL(candidate string, r *http.Request, cfg Config) string {
-	value := strings.TrimSpace(candidate)
+	value := cleanWrappedURL(candidate)
 	if value == "" {
 		return ""
 	}
@@ -905,7 +905,7 @@ func isLitePanSTRMURL(value string) bool {
 }
 
 func litepanPath(value string) string {
-	text := strings.TrimSpace(value)
+	text := cleanWrappedURL(value)
 	if text == "" {
 		return ""
 	}
@@ -914,10 +914,21 @@ func litepanPath(value string) string {
 		if err != nil {
 			return ""
 		}
-		return u.Path
+		return u.EscapedPath()
 	}
 	pathOnly, _, _ := strings.Cut(text, "?")
 	return pathOnly
+}
+
+func cleanWrappedURL(value string) string {
+	text := strings.TrimSpace(value)
+	for {
+		trimmed := strings.Trim(text, "`\"' ")
+		if trimmed == text {
+			return trimmed
+		}
+		text = strings.TrimSpace(trimmed)
+	}
 }
 
 func responseHeaders(src http.Header) http.Header {

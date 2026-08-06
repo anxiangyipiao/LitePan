@@ -816,6 +816,13 @@ func (s *Service) executeTransferFile(ctx context.Context, in executeFileInput) 
 		s.log.Warn("跨盘秒传执行前取指纹失败", "name", f.Name, "err", err)
 	}
 	if fileHash == "" {
+		if in.fallback {
+			if relayErr := s.enqueueRelayTask(ctx, in); relayErr == nil {
+				return transferItemResult(base, false, "relay", "", "")
+			} else {
+				return transferItemResult(base, false, "error", "", relayErr.Error())
+			}
+		}
 		return transferItemResult(base, false, "skip", "", "缺少指纹")
 	}
 
@@ -830,31 +837,39 @@ func (s *Service) executeTransferFile(ctx context.Context, in executeFileInput) 
 		return transferItemResult(base, true, "rapid", fileID, "")
 	}
 
-	if in.fallback && strings.TrimSpace(f.SourceFileID) != "" {
-		_, err := s.relay.CreateTask(ctx, RelayTaskInput{
-			SourceAccountID:   in.sourceAccountID,
-			SourceAccountName: in.sourceAccountName,
-			SourceDriverType:  in.sourceDriverType,
-			TargetAccountID:   in.targetAccountID,
-			TargetAccountName: in.targetAccountName,
-			TargetDriverType:  in.targetDriverType,
-			SourceFileID:      f.SourceFileID,
-			FileName:          f.Name,
-			RelPath:           f.RelPath,
-			RelDir:            f.RelDir,
-			TargetParentID:    in.targetParentID,
-			TargetDisplayPath: in.targetDisplayPath,
-			TotalBytes:        f.Size,
-			Method:            in.methodID,
-			ConflictPolicy:    in.conflict,
-		})
-		if err != nil {
+	if in.fallback {
+		if err := s.enqueueRelayTask(ctx, in); err != nil {
 			return transferItemResult(base, false, "error", "", err.Error())
 		}
 		return transferItemResult(base, false, "relay", "", "")
 	}
 
 	return transferItemResult(base, false, "rapid", "", "未命中秒传")
+}
+
+func (s *Service) enqueueRelayTask(ctx context.Context, in executeFileInput) error {
+	f := in.file
+	if strings.TrimSpace(f.SourceFileID) == "" {
+		return domain.Errorf(domain.CodeValidation, "源文件缺少 file_id，无法执行兜底传输")
+	}
+	_, err := s.relay.CreateTask(ctx, RelayTaskInput{
+		SourceAccountID:   in.sourceAccountID,
+		SourceAccountName: in.sourceAccountName,
+		SourceDriverType:  in.sourceDriverType,
+		TargetAccountID:   in.targetAccountID,
+		TargetAccountName: in.targetAccountName,
+		TargetDriverType:  in.targetDriverType,
+		SourceFileID:      f.SourceFileID,
+		FileName:          f.Name,
+		RelPath:           f.RelPath,
+		RelDir:            f.RelDir,
+		TargetParentID:    in.targetParentID,
+		TargetDisplayPath: in.targetDisplayPath,
+		TotalBytes:        f.Size,
+		Method:            in.methodID,
+		ConflictPolicy:    in.conflict,
+	})
+	return err
 }
 
 func normalizeConflictPolicy(policy string) string {

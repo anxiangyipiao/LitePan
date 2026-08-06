@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"litepan/internal/core/driverexec"
 	"litepan/internal/cache"
+	"litepan/internal/core/driverexec"
 	"litepan/internal/domain"
 	"litepan/internal/driver"
 	"litepan/internal/file"
@@ -159,6 +159,58 @@ func TestExecuteRapidUploadInvalidatesTargetDirCache(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].Name != "hit.bin" {
 		t.Fatalf("秒传成功后应直接看到新文件，items=%#v", items)
+	}
+}
+
+func TestExecuteFallbackQueuesFilesWithoutHash(t *testing.T) {
+	drv := newCleanupDriver()
+	service := newCleanupService(t, drv)
+	var events []StreamEvent
+
+	err := service.ExecuteStream(context.Background(), ExecuteInput{
+		SourceAccountID:   1,
+		SourceAccountName: "123",
+		SourceDriverType:  "123_open",
+		TargetAccountID:   2,
+		TargetAccountName: "189",
+		TargetDriverType:  "189_cloud",
+		TargetParentID:    "root",
+		TargetDisplayPath: "/",
+		MethodID:          "md5",
+		Fallback:          true,
+		Files: []TransferFile{
+			{
+				SourceFileID: "file-with-hash",
+				RelPath:      "A/has-hash.bin",
+				RelDir:       "A",
+				Name:         "has-hash.bin",
+				Size:         1,
+				Hash:         "11111111111111111111111111111111",
+			},
+			{
+				SourceFileID: "file-without-hash",
+				RelPath:      "B/no-hash.bin",
+				RelDir:       "B",
+				Name:         "no-hash.bin",
+				Size:         1,
+			},
+		},
+	}, func(event StreamEvent) error {
+		events = append(events, event)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("兜底执行失败: %v", err)
+	}
+	if len(events) < 3 {
+		t.Fatalf("事件数量不足: %#v", events)
+	}
+	firstItem, secondItem, end := events[1], events[2], events[len(events)-1]
+	if firstItem["mode"] != "relay" || secondItem["mode"] != "relay" {
+		t.Fatalf("开启兜底后两个文件都应进入中继队列，events=%#v", events)
+	}
+	if end["event"] != "end" || end["relay_queued"] != 2 {
+		t.Fatalf("兜底队列统计不正确: %#v", end)
 	}
 }
 
