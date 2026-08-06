@@ -100,7 +100,14 @@ func normalizeOrigin(value string) string {
 	return strings.ToLower(strings.TrimSuffix(text, "/"))
 }
 
+// SecureCookie 决定登录 cookie 是否带 Secure 标志。
+// 优先用浏览器真实协议（Origin/Referer）判定：前端是 https 才种 Secure cookie，
+// 避免「反代带 https 头但实际前端走 http 内网」时（如飞牛 app 应用入口）种下
+// Secure cookie 导致 http 环境下 WebView 拒绝保存、登录失效。无反代头时回退到连接本身。
 func SecureCookie(r *http.Request) bool {
+	if front := frontendScheme(r); front != "" {
+		return strings.EqualFold(front, "https")
+	}
 	proto := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0])
 	if strings.EqualFold(proto, "https") {
 		return true
@@ -113,4 +120,20 @@ func SecureCookie(r *http.Request) bool {
 		return false
 	}
 	return proto != ""
+}
+
+// frontendScheme 从浏览器侧头推导真实前端协议，避免信任仅由反代注入的 X-Forwarded-Proto。
+func frontendScheme(r *http.Request) string {
+	for _, name := range []string{"Origin", "Referer"} {
+		raw := strings.TrimSpace(r.Header.Get(name))
+		if raw == "" {
+			continue
+		}
+		u, err := url.Parse(raw)
+		if err != nil || u.Scheme == "" {
+			continue
+		}
+		return strings.ToLower(u.Scheme)
+	}
+	return ""
 }
