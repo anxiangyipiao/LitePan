@@ -43,3 +43,15 @@ func (h *Handler) requirePublicOrAdmin(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// requireUser 要求存在有效会话（不限管理员）。用于面向已登录用户的非管理员功能。
+func (h *Handler) requireUser(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sess, ok := h.adminAuth.ReadSession(r)
+		if !ok {
+			writeErr(w, domain.Errorf(domain.CodeAdminAuthRequired, "需要登录"))
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), adminSessionCtxKey{}, sess)))
+	})
+}

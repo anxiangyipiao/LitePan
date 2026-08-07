@@ -153,6 +153,10 @@ func NewRouter(d Deps) http.Handler {
 		r.Post("/auth/login", h.authLogin)
 		r.Post("/auth/logout", h.authLogout)
 		r.Post("/auth/reset-password", h.authResetPassword)
+		r.Group(func(r chi.Router) {
+			r.Use(h.requireUser)
+			r.Get("/magnet-search", h.magnetSearch)
+		})
 		r.Get("/strm/play/{account_id}/{file_key}/t/{token}/n/{filename}", h.strmPlay)
 		r.Head("/strm/play/{account_id}/{file_key}/t/{token}/n/{filename}", h.strmPlay)
 		r.Get("/strm/play/{account_id}/{file_key}/t/{token}/n/{filename}/s/{signature}", h.strmPlay)

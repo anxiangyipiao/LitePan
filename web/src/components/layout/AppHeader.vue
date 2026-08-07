@@ -15,6 +15,7 @@ import {
   type ThemePref,
 } from "@/utils/theme";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
+import MagnetSearchModal from "@/components/common/MagnetSearchModal.vue";
 
 type BrightStarShape = "dot" | "cross" | "penta" | "six";
 
@@ -181,6 +182,7 @@ const {
   kind: transferKind,
   setOpen: openTransferPanel,
 } = useTransferBadge();
+const magnetSearchOpen = ref(false);
 
 function toggleTheme() {
   theme.value = getNextThemePref(theme.value);
@@ -378,6 +380,21 @@ onMounted(async () => {
         </button>
 
         <button
+          v-if="loggedIn"
+          type="button"
+          class="header-icon-btn"
+          title="磁力搜索"
+          aria-label="磁力搜索"
+          @click="magnetSearchOpen = true"
+        >
+          <svg viewBox="0 0 24 24" class="header-magnet-icon" aria-hidden="true">
+            <path d="M6 8v5a6 6 0 0 0 12 0V8" />
+            <path d="M6 4v4" />
+            <path d="M18 4v4" />
+          </svg>
+        </button>
+
+        <button
           v-if="showThemeToggle"
           type="button"
           class="header-icon-btn"
@@ -430,6 +447,8 @@ onMounted(async () => {
         </div>
       </nav>
     </div>
+
+    <MagnetSearchModal :open="magnetSearchOpen" @close="magnetSearchOpen = false" />
   </header>
 </template>
 
@@ -1182,6 +1201,16 @@ onMounted(async () => {
   transform: translateY(0.5px);
 }
 .header-theme-icon {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.header-magnet-icon {
   width: 17px;
   height: 17px;
   fill: none;

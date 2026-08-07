@@ -48,6 +48,11 @@ const (
 	KeyStrmScrapeSource            = "strm_scrape_source"
 	KeyStrmScrapeMetaTubeURL       = "strm_scrape_metatube_url"
 
+	KeyMagnetSearchBaseURL       = "magnet_search_base_url"
+	KeyMagnetSearchProxyURL      = "magnet_search_proxy_url"
+	KeyMagnetSearchProxyUsername = "magnet_search_proxy_username"
+	KeyMagnetSearchProxyPassword = "magnet_search_proxy_password"
+
 	KeyMOProxyEnabled          = "mo_proxy_enabled"
 	KeyMOProxyURL              = "mo_proxy_url"
 	KeyMOProxyUsername         = "mo_proxy_username"
@@ -270,6 +275,39 @@ func defaultSpecs() []Spec {
 			Unit:        "天",
 			Min:         intp(1),
 			Max:         intp(365),
+		},
+		{
+			Key:         KeyMagnetSearchBaseURL,
+			Type:        TypeString,
+			Category:    "system",
+			Label:       "磁力搜索站点地址",
+			Description: "磁力搜索接口的站点根地址，默认 https://sukebei.nyaa.si。",
+			Default:     "https://sukebei.nyaa.si",
+		},
+		{
+			Key:         KeyMagnetSearchProxyURL,
+			Type:        TypeString,
+			Category:    "system",
+			Label:       "磁力搜索代理地址",
+			Description: "HTTP/HTTPS 代理地址，例如 http://127.0.0.1:7890；站点不可直连时填写。",
+			Default:     "",
+		},
+		{
+			Key:         KeyMagnetSearchProxyUsername,
+			Type:        TypeString,
+			Category:    "system",
+			Label:       "磁力搜索代理用户名",
+			Description: "代理认证用户名，无认证可留空。",
+			Default:     "",
+		},
+		{
+			Key:         KeyMagnetSearchProxyPassword,
+			Type:        TypeString,
+			Category:    "system",
+			Label:       "磁力搜索代理密码",
+			Description: "代理认证密码。",
+			Default:     "",
+			Sensitive:   true,
 		},
 		{
 			Key:     KeyLogErrorAckAt,
