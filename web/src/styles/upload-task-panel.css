@@ -611,3 +611,76 @@
   background: #fff;
   color: var(--brutal-ink);
 }
+
+/* 移动端：抽屉整宽、侧栏改顶部横向页签，让任务列表占满可用宽度 */
+@media (max-width: 768px) {
+  .upload-task-panel {
+    width: 100vw;
+    border-left: none;
+    border-radius: 0;
+  }
+
+  .upload-task-layout {
+    flex-direction: column;
+  }
+
+  .upload-task-sidebar {
+    width: 100%;
+    flex-shrink: 0;
+    flex-direction: column;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding: 8px 10px 6px;
+  }
+
+  .upload-task-sidebar__nav {
+    display: flex;
+    gap: 6px;
+    padding: 0;
+    overflow-x: auto;
+  }
+
+  .upload-task-nav-item {
+    flex: 1 1 0;
+    min-width: 0;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    column-gap: 5px;
+    padding: 8px 6px;
+    font-size: 12px;
+  }
+
+  .upload-task-nav-item.active {
+    box-shadow: inset 0 -2px 0 var(--brand);
+  }
+
+  .upload-task-sidebar__footer {
+    margin-top: 6px;
+    padding: 4px 2px 0;
+    justify-content: flex-end;
+    border-top: none;
+  }
+
+  .upload-task-sidebar__footer--note {
+    display: none;
+  }
+
+  .upload-task-content {
+    padding: 12px;
+  }
+
+  .upload-task-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .upload-task-item {
+    padding: 10px 8px;
+    gap: 10px;
+  }
+
+  /* 触屏无 hover：任务操作按钮常显 */
+  .upload-task-item-actions {
+    opacity: 1;
+  }
+}
