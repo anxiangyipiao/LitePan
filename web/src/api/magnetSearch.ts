@@ -3,7 +3,7 @@ import { http } from "./client";
 export interface MagnetSearchResult {
   id: number;
   name: string;
-  category: string;
+  category?: string;
   size: number;
   date: number;
   seeders: number;
