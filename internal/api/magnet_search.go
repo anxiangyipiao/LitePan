@@ -37,6 +37,9 @@ func (h *Handler) magnetSearch(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, domain.Errorf(domain.CodeDriverError, "磁力搜索失败：%v", err))
 		return
 	}
+	if results == nil {
+		results = []sukebei.Result{}
+	}
 	writeOK(w, results)
 }
 

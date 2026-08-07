@@ -20,7 +20,12 @@ const searched = ref(false);
 watch(
   () => props.open,
   (open) => {
-    if (open) error.value = "";
+    if (open) {
+      // 重新打开回到初始态，避免残留上次搜索的「无结果」空态
+      error.value = "";
+      searched.value = false;
+      results.value = [];
+    }
   },
 );
 
@@ -33,7 +38,7 @@ async function search() {
   loading.value = true;
   error.value = "";
   try {
-    results.value = await searchMagnet(q);
+    results.value = (await searchMagnet(q)) ?? [];
     searched.value = true;
   } catch (e) {
     error.value = getApiErrorMessage(e, "搜索失败，请检查站点地址或代理配置");
