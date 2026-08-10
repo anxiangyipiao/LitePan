@@ -27,6 +27,17 @@ func TestDedupeSearchItemsKeepsBestScorePerNumber(t *testing.T) {
 	}
 }
 
+func TestFetchMovieBackdropsEmpty(t *testing.T) {
+	c := &Client{}
+	got, err := c.FetchMovieBackdrops(context.Background(), "any")
+	if err != nil {
+		t.Fatalf("FetchMovieBackdrops err=%v", err)
+	}
+	if got != nil {
+		t.Fatalf("FetchMovieBackdrops = %v, want nil", got)
+	}
+}
+
 func TestSearchItemToTMDBShapeUsesNumberAsMatchKey(t *testing.T) {
 	out := searchItemToTMDBShape(map[string]any{
 		"id":           "ssis00123",
@@ -61,17 +72,18 @@ func TestDetailToTMDBShapeMergesRichFields(t *testing.T) {
 		"title": "無自覚なフリして", "thumb_url": "https://example.com/t.jpg",
 	})
 	out := detailToTMDBShape(hit, map[string]any{
-		"id":           "ssis00123",
-		"number":       "SSIS-123",
-		"provider":     "JAV321",
-		"title":        "無自覚なフリして誘惑",
-		"summary":      "这是一个简介",
-		"release_date": "2021-07-19T00:00:00Z",
-		"runtime":      148,
-		"maker":        "S1 NO.1",
-		"director":     "大崎広浩治",
-		"genres":       []any{"美少女", "単体作品"},
-		"actors":       []any{"乙白さやか"},
+		"id":             "ssis00123",
+		"number":         "SSIS-123",
+		"provider":       "JAV321",
+		"title":          "無自覚なフリして誘惑",
+		"summary":        "这是一个简介",
+		"release_date":   "2021-07-19T00:00:00Z",
+		"runtime":        148,
+		"maker":          "S1 NO.1",
+		"director":       "大崎広浩治",
+		"genres":         []any{"美少女", "単体作品"},
+		"actors":         []any{"乙白さやか"},
+		"preview_images": []any{"http://a/1.jpg", "http://a/2.jpg"},
 	})
 	if out["overview"] != "这是一个简介" {
 		t.Fatalf("overview 未合并，got %v", out["overview"])
@@ -81,6 +93,13 @@ func TestDetailToTMDBShapeMergesRichFields(t *testing.T) {
 	}
 	if out["poster_path"] != "JAV321/ssis00123" {
 		t.Fatalf("详情 poster_path 应为 provider/id 供图片端点下载，got %v", out["poster_path"])
+	}
+	if out["backdrop_path"] != "backdrop/JAV321/ssis00123" {
+		t.Fatalf("详情 backdrop_path 应为哨兵路径供背景图端点下载，got %v", out["backdrop_path"])
+	}
+	imgs, _ := out["_metatube_preview_images"].([]string)
+	if len(imgs) != 2 || imgs[0] != "http://a/1.jpg" {
+		t.Fatalf("_metatube_preview_images 未合并，got %v", out["_metatube_preview_images"])
 	}
 	if out["studio"] != "S1 NO.1" {
 		t.Fatalf("studio 未取 maker，got %v", out["studio"])
@@ -145,6 +164,40 @@ func TestSearchParsesDataHits(t *testing.T) {
 	}
 	if m["id"] != "SSIS-123" || m["original_title"] != "SSIS-123" {
 		t.Fatalf("命中未翻译成番号键：%v", m)
+	}
+}
+
+func TestDownloadImageRoutesBackdropAndPrimary(t *testing.T) {
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write([]byte("img"))
+	}))
+	defer srv.Close()
+
+	c := NewClient(Options{BaseURL: srv.URL})
+	if _, err := c.DownloadImage(context.Background(), "backdrop/JAV321/ssis00123", "w1280"); err != nil {
+		t.Fatalf("backdrop download: %v", err)
+	}
+	if _, err := c.DownloadImage(context.Background(), "JAV321/ssis00123", "w500"); err != nil {
+		t.Fatalf("primary download: %v", err)
+	}
+	if _, err := c.DownloadImage(context.Background(), srv.URL+"/x.jpg", "w500"); err != nil {
+		t.Fatalf("absolute url download: %v", err)
+	}
+	want := []string{
+		"/v1/images/backdrop/JAV321/ssis00123",
+		"/v1/images/primary/JAV321/ssis00123",
+		"/x.jpg",
+	}
+	if len(paths) != len(want) {
+		t.Fatalf("请求路径数量 = %d, want %d: %v", len(paths), len(want), paths)
+	}
+	for i := range want {
+		if paths[i] != want[i] {
+			t.Fatalf("第 %d 次请求路径 = %s, want %s", i, paths[i], want[i])
+		}
 	}
 }
 

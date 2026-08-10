@@ -3,6 +3,7 @@ package strmscrape
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"litepan/internal/domain"
@@ -25,6 +26,8 @@ type scrapeSource interface {
 	EnrichSearchResult(ctx context.Context, raw json.RawMessage, mediaType string) (json.RawMessage, error)
 	FetchTVSeasons(ctx context.Context, showID string) ([]json.RawMessage, error)
 	FetchTVSeason(ctx context.Context, showID string, season int) (json.RawMessage, error)
+	// FetchMovieBackdrops 返回电影的背景图 file_path 列表；数据源无背景图时返回空。
+	FetchMovieBackdrops(ctx context.Context, id string) ([]string, error)
 	DownloadImage(ctx context.Context, imagePath, size string) ([]byte, error)
 }
 
@@ -55,6 +58,33 @@ func (t tmdbScrapeSource) FetchTVSeason(ctx context.Context, showID string, seas
 
 func (t tmdbScrapeSource) DownloadImage(ctx context.Context, imagePath, size string) ([]byte, error) {
 	return t.client.DownloadImage(ctx, imagePath, size)
+}
+
+func (t tmdbScrapeSource) FetchMovieBackdrops(ctx context.Context, id string) ([]string, error) {
+	raw, err := t.client.FetchMovieImages(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return parseMovieBackdrops(raw), nil
+}
+
+// parseMovieBackdrops 解析 /movie/{id}/images 返回里的 backdrops file_path 列表。
+func parseMovieBackdrops(raw json.RawMessage) []string {
+	var payload struct {
+		Backdrops []struct {
+			FilePath string `json:"file_path"`
+		} `json:"backdrops"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(payload.Backdrops))
+	for _, b := range payload.Backdrops {
+		if s := strings.TrimSpace(b.FilePath); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // newScrapeClient 按当前设置返回可用的元数据源；未配置对应源时返回 nil。

@@ -7,6 +7,28 @@ import (
 	"litepan/internal/mediaorganize/rules"
 )
 
+func TestDecodeTMDBInfoMetaTubeFields(t *testing.T) {
+	raw := json.RawMessage(`{
+		"id":"SSIS-123","title":"SSIS-123 誘惑","overview":"x",
+		"poster_path":"JAV321/ssis00123","backdrop_path":"backdrop/JAV321/ssis00123",
+		"_metatube_id":"ssis00123","_metatube_number":"SSIS-123","_metatube_provider":"JAV321",
+		"_metatube_preview_images":["http://pics/1.jpg","http://pics/2.jpg"]
+	}`)
+	info, err := decodeTMDBInfo(raw, MediaTypeMovie)
+	if err != nil {
+		t.Fatalf("decodeTMDBInfo: %v", err)
+	}
+	if info.BackdropPath != "backdrop/JAV321/ssis00123" {
+		t.Fatalf("BackdropPath = %q", info.BackdropPath)
+	}
+	if info.MetaTubeProvider != "JAV321" {
+		t.Fatalf("MetaTubeProvider = %q", info.MetaTubeProvider)
+	}
+	if len(info.PreviewImages) != 2 || info.PreviewImages[0] != "http://pics/1.jpg" {
+		t.Fatalf("PreviewImages = %v", info.PreviewImages)
+	}
+}
+
 func TestPickTMDBScrapeMatchUsesControlledAdjacentYearDoubt(t *testing.T) {
 	year := 2026
 	results := rules.RawJSONListToMaps([]json.RawMessage{

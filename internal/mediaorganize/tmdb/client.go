@@ -201,6 +201,23 @@ func (c *Client) FetchTVSeason(ctx context.Context, tmdbID string, seasonNumber 
 	return c.get(ctx, fmt.Sprintf("%s/tv/%d/season/%d", baseURL, id, seasonNumber), q)
 }
 
+// FetchMovieImages 拉取电影图片集（backdrops/posters/logos），返回原始 JSON 由调用方解析。
+func (c *Client) FetchMovieImages(ctx context.Context, tmdbID string) (json.RawMessage, error) {
+	if c == nil || c.apiKey == "" {
+		return nil, fmt.Errorf("tmdb: missing api key")
+	}
+	id, err := strconv.Atoi(strings.TrimSpace(tmdbID))
+	if err != nil || id <= 0 {
+		return nil, fmt.Errorf("tmdb: invalid id %q", tmdbID)
+	}
+	q := url.Values{}
+	q.Set("api_key", c.apiKey)
+	if c.language != "" {
+		q.Set("language", c.language)
+	}
+	return c.get(ctx, fmt.Sprintf("%s/movie/%d/images", baseURL, id), q)
+}
+
 func (c *Client) searchMovie(ctx context.Context, query string, year *int) ([]json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("api_key", c.apiKey)

@@ -163,8 +163,14 @@ func (c *Client) FetchTVSeason(ctx context.Context, showID string, season int) (
 	return nil, fmt.Errorf("metatube: 不支持剧集刮削")
 }
 
-// DownloadImage 下载图片。imagePath 为绝对 URL 时直接下载；为 provider/id 时经
-// /v1/images/primary 下载海报。size 参数被忽略（MetaTube 图片端点无尺寸裁剪）。
+// FetchMovieBackdrops 仅电影源，MetaTube 无背景图数据，返回空。
+func (c *Client) FetchMovieBackdrops(ctx context.Context, id string) ([]string, error) {
+	return nil, nil
+}
+
+// DownloadImage 下载图片。imagePath 为绝对 URL 时直接下载；为 "backdrop/provider/id" 时经
+// /v1/images/backdrop 下载背景图；为 provider/id 时经 /v1/images/primary 下载海报。
+// size 参数被忽略（MetaTube 图片端点无尺寸裁剪）。
 func (c *Client) DownloadImage(ctx context.Context, imagePath, size string) ([]byte, error) {
 	imagePath = strings.TrimSpace(imagePath)
 	if imagePath == "" {
@@ -172,9 +178,12 @@ func (c *Client) DownloadImage(ctx context.Context, imagePath, size string) ([]b
 	}
 	endpoint := imagePath
 	if !strings.Contains(imagePath, "://") {
-		if strings.Contains(imagePath, "/") {
+		switch {
+		case strings.HasPrefix(imagePath, "backdrop/"):
+			endpoint = "/v1/images/backdrop/" + strings.TrimPrefix(imagePath, "backdrop/")
+		case strings.Contains(imagePath, "/"):
 			endpoint = "/v1/images/primary/" + strings.TrimPrefix(imagePath, "/")
-		} else {
+		default:
 			return nil, fmt.Errorf("metatube: invalid image path %q", imagePath)
 		}
 	}
@@ -261,7 +270,10 @@ func (c *Client) getRetry(ctx context.Context, endpoint string, query url.Values
 }
 
 func (c *Client) getBytes(ctx context.Context, endpoint string) ([]byte, error) {
-	rawURL := c.baseURL + endpoint
+	rawURL := endpoint
+	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+		rawURL = c.baseURL + endpoint
+	}
 	client := c.http
 	if client == nil {
 		client = http.DefaultClient
@@ -410,6 +422,8 @@ func detailToTMDBShape(hit map[string]any, detail map[string]any) map[string]any
 	if provider != "" && metaID != "" {
 		out["_metatube_provider"] = provider
 		out["poster_path"] = provider + "/" + metaID
+		// backdrop_path 用哨兵路径，DownloadImage 会路由到 /v1/images/backdrop/{provider}/{id}。
+		out["backdrop_path"] = "backdrop/" + provider + "/" + metaID
 	}
 	if t := strings.TrimSpace(anyString(detail["title"])); t != "" {
 		out["title"] = javDisplayTitle(number, t)
@@ -428,6 +442,10 @@ func detailToTMDBShape(hit map[string]any, detail map[string]any) map[string]any
 	}
 	if genres := stringListField(detail["genres"]); len(genres) > 0 {
 		out["genres"] = genres
+	}
+	// 预览截图（多为竖图）作为多张轮播背景图的素材，写进 _metatube_preview_images 供刮削侧读取。
+	if imgs := stringListField(detail["preview_images"]); len(imgs) > 0 {
+		out["_metatube_preview_images"] = imgs
 	}
 	if actors := stringListField(detail["actors"]); len(actors) > 0 {
 		out["actors"] = actors

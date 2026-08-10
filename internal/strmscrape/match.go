@@ -20,6 +20,7 @@ type tmdbInfo struct {
 	Year         *int
 	Plot         string
 	PosterPath   string
+	BackdropPath string
 	MediaType    string
 	Doubt        bool
 	EpisodeCount int // 默认全剧集数；刮削时会按本地已有季收窄
@@ -32,9 +33,13 @@ type tmdbInfo struct {
 	Runtime  int
 
 	// MetaTube 源附加字段：MetaTubeID 为 provider 侧 ID（详情/图片端点用），
-	// MetaTubeNumber 为番号（NFO uniqueid 用）。
-	MetaTubeID     string
-	MetaTubeNumber string
+	// MetaTubeNumber 为番号（NFO uniqueid 用），MetaTubeProvider 为 provider 名（背景图端点用）。
+	MetaTubeID       string
+	MetaTubeNumber   string
+	MetaTubeProvider string
+
+	// PreviewImages 是详情返回的预览截图（MetaTube），用作多张轮播背景图素材；TMDB 源为空。
+	PreviewImages []string
 }
 
 func (s *Service) matchWork(ctx context.Context, client scrapeSource, g workGroup) (*tmdbInfo, error) {
@@ -296,6 +301,11 @@ func (s *Service) writeMatchedOpts(ctx context.Context, client scrapeSource, g w
 			return 0, err
 		}
 	}
+	if mediaType == MediaTypeMovie {
+		if err := s.writeMovieExtras(ctx, client, g, info, overwrite); err != nil {
+			return epTMDB, fmt.Errorf("补写电影背景图失败：%w", err)
+		}
+	}
 	if withTVExtras && needTVExtras {
 		if err := s.writeTVExtras(ctx, client, g, info, overwrite); err != nil {
 			return epTMDB, fmt.Errorf("补写季/集元数据失败：%w", err)
@@ -476,6 +486,7 @@ func decodeTMDBInfo(raw json.RawMessage, mediaType string) (tmdbInfo, error) {
 	id, title, original, year := rules.ExtractTMDBDisplayFields(m, mediaType)
 	plot := nonNilString(m["overview"])
 	poster := nonNilString(m["poster_path"])
+	backdrop := nonNilString(m["backdrop_path"])
 	if id == "" || title == "" {
 		return tmdbInfo{}, fmt.Errorf("TMDB 结果缺少标题")
 	}
@@ -490,14 +501,17 @@ func decodeTMDBInfo(raw json.RawMessage, mediaType string) (tmdbInfo, error) {
 		Year:         year,
 		Plot:         plot,
 		PosterPath:   poster,
+		BackdropPath: backdrop,
 		MediaType:    mediaType,
 		EpisodeCount: epCount,
 		Genres:       extractStringList(m["genres"]),
 		Studio:       firstNonEmpty(nonNilString(m["studio"]), nonNilString(m["maker"])),
 		Director:     nonNilString(m["director"]),
 		Actors:       extractStringList(m["actors"]),
-		MetaTubeID:   nonNilString(m["_metatube_id"]),
-		MetaTubeNumber: nonNilString(m["_metatube_number"]),
+		MetaTubeID:       nonNilString(m["_metatube_id"]),
+		MetaTubeNumber:   nonNilString(m["_metatube_number"]),
+		MetaTubeProvider: nonNilString(m["_metatube_provider"]),
+		PreviewImages:    extractStringList(m["_metatube_preview_images"]),
 	}
 	if n := asInt(m["runtime"]); n != nil && *n > 0 {
 		info.Runtime = *n

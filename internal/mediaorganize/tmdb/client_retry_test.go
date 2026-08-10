@@ -119,3 +119,49 @@ func testResponse(status int, body string) *http.Response {
 		Body:       io.NopCloser(strings.NewReader(body)),
 	}
 }
+
+func TestFetchMovieImagesHitsImagesEndpoint(t *testing.T) {
+	var reqPath, reqQuery string
+	client := &Client{
+		apiKey: "test-key",
+		http: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			reqPath = req.URL.Path
+			reqQuery = req.URL.RawQuery
+			return testResponse(http.StatusOK, `{"backdrops":[{"file_path":"/a.jpg"}]}`), nil
+		})},
+		maxRetries: 0,
+	}
+
+	raw, err := client.FetchMovieImages(context.Background(), "123")
+	if err != nil {
+		t.Fatalf("fetch movie images: %v", err)
+	}
+	if !strings.HasSuffix(reqPath, "/movie/123/images") {
+		t.Fatalf("unexpected path: %s", reqPath)
+	}
+	if !strings.Contains(reqQuery, "api_key=test-key") {
+		t.Fatalf("missing api_key in query: %s", reqQuery)
+	}
+	if string(raw) != `{"backdrops":[{"file_path":"/a.jpg"}]}` {
+		t.Fatalf("raw mismatch: %s", raw)
+	}
+}
+
+func TestFetchMovieImagesRejectsBadID(t *testing.T) {
+	var calls atomic.Int32
+	client := &Client{
+		apiKey: "test-key",
+		http: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			calls.Add(1)
+			return testResponse(http.StatusOK, `{}`), nil
+		})},
+		maxRetries: 0,
+	}
+
+	if _, err := client.FetchMovieImages(context.Background(), "abc"); err == nil {
+		t.Fatal("expected invalid id error")
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("invalid id should not hit http, calls=%d", calls.Load())
+	}
+}
