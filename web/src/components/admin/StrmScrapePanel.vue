@@ -69,11 +69,39 @@ function loadSavedSource(): string | null {
   return null;
 }
 
-function loadSavedCustomRoot(): string {
+interface CustomRootStore {
+  roots: string[];
+  selected: string;
+}
+
+// loadCustomRootStore 读取自定义目录收藏；兼容旧版单路径字符串（自动迁移为收藏结构）。
+function loadCustomRootStore(): CustomRootStore {
   try {
-    return (localStorage.getItem(CUSTOM_ROOT_STORAGE_KEY) || "").trim();
+    const raw = localStorage.getItem(CUSTOM_ROOT_STORAGE_KEY);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as Partial<CustomRootStore> | null;
+        if (parsed && Array.isArray(parsed.roots)) {
+          const roots = [...new Set(parsed.roots.map((r) => String(r).trim()).filter(Boolean))];
+          const selected = roots.includes(String(parsed.selected ?? "").trim())
+            ? String(parsed.selected).trim()
+            : roots[0] || "";
+          return { roots, selected };
+        }
+      } catch {}
+      // 非 JSON：旧版单路径字符串
+      const legacy = String(raw).trim();
+      if (legacy) return { roots: [legacy], selected: legacy };
+    }
   } catch {}
-  return "";
+  return { roots: [], selected: "" };
+}
+
+function saveCustomRootStore() {
+  const store: CustomRootStore = { roots: customRoots.value, selected: selectedCustomRoot.value };
+  try {
+    localStorage.setItem(CUSTOM_ROOT_STORAGE_KEY, JSON.stringify(store));
+  } catch {}
 }
 
 function saveSortKey(key: SortKey) {
@@ -85,8 +113,11 @@ function saveSortKey(key: SortKey) {
 const tasks = ref<StrmTask[]>([]);
 // 下拉值："custom"（自定义目录）或任务 ID 字符串。
 const selectedTaskId = ref<string | null>(null);
-const customRoot = ref("");
+// 自定义目录收藏：目录路径列表 + 当前选中路径。
+const customRoots = ref<string[]>([]);
+const selectedCustomRoot = ref("");
 const customRootInput = ref("");
+const sourceMenuOpen = ref(false);
 const items = ref<StrmScrapeItem[]>([]);
 const stats = ref<StrmScrapeItemListStats>(emptyStats());
 const totalMatched = ref(0);
@@ -117,19 +148,17 @@ const selectedCandidateKey = ref("");
 const previewPosterURL = ref("");
 const previewPosterTitle = ref("");
 
-const taskOptions = computed(() => [
-  { value: "custom", label: "自定义目录" },
-  ...tasks.value.map((t) => ({
-    value: String(t.id),
-    label: t.name || `任务 #${t.id}`,
-  })),
-]);
-
 const isCustomMode = computed(() => selectedTaskId.value === "custom");
 const activeTaskId = computed<number | null>(() =>
   isCustomMode.value ? null : selectedTaskId.value ? Number(selectedTaskId.value) : null,
 );
-const activeRoot = computed(() => (isCustomMode.value ? customRoot.value.trim() : ""));
+const activeRoot = computed(() => (isCustomMode.value ? selectedCustomRoot.value.trim() : ""));
+// 下拉触发按钮显示的当前来源标签。
+const currentSourceLabel = computed(() => {
+  if (isCustomMode.value) return selectedCustomRoot.value || "自定义目录";
+  const t = tasks.value.find((x) => String(x.id) === selectedTaskId.value);
+  return t ? t.name || `任务 #${t.id}` : "选择来源";
+});
 
 const sortOptions: { value: SortKey; label: string }[] = [
   { value: "added_desc", label: "添加时间 · 新→旧" },
@@ -429,18 +458,49 @@ async function startScrape() {
   }
 }
 
-function enterCustomMode() {
-  customRootInput.value = customRoot.value;
+function selectTask(id: string) {
+  selectedTaskId.value = id;
+  try {
+    localStorage.setItem(SOURCE_STORAGE_KEY, id);
+  } catch {}
+  sourceMenuOpen.value = false;
 }
 
-function applyCustomRoot() {
-  const p = customRootInput.value.trim();
-  customRoot.value = p;
+function selectRoot(path: string) {
+  selectedCustomRoot.value = path;
+  selectedTaskId.value = "custom";
   try {
-    if (p) localStorage.setItem(CUSTOM_ROOT_STORAGE_KEY, p);
-    else localStorage.removeItem(CUSTOM_ROOT_STORAGE_KEY);
+    localStorage.setItem(SOURCE_STORAGE_KEY, "custom");
+    saveCustomRootStore();
   } catch {}
-  void loadItems();
+  sourceMenuOpen.value = false;
+}
+
+function addCustomRoot() {
+  const p = customRootInput.value.trim();
+  if (!p) return;
+  if (!customRoots.value.includes(p)) {
+    customRoots.value = [...customRoots.value, p];
+  }
+  selectedCustomRoot.value = p;
+  selectedTaskId.value = "custom";
+  customRootInput.value = "";
+  try {
+    localStorage.setItem(SOURCE_STORAGE_KEY, "custom");
+    saveCustomRootStore();
+  } catch {}
+  sourceMenuOpen.value = false;
+}
+
+function removeRoot(path: string) {
+  const next = customRoots.value.filter((r) => r !== path);
+  customRoots.value = next;
+  if (selectedCustomRoot.value === path) {
+    selectedCustomRoot.value = next[0] || "";
+  }
+  try {
+    saveCustomRootStore();
+  } catch {}
 }
 
 async function stopScrape() {
@@ -753,21 +813,12 @@ watch([loadMoreSentinelEl, hasMore], () => {
   void nextTick(() => setupLoadMoreObserver());
 });
 
-function onSourceChange(v: string | number | boolean) {
-  const raw = String(v ?? "");
-  selectedTaskId.value = raw || null;
-  if (raw === "custom") enterCustomMode();
-  try {
-    if (raw) localStorage.setItem(SOURCE_STORAGE_KEY, raw);
-    else localStorage.removeItem(SOURCE_STORAGE_KEY);
-  } catch {}
-}
-
 onMounted(async () => {
   window.addEventListener("keydown", onPosterPreviewKeydown, true);
+  const savedStore = loadCustomRootStore();
+  customRoots.value = savedStore.roots;
+  selectedCustomRoot.value = savedStore.selected;
   selectedTaskId.value = loadSavedSource();
-  customRoot.value = loadSavedCustomRoot();
-  customRootInput.value = customRoot.value;
   loading.value = true;
   try {
     await loadTasks();
@@ -809,12 +860,80 @@ defineExpose({
     <div class="scrape-panel__head">
       <div class="scrape-panel__head-left">
         <h2>海报墙</h2>
-        <div v-if="taskOptions.length" class="scrape-panel__task-select">
-          <AppSelect
-            :model-value="selectedTaskId ?? ''"
-            :options="taskOptions"
-            @update:model-value="onSourceChange"
-          />
+        <div class="scrape-panel__task-select">
+          <AppDropdown
+            v-model:open="sourceMenuOpen"
+            trigger="click"
+            align="right"
+            :min-width="300"
+          >
+            <template #trigger="{ toggle }">
+              <button type="button" class="scrape-source__trigger" @click="toggle">
+                <span class="scrape-source__label">{{ currentSourceLabel }}</span>
+                <span class="scrape-source__arrow" :class="{ 'scrape-source__arrow--open': sourceMenuOpen }">▾</span>
+              </button>
+            </template>
+            <template #panel>
+              <div class="scrape-source-menu">
+                <template v-if="tasks.length">
+                  <p class="scrape-source-menu__group">STRM 任务</p>
+                  <button
+                    v-for="t in tasks"
+                    :key="t.id"
+                    type="button"
+                    class="scrape-source-menu__item"
+                    :class="{ 'scrape-source-menu__item--active': selectedTaskId === String(t.id) }"
+                    @click="selectTask(String(t.id))"
+                  >
+                    {{ t.name || `任务 #${t.id}` }}
+                  </button>
+                </template>
+
+                <p class="scrape-source-menu__group">自定义目录</p>
+                <template v-if="customRoots.length">
+                  <div v-for="r in customRoots" :key="r" class="scrape-source-menu__root">
+                    <button
+                      type="button"
+                      class="scrape-source-menu__item scrape-source-menu__root-main"
+                      :class="{ 'scrape-source-menu__item--active': isCustomMode && selectedCustomRoot === r }"
+                      :title="r"
+                      @click="selectRoot(r)"
+                    >
+                      <span class="scrape-source-menu__root-path">{{ r }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="scrape-source-menu__root-del"
+                      title="移除该目录"
+                      aria-label="移除该目录"
+                      @click="removeRoot(r)"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </template>
+                <p v-else class="scrape-source-menu__empty">还没有收藏目录</p>
+
+                <div class="scrape-source-menu__add">
+                  <input
+                    v-model="customRootInput"
+                    class="scrape-source-menu__add-input"
+                    type="text"
+                    placeholder="粘贴含 .strm 的目录绝对路径"
+                    @keydown.enter.prevent="addCustomRoot"
+                  />
+                  <button
+                    type="button"
+                    class="scrape-source-menu__add-btn"
+                    :disabled="!customRootInput.trim()"
+                    @click="addCustomRoot"
+                  >
+                    添加
+                  </button>
+                </div>
+              </div>
+            </template>
+          </AppDropdown>
         </div>
       </div>
       <div class="scrape-panel__head-actions">
@@ -901,31 +1020,11 @@ defineExpose({
       <span class="scrape-progress__nums">{{ progress.done }}/{{ progress.total }}</span>
     </div>
 
-    <div v-if="isCustomMode" class="scrape-custom-root">
-      <input
-        v-model="customRootInput"
-        class="scrape-custom-root__input"
-        type="text"
-        placeholder="粘贴含 .strm 文件的目录绝对路径，例如 /mnt/library"
-        @keydown.enter.prevent="applyCustomRoot"
-      />
-      <button
-        type="button"
-        class="scrape-custom-root__apply"
-        :disabled="!customRootInput.trim()"
-        @click="applyCustomRoot"
-      >
-        应用
-      </button>
-      <span v-if="customRoot" class="scrape-custom-root__hint">当前目录：{{ customRoot }}</span>
-      <span v-else class="scrape-custom-root__hint">填写路径后点「应用」，直接刮削该目录</span>
-    </div>
-
     <AdminEmptyState
-      v-if="!loading && isCustomMode && !customRoot"
+      v-if="!loading && isCustomMode && !activeRoot"
       icon="📁"
       title="自定义目录"
-      description="填入上方目录路径并点「应用」，即可直接刮削任意含 .strm 文件的目录，无需 STRM 任务。"
+      description="点上方「自定义目录」下拉，添加并选中一个含 .strm 文件的目录，即可直接刮削，无需 STRM 任务。"
     />
 
     <AdminEmptyState
@@ -1300,9 +1399,39 @@ defineExpose({
   white-space: nowrap;
 }
 .scrape-panel__task-select {
-  width: min(200px, 42vw);
-  flex: 0 1 200px;
-  min-width: 120px;
+  width: min(240px, 42vw);
+  flex: 0 1 240px;
+  min-width: 140px;
+}
+.scrape-source__trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.scrape-source__trigger:hover {
+  border-color: var(--brand);
+}
+.scrape-source__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scrape-source__arrow {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  transition: transform var(--transition);
+}
+.scrape-source__arrow--open {
+  transform: rotate(180deg);
 }
 .scrape-panel__head-actions {
   display: flex;
@@ -1465,20 +1594,94 @@ defineExpose({
   font-weight: 700;
   white-space: nowrap;
 }
-.scrape-custom-root {
+.scrape-source-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 300px;
+  max-width: min(360px, calc(100vw - 32px));
+  max-height: 340px;
+  overflow-y: auto;
+}
+.scrape-source-menu__group {
+  margin: 6px 12px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+.scrape-source-menu__item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.scrape-source-menu__item:hover {
+  background: var(--border-soft);
+}
+.scrape-source-menu__item--active {
+  color: var(--brand);
+  font-weight: 600;
+}
+.scrape-source-menu__root {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border-soft);
-  background: color-mix(in srgb, var(--brand) 4%, transparent);
-  flex-wrap: wrap;
+  gap: 2px;
 }
-.scrape-custom-root__input {
-  flex: 1 1 260px;
+.scrape-source-menu__root-main {
+  flex: 1 1 auto;
   min-width: 0;
-  height: 34px;
-  padding: 0 12px;
+}
+.scrape-source-menu__root-path {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scrape-source-menu__root-del {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  margin-right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.scrape-source-menu__root-del:hover {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+.scrape-source-menu__empty {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.scrape-source-menu__add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px 2px;
+  border-top: 1px solid var(--border-soft);
+  margin-top: 4px;
+}
+.scrape-source-menu__add-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -1486,13 +1689,13 @@ defineExpose({
   font-size: 13px;
   outline: none;
 }
-.scrape-custom-root__input:focus {
+.scrape-source-menu__add-input:focus {
   border-color: var(--brand);
 }
-.scrape-custom-root__apply {
+.scrape-source-menu__add-btn {
   flex: 0 0 auto;
-  height: 34px;
-  padding: 0 16px;
+  height: 32px;
+  padding: 0 14px;
   border: none;
   border-radius: var(--radius-sm);
   background: var(--brand);
@@ -1501,15 +1704,9 @@ defineExpose({
   font-weight: 700;
   cursor: pointer;
 }
-.scrape-custom-root__apply:disabled {
+.scrape-source-menu__add-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
-}
-.scrape-custom-root__hint {
-  flex: 1 1 100%;
-  font-size: 12px;
-  color: var(--text-muted);
-  word-break: break-all;
 }
 .scrape-toolbar {
   display: flex;
