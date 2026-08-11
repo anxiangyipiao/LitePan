@@ -115,21 +115,18 @@ func normalizeItemListQuery(in ItemListQuery) ItemListQuery {
 	return out
 }
 
-func (s *Service) ListItems(ctx context.Context, strmTaskID int64, query ItemListQuery) (ItemListResult, error) {
+func (s *Service) ListItems(ctx context.Context, strmTaskID int64, root string, query ItemListQuery) (ItemListResult, error) {
 	query = normalizeItemListQuery(query)
-	_, root, err := s.resolveTask(ctx, strmTaskID)
+	sr, err := s.resolveScrapeRoot(ctx, strmTaskID, root)
 	if err != nil {
 		return ItemListResult{}, err
 	}
-	if abs, aerr := filepath.Abs(root); aerr == nil {
-		root = abs
-	}
 	var out ItemListResult
-	err = s.withTaskIndexLock(strmTaskID, func() error {
-		if err := s.ensureIndexLocked(ctx, strmTaskID, root); err != nil {
+	err = s.withTaskIndexLock(sr.indexKey, func() error {
+		if err := s.ensureIndexLocked(ctx, sr.indexKey, sr.root); err != nil {
 			return err
 		}
-		items, err := s.listIndexItems(strmTaskID, query)
+		items, err := s.listIndexItems(sr.indexKey, query)
 		if err != nil {
 			return err
 		}
@@ -140,30 +137,35 @@ func (s *Service) ListItems(ctx context.Context, strmTaskID int64, query ItemLis
 }
 
 // RefreshIndex 扫盘重建索引并返回列表（海报墙刷新按钮）。
-func (s *Service) RefreshIndex(ctx context.Context, strmTaskID int64, query ItemListQuery) (ItemListResult, error) {
+func (s *Service) RefreshIndex(ctx context.Context, strmTaskID int64, root string, query ItemListQuery) (ItemListResult, error) {
 	query = normalizeItemListQuery(query)
-	if err := s.RebuildIndex(ctx, strmTaskID); err != nil {
+	sr, err := s.resolveScrapeRoot(ctx, strmTaskID, root)
+	if err != nil {
 		return ItemListResult{}, err
 	}
-	return s.listIndexItems(strmTaskID, query)
+	if err := s.RebuildIndex(ctx, strmTaskID, root); err != nil {
+		return ItemListResult{}, err
+	}
+	return s.listIndexItems(sr.indexKey, query)
 }
 
 func (s *Service) RunAsync(ctx context.Context, req RunRequest) error {
-	if req.StrmTaskID <= 0 {
+	if req.StrmTaskID <= 0 && strings.TrimSpace(req.Root) == "" {
 		return domain.Errorf(domain.CodeValidation, "strm_task_id 无效")
 	}
 	_ = ctx // 后台任务不随启动请求结束
-	return s.startAsyncOperation(req.StrmTaskID, 0, "准备刮削", "刮削完成", "strm scrape failed", func(runCtx context.Context) error {
+	return s.startAsyncOperation(req.StrmTaskID, req.Root, 0, "准备刮削", "刮削完成", "strm scrape failed", func(runCtx context.Context) error {
 		return s.run(runCtx, req)
 	})
 }
 
-func (s *Service) startAsyncOperation(taskID int64, total int, message, doneMessage, logMessage string, run func(context.Context) error) error {
+func (s *Service) startAsyncOperation(taskID int64, root string, total int, message, doneMessage, logMessage string, run func(context.Context) error) error {
 	if !s.operationMu.TryLock() {
 		return domain.Errorf(domain.CodeValidation, "刮削任务进行中")
 	}
 	releaseFiles := func() {}
-	if s.strm != nil {
+	// 自定义目录（taskID<=0）与 STRM 任务无文件操作关联，跳过并发守卫。
+	if s.strm != nil && taskID > 0 {
 		var ok bool
 		releaseFiles, ok = s.strm.TryBeginTaskFileOperation(taskID)
 		if !ok {
@@ -186,6 +188,7 @@ func (s *Service) startAsyncOperation(taskID int64, total int, message, doneMess
 		Total:     total,
 		Message:   message,
 		StartedAt: time.Now().Format(time.RFC3339),
+		Root:      root,
 	}
 	s.mu.Unlock()
 
@@ -222,14 +225,14 @@ func (s *Service) overwriteForMatch(sameID bool) bool {
 
 // Rematch 对同 ID 沿用写入策略，换 ID 时强制覆盖并统一走 writeMatchedOpts。
 func (s *Service) Rematch(ctx context.Context, req RematchRequest) (*Item, bool, error) {
-	if req.StrmTaskID <= 0 || strings.TrimSpace(req.ItemID) == "" || strings.TrimSpace(req.TMDBID) == "" {
+	if (req.StrmTaskID <= 0 && strings.TrimSpace(req.Root) == "") || strings.TrimSpace(req.ItemID) == "" || strings.TrimSpace(req.TMDBID) == "" {
 		return nil, false, domain.Errorf(domain.CodeValidation, "参数不完整")
 	}
-	_, root, err := s.resolveTask(ctx, req.StrmTaskID)
+	sr, err := s.resolveScrapeRoot(ctx, req.StrmTaskID, req.Root)
 	if err != nil {
 		return nil, false, err
 	}
-	g, err := findWorkByID(root, req.ItemID)
+	g, err := findWorkByID(sr.root, req.ItemID)
 	if err != nil {
 		return nil, false, err
 	}
@@ -246,12 +249,12 @@ func (s *Service) Rematch(ctx context.Context, req RematchRequest) (*Item, bool,
 	if display == "" {
 		display = workDisplayName(g)
 	}
-	current := buildItem(req.StrmTaskID, root, g)
-	err = s.startAsyncOperation(req.StrmTaskID, 1, "正在刮削："+display, "已重新匹配："+display, "strm rematch failed", func(runCtx context.Context) error {
+	current := buildItem(sr.root, g)
+	err = s.startAsyncOperation(req.StrmTaskID, req.Root, 1, "正在刮削："+display, "已重新匹配："+display, "strm rematch failed", func(runCtx context.Context) error {
 		s.setProgress(func(p *Progress) {
 			p.CurrentItemID = req.ItemID
 		})
-		updated, applyErr := s.applyRematch(runCtx, req, root, g, mediaType, overwrite)
+		updated, applyErr := s.applyRematch(runCtx, req, sr.indexKey, sr.root, g, mediaType, overwrite)
 		if applyErr != nil {
 			s.setProgress(func(p *Progress) {
 				p.Done = 1
@@ -276,7 +279,7 @@ func (s *Service) Rematch(ctx context.Context, req RematchRequest) (*Item, bool,
 	return &current, true, nil
 }
 
-func (s *Service) applyRematch(ctx context.Context, req RematchRequest, root string, g workGroup, mediaType string, overwrite bool) (*Item, error) {
+func (s *Service) applyRematch(ctx context.Context, req RematchRequest, indexKey int64, root string, g workGroup, mediaType string, overwrite bool) (*Item, error) {
 	client, err := s.requireScrapeClient()
 	if err != nil {
 		return nil, err
@@ -302,8 +305,8 @@ func (s *Service) applyRematch(ctx context.Context, req RematchRequest, root str
 	if err != nil {
 		return nil, err
 	}
-	s.upsertIndexItem(scrapeCtx, req.StrmTaskID, root, g)
-	item := buildItem(req.StrmTaskID, root, g)
+	s.upsertIndexItem(scrapeCtx, indexKey, root, g)
+	item := buildItem(root, g)
 	return &item, nil
 }
 
@@ -319,18 +322,18 @@ func confirmExistingMatch(g workGroup, mediaType string) {
 }
 
 func (s *Service) MarkNormal(ctx context.Context, req MarkNormalRequest) (*Item, error) {
-	if req.StrmTaskID <= 0 || strings.TrimSpace(req.ItemID) == "" {
+	if (req.StrmTaskID <= 0 && strings.TrimSpace(req.Root) == "") || strings.TrimSpace(req.ItemID) == "" {
 		return nil, domain.Errorf(domain.CodeValidation, "参数不完整")
 	}
 	if !s.operationMu.TryLock() {
 		return nil, domain.Errorf(domain.CodeValidation, "刮削任务进行中")
 	}
 	defer s.operationMu.Unlock()
-	_, root, err := s.resolveTask(ctx, req.StrmTaskID)
+	sr, err := s.resolveScrapeRoot(ctx, req.StrmTaskID, req.Root)
 	if err != nil {
 		return nil, err
 	}
-	g, err := findWorkByID(root, req.ItemID)
+	g, err := findWorkByID(sr.root, req.ItemID)
 	if err != nil {
 		return nil, err
 	}
@@ -345,21 +348,21 @@ func (s *Service) MarkNormal(ctx context.Context, req MarkNormalRequest) (*Item,
 			return nil, domain.Errorf(domain.CodeValidation, "%v", err)
 		}
 	}
-	s.upsertIndexItem(ctx, req.StrmTaskID, root, g)
-	item := buildItem(req.StrmTaskID, root, g)
+	s.upsertIndexItem(ctx, sr.indexKey, sr.root, g)
+	item := buildItem(sr.root, g)
 	return &item, nil
 }
 
 // Rescrape：沿用原 TMDB ID，走与「开始刮削」相同的 writeMatchedOpts（含正片季/finale 集数与 pending）。
 func (s *Service) Rescrape(ctx context.Context, req RescrapeRequest) (*Item, bool, error) {
-	if req.StrmTaskID <= 0 || strings.TrimSpace(req.ItemID) == "" {
+	if (req.StrmTaskID <= 0 && strings.TrimSpace(req.Root) == "") || strings.TrimSpace(req.ItemID) == "" {
 		return nil, false, domain.Errorf(domain.CodeValidation, "参数不完整")
 	}
-	_, root, err := s.resolveTask(ctx, req.StrmTaskID)
+	sr, err := s.resolveScrapeRoot(ctx, req.StrmTaskID, req.Root)
 	if err != nil {
 		return nil, false, err
 	}
-	g, err := findWorkByID(root, req.ItemID)
+	g, err := findWorkByID(sr.root, req.ItemID)
 	if err != nil {
 		return nil, false, err
 	}
@@ -372,12 +375,12 @@ func (s *Service) Rescrape(ctx context.Context, req RescrapeRequest) (*Item, boo
 	if display == "" {
 		display = workDisplayName(g)
 	}
-	current := buildItem(req.StrmTaskID, root, g)
+	current := buildItem(sr.root, g)
 	overwrite := s.overwriteForMatch(true)
 	if _, err := s.requireScrapeClient(); err != nil {
 		return nil, false, err
 	}
-	err = s.startAsyncOperation(req.StrmTaskID, 1, "正在重新刮削："+display, "已重新刮削："+display, "strm rescrape failed", func(runCtx context.Context) error {
+	err = s.startAsyncOperation(req.StrmTaskID, req.Root, 1, "正在重新刮削："+display, "已重新刮削："+display, "strm rescrape failed", func(runCtx context.Context) error {
 		s.setProgress(func(p *Progress) {
 			p.CurrentItemID = req.ItemID
 		})
@@ -388,7 +391,8 @@ func (s *Service) Rescrape(ctx context.Context, req RescrapeRequest) (*Item, boo
 			MediaType:  mediaType,
 			Title:      meta.Title,
 			Year:       meta.Year,
-		}, root, g, mediaType, overwrite)
+			Root:       req.Root,
+		}, sr.indexKey, sr.root, g, mediaType, overwrite)
 		if applyErr != nil {
 			s.setProgress(func(p *Progress) {
 				p.Done = 1
@@ -413,10 +417,24 @@ func (s *Service) Rescrape(ctx context.Context, req RescrapeRequest) (*Item, boo
 	return &current, true, nil
 }
 
-func (s *Service) ResolvePosterFile(ctx context.Context, strmTaskID int64, rel string) (string, error) {
-	_, root, err := s.resolveTask(ctx, strmTaskID)
-	if err != nil {
-		return "", err
+// ResolvePosterFile 解析海报文件的本地绝对路径。
+// root 非空时为自定义目录直接使用；否则回退到 STRM 任务的输出目录（兼容旧海报 URL）。
+func (s *Service) ResolvePosterFile(ctx context.Context, strmTaskID int64, root, rel string) (string, error) {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		sr, serr := s.resolveScrapeRoot(ctx, strmTaskID, "")
+		if serr != nil {
+			return "", serr
+		}
+		root = sr.root
+	} else {
+		if abs, aerr := filepath.Abs(root); aerr == nil {
+			root = abs
+		}
+		st, serr := os.Stat(root)
+		if serr != nil || !st.IsDir() {
+			return "", domain.Errorf(domain.CodeValidation, "目录不存在或不是文件夹：%s", root)
+		}
 	}
 	rel = filepath.Clean("/" + strings.TrimSpace(rel))
 	rel = strings.TrimPrefix(rel, "/")
@@ -435,10 +453,11 @@ func (s *Service) ResolvePosterFile(ctx context.Context, strmTaskID int64, rel s
 }
 
 func (s *Service) run(ctx context.Context, req RunRequest) error {
-	task, root, err := s.resolveTask(ctx, req.StrmTaskID)
+	sr, err := s.resolveScrapeRoot(ctx, req.StrmTaskID, req.Root)
 	if err != nil {
 		return err
 	}
+	task, root := sr.task, sr.root
 	failures := make([]ScrapeFailure, 0)
 	defer func() {
 		s.notifyScrapeFailures(task, failures)
@@ -495,7 +514,7 @@ func (s *Service) run(ctx context.Context, req RunRequest) error {
 			return err
 		}
 		displayName := workDisplayName(g)
-		item := buildItem(req.StrmTaskID, root, g)
+		item := buildItem(root, g)
 		need := mode == WriteModeOverwrite || workNeedsScrape(g, item.MediaType)
 		if !need {
 			s.setProgress(func(p *Progress) {
@@ -549,8 +568,8 @@ func (s *Service) run(ctx context.Context, req RunRequest) error {
 			time.Sleep(interval)
 			continue
 		}
-		s.upsertIndexItem(ctx, req.StrmTaskID, root, g)
-		updated := buildItem(req.StrmTaskID, root, g)
+		s.upsertIndexItem(ctx, sr.indexKey, root, g)
+		updated := buildItem(root, g)
 		s.setProgress(func(p *Progress) {
 			p.Done = i + 1
 			p.CurrentItemID = ""
@@ -561,7 +580,7 @@ func (s *Service) run(ctx context.Context, req RunRequest) error {
 		time.Sleep(interval)
 	}
 	// 全量对账一次，去掉已删除作品
-	_ = s.RebuildIndex(ctx, req.StrmTaskID)
+	_ = s.RebuildIndex(ctx, req.StrmTaskID, req.Root)
 	s.setProgress(func(p *Progress) {
 		p.CurrentItemID = ""
 		p.Message = fmt.Sprintf("完成：成功 %d，跳过 %d，失败 %d", p.Done-p.Skipped-p.Failed, p.Skipped, p.Failed)
@@ -589,6 +608,34 @@ func (s *Service) resolveTask(ctx context.Context, id int64) (*domain.StrmTask, 
 		root = abs
 	}
 	return task, root, nil
+}
+
+// scrapeRoot 是一次刮削操作的根目录解析结果。
+type scrapeRoot struct {
+	task     *domain.StrmTask // 自定义目录模式下为 nil
+	root     string           // 刮削根目录绝对路径
+	indexKey int64            // 索引键：自定义目录为路径派生负数键，任务模式为任务 ID
+}
+
+// resolveScrapeRoot 解析本次刮削的根目录：
+// root 非空 → 自定义目录模式：校验目录存在，索引键用路径派生的负数键（task 为 nil）；
+// root 为空 → 任务模式：走 resolveTask，索引键即任务 ID。
+func (s *Service) resolveScrapeRoot(ctx context.Context, strmTaskID int64, root string) (scrapeRoot, error) {
+	if rt := strings.TrimSpace(root); rt != "" {
+		if abs, err := filepath.Abs(rt); err == nil {
+			rt = abs
+		}
+		st, err := os.Stat(rt)
+		if err != nil || !st.IsDir() {
+			return scrapeRoot{}, domain.Errorf(domain.CodeValidation, "自定义目录不存在或不是文件夹：%s", rt)
+		}
+		return scrapeRoot{root: rt, indexKey: CustomRootTaskID(rt)}, nil
+	}
+	task, resolved, err := s.resolveTask(ctx, strmTaskID)
+	if err != nil {
+		return scrapeRoot{}, err
+	}
+	return scrapeRoot{task: task, root: resolved, indexKey: strmTaskID}, nil
 }
 
 func (s *Service) setProgress(fn func(*Progress)) {

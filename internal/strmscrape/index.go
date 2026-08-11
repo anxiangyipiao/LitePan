@@ -3,7 +3,7 @@ package strmscrape
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -127,12 +127,14 @@ func itemPosterRel(root string, g workGroup, mediaType string) string {
 	return filepath.ToSlash(relUnder(root, workPosterFile(g, mediaType)))
 }
 
-func posterURLFromRel(taskID int64, rel string) string {
+// posterURLFromRel 生成海报访问 URL。root 为刮削根目录绝对路径（任务输出目录或自定义目录）。
+func posterURLFromRel(root string, rel string) string {
 	rel = strings.TrimSpace(rel)
-	if rel == "" {
+	root = strings.TrimSpace(root)
+	if rel == "" || root == "" {
 		return ""
 	}
-	return fmt.Sprintf("/api/admin/strm-scrape/poster?strm_task_id=%d&rel=%s", taskID, pathEscape(rel))
+	return "/api/admin/strm-scrape/poster?root=" + url.QueryEscape(filepath.ToSlash(root)) + "&rel=" + pathEscape(rel)
 }
 
 func boolToInt(v bool) int {
@@ -142,23 +144,29 @@ func boolToInt(v bool) int {
 	return 0
 }
 
-// RebuildIndex 扫盘重建该任务索引。
-func (s *Service) RebuildIndex(ctx context.Context, strmTaskID int64) error {
-	if strmTaskID <= 0 {
-		return domain.Errorf(domain.CodeValidation, "strm_task_id 无效")
+// RebuildIndex 扫盘重建索引。root 非空为自定义目录模式，否则按任务输出目录。
+func (s *Service) RebuildIndex(ctx context.Context, strmTaskID int64, root string) error {
+	sr, err := s.resolveScrapeRoot(ctx, strmTaskID, root)
+	if err != nil {
+		return err
 	}
-	return s.withTaskIndexLock(strmTaskID, func() error {
-		return s.rebuildIndexLocked(ctx, strmTaskID)
+	return s.withTaskIndexLock(sr.indexKey, func() error {
+		return s.rebuildIndexLocked(ctx, sr.indexKey, sr.root)
 	})
 }
 
-func (s *Service) rebuildIndexLocked(ctx context.Context, strmTaskID int64) error {
+// rebuildIndexLocked 在锁内重建索引。strmTaskID 即索引键（任务 ID 或负数自定义键），不再派生。
+// root 为空时回退到任务输出目录解析。
+func (s *Service) rebuildIndexLocked(ctx context.Context, strmTaskID int64, root string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	_, root, err := s.resolveTask(ctx, strmTaskID)
-	if err != nil {
-		return err
+	var err error
+	if strings.TrimSpace(root) == "" {
+		_, root, err = s.resolveTask(ctx, strmTaskID)
+		if err != nil {
+			return err
+		}
 	}
 	root, err = filepath.Abs(root)
 	if err != nil {
@@ -184,7 +192,7 @@ func (s *Service) rebuildIndexLocked(ctx context.Context, strmTaskID int64) erro
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		it := buildItem(strmTaskID, root, g)
+		it := buildItem(root, g)
 		items = append(items, it)
 		rels = append(rels, itemPosterRel(root, g, it.MediaType))
 	}
@@ -264,7 +272,7 @@ func (s *Service) upsertIndexItem(ctx context.Context, strmTaskID int64, root st
 			root = abs
 		}
 		if !s.indexFileExists(strmTaskID) {
-			return s.rebuildIndexLocked(ctx, strmTaskID)
+			return s.rebuildIndexLocked(ctx, strmTaskID, root)
 		}
 		db, err := openTaskIndexDB(s.indexPath(strmTaskID))
 		if err != nil {
@@ -277,10 +285,10 @@ func (s *Service) upsertIndexItem(ctx context.Context, strmTaskID int64, root st
 				storedAbs = abs
 			}
 			if storedAbs != root {
-				return s.rebuildIndexLocked(ctx, strmTaskID)
+				return s.rebuildIndexLocked(ctx, strmTaskID, root)
 			}
 		}
-		it := buildItem(strmTaskID, root, g)
+		it := buildItem(root, g)
 		rel := itemPosterRel(root, g, it.MediaType)
 		tx, err := db.Begin()
 		if err != nil {
@@ -335,7 +343,8 @@ func itemListOrderBy(sort ItemListSort) string {
 	}
 }
 
-func scanIndexItems(rows *sql.Rows, strmTaskID int64) ([]Item, error) {
+// scanIndexItems 按行扫描索引条目，海报 URL 用索引库 meta 里记录的 root 重建。
+func scanIndexItems(rows *sql.Rows, root string) ([]Item, error) {
 	out := make([]Item, 0, 128)
 	for rows.Next() {
 		var it Item
@@ -356,7 +365,9 @@ func scanIndexItems(rows *sql.Rows, strmTaskID int64) ([]Item, error) {
 			y := int(year.Int64)
 			it.Year = &y
 		}
-		it.PosterURL = posterURLFromRel(strmTaskID, posterRel)
+		if strings.TrimSpace(root) != "" {
+			it.PosterURL = posterURLFromRel(root, posterRel)
+		}
 		out = append(out, it)
 	}
 	return out, rows.Err()
@@ -386,6 +397,7 @@ func (s *Service) listIndexItems(strmTaskID int64, query ItemListQuery) (ItemLis
 	if err != nil {
 		return ItemListResult{}, err
 	}
+	storedRoot, _ := readIndexMeta(db, "root")
 	whereSQL, whereArgs := buildItemListWhere(query)
 	countSQL := `SELECT COUNT(*) FROM items`
 	if whereSQL != "" {
@@ -411,7 +423,7 @@ FROM items
 		return ItemListResult{}, err
 	}
 	defer rows.Close()
-	items, err := scanIndexItems(rows, strmTaskID)
+	items, err := scanIndexItems(rows, storedRoot)
 	if err != nil {
 		return ItemListResult{}, err
 	}
@@ -431,15 +443,15 @@ func (s *Service) ensureIndexLocked(ctx context.Context, strmTaskID int64, root 
 		rootAbs = abs
 	}
 	if !s.indexFileExists(strmTaskID) {
-		return s.rebuildIndexLocked(ctx, strmTaskID)
+		return s.rebuildIndexLocked(ctx, strmTaskID, root)
 	}
 	db, err := openTaskIndexDB(s.indexPath(strmTaskID))
 	if err != nil {
-		return s.rebuildIndexLocked(ctx, strmTaskID)
+		return s.rebuildIndexLocked(ctx, strmTaskID, root)
 	}
 	defer db.Close()
 	if ver, ok := readIndexMeta(db, "schema"); !ok || ver != indexSchemaVersion {
-		return s.rebuildIndexLocked(ctx, strmTaskID)
+		return s.rebuildIndexLocked(ctx, strmTaskID, root)
 	}
 	if stored, ok := readIndexMeta(db, "root"); ok && stored != "" {
 		storedAbs := stored
@@ -447,13 +459,13 @@ func (s *Service) ensureIndexLocked(ctx context.Context, strmTaskID int64, root 
 			storedAbs = abs
 		}
 		if storedAbs != rootAbs {
-			return s.rebuildIndexLocked(ctx, strmTaskID)
+			return s.rebuildIndexLocked(ctx, strmTaskID, root)
 		}
 	}
 	var n int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM items`).Scan(&n); err != nil || n == 0 {
 		// 空索引常见于目录当时为空或重建中断；再扫一次对齐磁盘
-		return s.rebuildIndexLocked(ctx, strmTaskID)
+		return s.rebuildIndexLocked(ctx, strmTaskID, root)
 	}
 	return nil
 }

@@ -140,7 +140,8 @@ func (h *Handler) listStrmScrapeItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	taskID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("strm_task_id")), 10, 64)
-	items, err := h.strmScrape.ListItems(r.Context(), taskID, parseStrmScrapeListQuery(r))
+	root := strings.TrimSpace(r.URL.Query().Get("root"))
+	items, err := h.strmScrape.ListItems(r.Context(), taskID, root, parseStrmScrapeListQuery(r))
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -154,6 +155,7 @@ func (h *Handler) refreshStrmScrapeIndex(w http.ResponseWriter, r *http.Request)
 	}
 	var req struct {
 		StrmTaskID int64                   `json:"strm_task_id"`
+		Root       string                  `json:"root"`
 		Offset     int                     `json:"offset"`
 		Limit      int                     `json:"limit"`
 		Keyword    string                  `json:"keyword"`
@@ -166,7 +168,7 @@ func (h *Handler) refreshStrmScrapeIndex(w http.ResponseWriter, r *http.Request)
 		writeErr(w, err)
 		return
 	}
-	items, err := h.strmScrape.RefreshIndex(r.Context(), req.StrmTaskID, strmscrape.ItemListQuery{
+	items, err := h.strmScrape.RefreshIndex(r.Context(), req.StrmTaskID, req.Root, strmscrape.ItemListQuery{
 		Offset:    req.Offset,
 		Limit:     req.Limit,
 		Keyword:   strings.TrimSpace(req.Keyword),
@@ -246,8 +248,9 @@ func (h *Handler) getStrmScrapePoster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	taskID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("strm_task_id")), 10, 64)
+	root := strings.TrimSpace(r.URL.Query().Get("root"))
 	rel := strings.TrimSpace(r.URL.Query().Get("rel"))
-	path, err := h.strmScrape.ResolvePosterFile(r.Context(), taskID, rel)
+	path, err := h.strmScrape.ResolvePosterFile(r.Context(), taskID, root, rel)
 	if err != nil {
 		writeErr(w, err)
 		return

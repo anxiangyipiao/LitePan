@@ -46,6 +46,7 @@ export interface StrmScrapeProgress {
   current_item_id: string;
   item_revision: number;
   updated_item?: StrmScrapeItem;
+  root?: string;
 }
 
 export interface StrmScrapeRematchResult {
@@ -134,9 +135,14 @@ export function searchStrmScrape(params: {
   });
 }
 
-export function runStrmScrape(strmTaskId: number, writeMode?: StrmScrapeWriteMode) {
+export function runStrmScrape(
+  strmTaskId: number,
+  root?: string,
+  writeMode?: StrmScrapeWriteMode,
+) {
   return http.post<StrmScrapeProgress>("/admin/strm-scrape/run", {
     strm_task_id: strmTaskId,
+    root,
     write_mode: writeMode,
   });
 }
@@ -149,22 +155,33 @@ export function fetchStrmScrapeProgress() {
   return http.get<StrmScrapeProgress>("/admin/strm-scrape/progress");
 }
 
-export function fetchStrmScrapeItems(strmTaskId: number, query: StrmScrapeItemListQuery = {}) {
+export function fetchStrmScrapeItems(
+  strmTaskId: number,
+  root: string,
+  query: StrmScrapeItemListQuery = {},
+) {
   return http.get<StrmScrapeItemListResult>("/admin/strm-scrape/items", {
     strm_task_id: strmTaskId,
+    root,
     ...query,
   });
 }
 
-export function refreshStrmScrapeIndex(strmTaskId: number, query: StrmScrapeItemListQuery = {}) {
+export function refreshStrmScrapeIndex(
+  strmTaskId: number,
+  root: string,
+  query: StrmScrapeItemListQuery = {},
+) {
   return http.post<StrmScrapeItemListResult>("/admin/strm-scrape/refresh-index", {
     strm_task_id: strmTaskId,
+    root,
     ...query,
   });
 }
 
 export function rematchStrmScrapeItem(input: {
   strm_task_id: number;
+  root?: string;
   item_id: string;
   tmdb_id: string;
   media_type: string;
@@ -174,10 +191,18 @@ export function rematchStrmScrapeItem(input: {
   return http.post<StrmScrapeRematchResult>("/admin/strm-scrape/rematch", input);
 }
 
-export function markStrmScrapeNormal(input: { strm_task_id: number; item_id: string }) {
+export function markStrmScrapeNormal(input: {
+  strm_task_id: number;
+  root?: string;
+  item_id: string;
+}) {
   return http.post<StrmScrapeItem>("/admin/strm-scrape/mark-normal", input);
 }
 
-export function rescrapeStrmScrapeItem(input: { strm_task_id: number; item_id: string }) {
+export function rescrapeStrmScrapeItem(input: {
+  strm_task_id: number;
+  root?: string;
+  item_id: string;
+}) {
   return http.post<StrmScrapeRematchResult>("/admin/strm-scrape/rescrape", input);
 }

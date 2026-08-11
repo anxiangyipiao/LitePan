@@ -87,6 +87,8 @@ type Progress struct {
 	CurrentItemID string `json:"current_item_id"`
 	ItemRevision  int    `json:"item_revision"`
 	UpdatedItem   *Item  `json:"updated_item,omitempty"`
+	// Root 是自定义目录刮削时记录的目标路径（任务模式为空），供前端区分当前来源。
+	Root string `json:"root,omitempty"`
 }
 
 type Settings struct {
@@ -107,6 +109,8 @@ type Settings struct {
 type RunRequest struct {
 	StrmTaskID int64  `json:"strm_task_id"`
 	WriteMode  string `json:"write_mode,omitempty"`
+	// Root 为自定义刮削目录绝对路径；非空时忽略 StrmTaskID，直接刮削该目录。
+	Root string `json:"root,omitempty"`
 }
 
 type RematchRequest struct {
@@ -116,14 +120,17 @@ type RematchRequest struct {
 	MediaType  string `json:"media_type"`
 	Title      string `json:"title,omitempty"`
 	Year       *int   `json:"year,omitempty"`
+	Root       string `json:"root,omitempty"`
 }
 
 type MarkNormalRequest struct {
 	StrmTaskID int64  `json:"strm_task_id"`
 	ItemID     string `json:"item_id"`
+	Root       string `json:"root,omitempty"`
 }
 
 type RescrapeRequest struct {
 	StrmTaskID int64  `json:"strm_task_id"`
 	ItemID     string `json:"item_id"`
+	Root       string `json:"root,omitempty"`
 }

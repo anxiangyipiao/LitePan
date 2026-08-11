@@ -43,6 +43,8 @@ type TVSubFilter = "all" | "ended" | "updating";
 type SortKey = StrmScrapeItemListSort;
 
 const SORT_STORAGE_KEY = "litepan:strm-scrape:sort";
+const SOURCE_STORAGE_KEY = "litepan:strm-scrape:source";
+const CUSTOM_ROOT_STORAGE_KEY = "litepan:strm-scrape:custom-root";
 const SORT_KEYS: SortKey[] = ["title_asc", "year_desc", "year_asc", "added_desc", "added_asc"];
 const PAGE_LIMIT = 120;
 const MAX_RELOAD_LIMIT = 200;
@@ -59,6 +61,21 @@ function loadSavedSortKey(): SortKey {
   return "added_desc";
 }
 
+function loadSavedSource(): string | null {
+  try {
+    const raw = localStorage.getItem(SOURCE_STORAGE_KEY);
+    if (raw === "custom" || (raw && /^\d+$/.test(raw))) return raw;
+  } catch {}
+  return null;
+}
+
+function loadSavedCustomRoot(): string {
+  try {
+    return (localStorage.getItem(CUSTOM_ROOT_STORAGE_KEY) || "").trim();
+  } catch {}
+  return "";
+}
+
 function saveSortKey(key: SortKey) {
   try {
     localStorage.setItem(SORT_STORAGE_KEY, key);
@@ -66,7 +83,10 @@ function saveSortKey(key: SortKey) {
 }
 
 const tasks = ref<StrmTask[]>([]);
-const selectedTaskId = ref<number | null>(null);
+// 下拉值："custom"（自定义目录）或任务 ID 字符串。
+const selectedTaskId = ref<string | null>(null);
+const customRoot = ref("");
+const customRootInput = ref("");
 const items = ref<StrmScrapeItem[]>([]);
 const stats = ref<StrmScrapeItemListStats>(emptyStats());
 const totalMatched = ref(0);
@@ -97,12 +117,19 @@ const selectedCandidateKey = ref("");
 const previewPosterURL = ref("");
 const previewPosterTitle = ref("");
 
-const taskOptions = computed(() =>
-  tasks.value.map((t) => ({
+const taskOptions = computed(() => [
+  { value: "custom", label: "自定义目录" },
+  ...tasks.value.map((t) => ({
     value: String(t.id),
     label: t.name || `任务 #${t.id}`,
   })),
+]);
+
+const isCustomMode = computed(() => selectedTaskId.value === "custom");
+const activeTaskId = computed<number | null>(() =>
+  isCustomMode.value ? null : selectedTaskId.value ? Number(selectedTaskId.value) : null,
 );
+const activeRoot = computed(() => (isCustomMode.value ? customRoot.value.trim() : ""));
 
 const sortOptions: { value: SortKey; label: string }[] = [
   { value: "added_desc", label: "添加时间 · 新→旧" },
@@ -135,6 +162,7 @@ const currentListQuery = computed<StrmScrapeItemListQuery>(() => ({
 const currentListQueryKey = computed(() =>
   JSON.stringify({
     task_id: selectedTaskId.value ?? 0,
+    root: activeRoot.value,
     ...currentListQuery.value,
   }),
 );
@@ -237,11 +265,13 @@ function replaceItem(updated: StrmScrapeItem) {
 }
 
 async function requestItems(
-  taskId: number,
+  taskId: number | null,
+  root: string,
   query: StrmScrapeItemListQuery,
   refreshIndex = false,
 ) {
-  return refreshIndex ? refreshStrmScrapeIndex(taskId, query) : fetchStrmScrapeItems(taskId, query);
+  const id = taskId ?? 0;
+  return refreshIndex ? refreshStrmScrapeIndex(id, root, query) : fetchStrmScrapeItems(id, root, query);
 }
 
 function disconnectLoadMoreObserver() {
@@ -263,14 +293,19 @@ function setupLoadMoreObserver() {
   loadMoreObserver.observe(loadMoreSentinelEl.value);
 }
 
+function currentSourceKey() {
+  return activeRoot.value || (selectedTaskId.value ?? "");
+}
+
 async function loadItems(opts?: {
   append?: boolean;
   silent?: boolean;
   preserveLoaded?: boolean;
   refreshIndex?: boolean;
 }) {
-  const taskId = selectedTaskId.value;
-  if (!taskId) {
+  const taskId = activeTaskId.value;
+  const root = activeRoot.value;
+  if (!taskId && !root) {
     clearItemList();
     return false;
   }
@@ -279,6 +314,7 @@ async function loadItems(opts?: {
     return false;
   }
   const seq = ++loadItemsSeq;
+  const sourceKey = currentSourceKey();
   const limit = append ? PAGE_LIMIT : currentFetchLimit(Boolean(opts?.preserveLoaded));
   const offset = append ? items.value.length : 0;
   if (append) {
@@ -290,8 +326,8 @@ async function loadItems(opts?: {
     clearItemList();
   }
   try {
-    const data = await requestItems(taskId, buildListQuery(offset, limit), Boolean(opts?.refreshIndex));
-    if (seq !== loadItemsSeq || selectedTaskId.value !== taskId) return false;
+    const data = await requestItems(taskId, root, buildListQuery(offset, limit), Boolean(opts?.refreshIndex));
+    if (seq !== loadItemsSeq || currentSourceKey() !== sourceKey) return false;
     applyListResult(data, append);
     await nextTick();
     if (!append) {
@@ -301,7 +337,7 @@ async function loadItems(opts?: {
     setupLoadMoreObserver();
     return true;
   } catch (e) {
-    if (seq !== loadItemsSeq || selectedTaskId.value !== taskId) return false;
+    if (seq !== loadItemsSeq || currentSourceKey() !== sourceKey) return false;
     const fallback = append
       ? "加载更多失败"
       : opts?.refreshIndex
@@ -328,13 +364,24 @@ const progressPolling = useConditionalPolling({
   shouldPoll: () => running.value,
 });
 
+// progressMatchesSource 判断进度是否属于当前正在查看的来源（自定义目录按 root 匹配，任务按 task_id 匹配）。
+function progressMatchesSource(p: StrmScrapeProgress | null) {
+  if (!p) return false;
+  if (activeRoot.value) return String(p.root || "") === activeRoot.value;
+  return Boolean(activeTaskId.value) && Number(p.strm_task_id) === Number(activeTaskId.value);
+}
+
 async function loadTasks() {
   const list = await fetchStrmTasks();
   tasks.value = Array.isArray(list) ? list : [];
   if (!selectedTaskId.value && tasks.value.length) {
-    selectedTaskId.value = Number(tasks.value[0].id);
-  } else if (selectedTaskId.value && !tasks.value.some((t) => Number(t.id) === Number(selectedTaskId.value))) {
-    selectedTaskId.value = tasks.value.length ? Number(tasks.value[0].id) : null;
+    selectedTaskId.value = String(tasks.value[0].id);
+  } else if (
+    selectedTaskId.value &&
+    selectedTaskId.value !== "custom" &&
+    !tasks.value.some((t) => Number(t.id) === Number(selectedTaskId.value))
+  ) {
+    selectedTaskId.value = tasks.value.length ? String(tasks.value[0].id) : null;
   }
 }
 
@@ -343,11 +390,12 @@ async function syncProgress() {
     const p = await fetchStrmScrapeProgress();
     const previous = progress.value;
     const wasRunning = previous?.running;
-    const sameTask = Number(p.strm_task_id) === Number(selectedTaskId.value);
-    const previousRevision =
-      Number(previous?.strm_task_id) === Number(p.strm_task_id)
-        ? Number(previous?.item_revision || 0)
-        : 0;
+    const sameTask = progressMatchesSource(p);
+    const sameJob =
+      previous != null &&
+      Number(previous.strm_task_id) === Number(p.strm_task_id) &&
+      String(previous.root || "") === String(p.root || "");
+    const previousRevision = sameJob ? Number(previous?.item_revision || 0) : 0;
     progress.value = p;
     if (sameTask && p.running && Number(p.item_revision || 0) > previousRevision) {
       const revisionDelta = Number(p.item_revision || 0) - previousRevision;
@@ -366,19 +414,33 @@ async function syncProgress() {
 }
 
 async function startScrape() {
-  if (!selectedTaskId.value) {
-    toast.error("请先选择 STRM 任务");
+  if (!activeTaskId.value && !activeRoot.value) {
+    toast.error(isCustomMode.value ? "请先填写自定义目录路径" : "请先选择 STRM 任务");
     return;
   }
   if (running.value) return;
   try {
-    const p = await runStrmScrape(selectedTaskId.value);
+    const p = await runStrmScrape(activeTaskId.value ?? 0, activeRoot.value);
     progress.value = p;
     progressPolling.sync();
     toast.success("已开始刮削");
   } catch (e) {
     toast.error(getApiErrorMessage(e, "启动刮削失败"));
   }
+}
+
+function enterCustomMode() {
+  customRootInput.value = customRoot.value;
+}
+
+function applyCustomRoot() {
+  const p = customRootInput.value.trim();
+  customRoot.value = p;
+  try {
+    if (p) localStorage.setItem(CUSTOM_ROOT_STORAGE_KEY, p);
+    else localStorage.removeItem(CUSTOM_ROOT_STORAGE_KEY);
+  } catch {}
+  void loadItems();
 }
 
 async function stopScrape() {
@@ -452,7 +514,7 @@ function canRescrape(item: StrmScrapeItem) {
 function isItemBusy(item: StrmScrapeItem) {
   if (rescrapingId.value && rescrapingId.value === item.id) return true;
   if (!running.value) return false;
-  if (Number(progress.value?.strm_task_id) !== Number(selectedTaskId.value)) return false;
+  if (!progressMatchesSource(progress.value)) return false;
   return String(progress.value?.current_item_id || "") === item.id;
 }
 
@@ -571,7 +633,8 @@ async function applyMatch() {
   try {
     const year = hitYear(hit);
     const result = await rematchStrmScrapeItem({
-      strm_task_id: selectedTaskId.value,
+      strm_task_id: activeTaskId.value ?? 0,
+      root: activeRoot.value,
       item_id: matchItem.value.id,
       tmdb_id: hitId(hit),
       media_type: hitMediaType(hit),
@@ -636,7 +699,8 @@ async function confirmDoubt(item: StrmScrapeItem) {
 async function applyNormalState(item: StrmScrapeItem) {
   if (!selectedTaskId.value) return;
   const updated = await markStrmScrapeNormal({
-    strm_task_id: selectedTaskId.value,
+    strm_task_id: activeTaskId.value ?? 0,
+    root: activeRoot.value,
     item_id: item.id,
   });
   if (!replaceItem(updated)) {
@@ -649,7 +713,8 @@ async function rescrapeItem(item: StrmScrapeItem) {
   rescrapingId.value = item.id;
   try {
     const result = await rescrapeStrmScrapeItem({
-      strm_task_id: selectedTaskId.value,
+      strm_task_id: activeTaskId.value ?? 0,
+      root: activeRoot.value,
       item_id: item.id,
     });
     if (result.started) {
@@ -688,8 +753,21 @@ watch([loadMoreSentinelEl, hasMore], () => {
   void nextTick(() => setupLoadMoreObserver());
 });
 
+function onSourceChange(v: string | number | boolean) {
+  const raw = String(v ?? "");
+  selectedTaskId.value = raw || null;
+  if (raw === "custom") enterCustomMode();
+  try {
+    if (raw) localStorage.setItem(SOURCE_STORAGE_KEY, raw);
+    else localStorage.removeItem(SOURCE_STORAGE_KEY);
+  } catch {}
+}
+
 onMounted(async () => {
   window.addEventListener("keydown", onPosterPreviewKeydown, true);
+  selectedTaskId.value = loadSavedSource();
+  customRoot.value = loadSavedCustomRoot();
+  customRootInput.value = customRoot.value;
   loading.value = true;
   try {
     await loadTasks();
@@ -733,9 +811,9 @@ defineExpose({
         <h2>海报墙</h2>
         <div v-if="taskOptions.length" class="scrape-panel__task-select">
           <AppSelect
-            :model-value="selectedTaskId != null ? String(selectedTaskId) : ''"
+            :model-value="selectedTaskId ?? ''"
             :options="taskOptions"
-            @update:model-value="(v) => (selectedTaskId = Number(v) || null)"
+            @update:model-value="onSourceChange"
           />
         </div>
       </div>
@@ -823,11 +901,38 @@ defineExpose({
       <span class="scrape-progress__nums">{{ progress.done }}/{{ progress.total }}</span>
     </div>
 
+    <div v-if="isCustomMode" class="scrape-custom-root">
+      <input
+        v-model="customRootInput"
+        class="scrape-custom-root__input"
+        type="text"
+        placeholder="粘贴含 .strm 文件的目录绝对路径，例如 /mnt/library"
+        @keydown.enter.prevent="applyCustomRoot"
+      />
+      <button
+        type="button"
+        class="scrape-custom-root__apply"
+        :disabled="!customRootInput.trim()"
+        @click="applyCustomRoot"
+      >
+        应用
+      </button>
+      <span v-if="customRoot" class="scrape-custom-root__hint">当前目录：{{ customRoot }}</span>
+      <span v-else class="scrape-custom-root__hint">填写路径后点「应用」，直接刮削该目录</span>
+    </div>
+
     <AdminEmptyState
-      v-if="!loading && !tasks.length"
+      v-if="!loading && isCustomMode && !customRoot"
+      icon="📁"
+      title="自定义目录"
+      description="填入上方目录路径并点「应用」，即可直接刮削任意含 .strm 文件的目录，无需 STRM 任务。"
+    />
+
+    <AdminEmptyState
+      v-else-if="!loading && !tasks.length"
       icon="🎬"
       title="还没有 STRM 任务"
-      description="请先在「STRM 任务」里创建任务，再回来刮削其输出目录。"
+      description="请先在「STRM 任务」里创建任务，再回来刮削其输出目录；也可以在上方选择「自定义目录」。"
     />
 
     <template v-else-if="!loading">
@@ -1359,6 +1464,52 @@ defineExpose({
 .scrape-progress__nums {
   font-weight: 700;
   white-space: nowrap;
+}
+.scrape-custom-root {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--brand) 4%, transparent);
+  flex-wrap: wrap;
+}
+.scrape-custom-root__input {
+  flex: 1 1 260px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+.scrape-custom-root__input:focus {
+  border-color: var(--brand);
+}
+.scrape-custom-root__apply {
+  flex: 0 0 auto;
+  height: 34px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--brand);
+  color: var(--text-on-brand);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.scrape-custom-root__apply:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.scrape-custom-root__hint {
+  flex: 1 1 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+  word-break: break-all;
 }
 .scrape-toolbar {
   display: flex;

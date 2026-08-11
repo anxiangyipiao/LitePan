@@ -1,0 +1,1 @@
+import{K as e,S as t,U as n,k as r,y as i}from"./vue-vendor-DBT-cNUj.js";/* empty css                     */var a={class:`input-action-field`},o={class:`input-action-field__main`},s=r({__name:`InputActionField`,setup(r){return(r,s)=>(n(),t(`div`,a,[i(`div`,o,[e(r.$slots,`default`)]),e(r.$slots,`action`)]))}});export{s as t};
