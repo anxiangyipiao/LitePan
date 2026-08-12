@@ -36,6 +36,7 @@ const emit = defineEmits<{
                 <path d="M5 12h14m-6-6 6 6-6 6" />
               </svg>
             </button>
+            <span class="admin-settings-drawer__title">{{ title }}</span>
           </div>
           <div class="admin-settings-drawer__body">
             <slot />
@@ -104,9 +105,23 @@ const emit = defineEmits<{
   z-index: 2;
   top: 0;
   display: flex;
+  align-items: center;
+  gap: 2px;
   justify-content: flex-start;
-  padding: 10px 12px 4px;
+  padding: 10px 12px 6px;
   background: var(--surface);
+}
+
+.admin-settings-drawer__title {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
 }
 
 .admin-settings-drawer__head::before {
@@ -117,7 +132,7 @@ const emit = defineEmits<{
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #4c74df;
+  background: var(--brand);
   content: "";
   opacity: 0;
   pointer-events: none;
@@ -136,7 +151,7 @@ const emit = defineEmits<{
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: #ffffff;
+  color: var(--text-on-brand);
   cursor: pointer;
 }
 
@@ -145,7 +160,7 @@ const emit = defineEmits<{
   z-index: 0;
   inset: 5px;
   border-radius: 50%;
-  background: #4c74df;
+  background: var(--brand);
   content: "";
 }
 
@@ -157,12 +172,12 @@ const emit = defineEmits<{
 }
 
 .admin-settings-drawer__close:hover {
-  color: #ffffff;
+  color: var(--text-on-brand);
   background: transparent;
 }
 
 .admin-settings-drawer__close:hover::before {
-  background: #4c74df;
+  background: var(--brand-strong);
 }
 
 .admin-settings-drawer__close:focus-visible {
@@ -170,8 +185,15 @@ const emit = defineEmits<{
   outline-offset: 2px;
 }
 
+/* 打开时的一次性脉冲（不再无限循环）；弱动效用户完全关闭 */
 .admin-settings-drawer--open .admin-settings-drawer__head::before {
-  animation: admin-settings-drawer-back-halo 1s ease-out infinite;
+  animation: admin-settings-drawer-back-halo 0.9s ease-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-settings-drawer--open .admin-settings-drawer__head::before {
+    animation: none;
+  }
 }
 
 @keyframes admin-settings-drawer-back-halo {
@@ -194,10 +216,15 @@ const emit = defineEmits<{
 }
 
 .admin-settings-drawer__foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   justify-content: center;
   gap: 8px;
-  padding: 8px 16px 20px;
+  padding: 10px 16px 14px;
+  background: var(--surface);
+  border-top: 1px solid var(--border-soft);
 }
 
 @media (max-width: 768px) {

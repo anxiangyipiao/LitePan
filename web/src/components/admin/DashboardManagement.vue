@@ -1283,7 +1283,7 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .dashboard-hero,
   .dashboard-layout {
     grid-template-columns: 1fr;

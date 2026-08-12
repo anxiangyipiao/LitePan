@@ -463,7 +463,7 @@ onUnmounted(() => {
 .text-preview__state--error span { color: #9eb0c8; font-size: 13px; line-height: 1.7; }
 .text-preview__state--error button { margin-top: 4px; padding: 9px 18px; border: 1px solid #268bff; border-radius: 8px; background: #187ce0; font-weight: 650; }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .text-preview__stage { inset: 58px 0 0; padding-bottom: 30px; }
   .text-preview__document { min-height: calc(100dvh - 58px); }
   .text-preview__toolbar { min-height: 46px; padding: 6px 10px; }

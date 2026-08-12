@@ -533,7 +533,7 @@ onUnmounted(() => clearTimeout(searchTimer));
   cursor: not-allowed;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .logs-ack-banner {
     flex-direction: column;
     align-items: stretch;

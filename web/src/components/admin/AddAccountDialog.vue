@@ -412,6 +412,17 @@ function handleClose() {
   margin-left: auto;
 }
 
+/* 窄屏：底部按钮区允许换行，避免 OAuth/扫码/上一步/保存 挤出一行溢出 */
+@media (max-width: 768px) {
+  .step-footer {
+    flex-wrap: wrap;
+  }
+  .step-footer__right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
 .card-logo-field {
   display: flex;
   align-items: flex-start;

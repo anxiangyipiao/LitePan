@@ -39,6 +39,26 @@ ul {
   list-style: none;
 }
 
+img {
+  max-width: 100%;
+}
+
+/* 移动端点击无高亮闪烁 */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand) 24%, transparent);
+  color: var(--text);
+}
+
+/* 统一键盘可达性基线；组件 scoped 可覆盖 */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
 input,
 select,
 textarea {

@@ -921,7 +921,7 @@ onUnmounted(() => {
   .video-preview__controls { grid-template-columns: 46px auto minmax(130px, 1fr) 42px 84px 96px 42px 62px 42px; }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .video-preview__bottom { min-height: 295px; padding: 68px 9px 8px; }
   .video-preview__bottom.is-compact { min-height: 115px; }
   .video-preview__notice { bottom: 310px; max-width: 86vw; overflow: hidden; text-overflow: ellipsis; }

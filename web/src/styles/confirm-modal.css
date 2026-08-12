@@ -6,7 +6,7 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--modal-scrim);
   backdrop-filter: blur(4px);
 }
 

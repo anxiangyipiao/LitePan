@@ -84,7 +84,7 @@ onUnmounted(() => {
   inset: 0;
   z-index: var(--z-modal);
   overflow-y: auto;
-  background: rgba(15, 23, 42, 0.45);
+  background: var(--modal-scrim);
 }
 .overlay--nested {
   z-index: calc(var(--z-modal) + 40);

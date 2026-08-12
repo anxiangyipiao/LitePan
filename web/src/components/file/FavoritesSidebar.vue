@@ -512,6 +512,14 @@ function handleDrop(event: DragEvent, item: BrowserFavoriteItem) {
   padding-top: 1px;
 }
 
+/* 触屏：扩大收藏动作热区，避免 20px 按钮难点中 */
+@media (hover: none) {
+  .favorites-sidebar__action {
+    width: 36px;
+    height: 36px;
+  }
+}
+
 .favorites-sidebar__action {
   appearance: none;
   width: 20px;

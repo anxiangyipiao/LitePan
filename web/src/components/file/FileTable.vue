@@ -404,12 +404,13 @@ function handleFolderDrop(event: DragEvent, file: FileItem) {
 }
 
 function onRowClick(event: MouseEvent, file: FileItem) {
-  // 单击 = 选中；双击 = 进文件夹/预览（由 onRowDblClick 处理）
+  // 桌面：单击 = 选中；双击 = 进文件夹/预览（由 onRowDblClick 处理）
+  // 触屏：单击直接打开，选择靠常显 checkbox
   const target = event.target as HTMLElement | null;
   if (target?.closest('input[type="checkbox"]')) return;
   if (target?.closest(".file-row-actions")) return;
   if (target?.closest(".inline-rename-wrap")) return;
-  if (!props.isAdmin) {
+  if (!props.isAdmin || isTouchDevice.value) {
     emit("open", file);
     return;
   }
@@ -424,7 +425,7 @@ function onRowDblClick(_event: MouseEvent, file: FileItem) {
 }
 
 function onCardClick(file: FileItem) {
-  if (!props.isAdmin) {
+  if (!props.isAdmin || isTouchDevice.value) {
     emit("open", file);
     return;
   }
@@ -462,7 +463,17 @@ watch(hasMoreListFiles, async () => {
   void updateListLoadMoreObserver();
 });
 
+// 触屏设备（无 hover 主输入）：单击打开，选择靠常显 checkbox
+const isTouchDevice = ref(false);
+let touchMediaQuery: MediaQueryList | null = null;
+function updateTouchDevice() {
+  isTouchDevice.value = Boolean(touchMediaQuery?.matches);
+}
+
 onMounted(() => {
+  touchMediaQuery = window.matchMedia("(hover: none)");
+  updateTouchDevice();
+  touchMediaQuery.addEventListener("change", updateTouchDevice);
   void nextTick(updateListLoadMoreObserver);
   document.addEventListener("keydown", handleHeaderMenuKeydown);
   document.addEventListener("keydown", handleGlobalKeydown);
@@ -471,6 +482,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  touchMediaQuery?.removeEventListener("change", updateTouchDevice);
+  touchMediaQuery = null;
   disconnectListLoadMoreObserver();
   document.removeEventListener("keydown", handleHeaderMenuKeydown);
   document.removeEventListener("keydown", handleGlobalKeydown);
@@ -557,7 +570,13 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
         </tr>
 
         <tr v-if="showEmptyRow">
-          <td :colspan="emptyColSpan" class="state state--empty-cell">{{ emptyStateText }}</td>
+          <td :colspan="emptyColSpan" class="state state--empty-cell">
+            <span v-if="loading" class="empty-spinner" aria-label="加载中" />
+            <template v-else>
+              <span class="empty-icon"><SvgIcon name="fa-cubes" :size="22" /></span>
+              <span>{{ emptyStateText }}</span>
+            </template>
+          </td>
         </tr>
 
         <tr
@@ -704,10 +723,11 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
       </div>
 
       <div v-if="showEmptyRow && !inlineCreatingFolder" class="grid-state">
-        <template v-if="!loading">
-          <SvgIcon name="folder" :size="40" />
+        <span v-if="loading" class="empty-spinner" aria-label="加载中" />
+        <template v-else>
+          <span class="empty-icon"><SvgIcon name="fa-cubes" :size="40" /></span>
+          <p>{{ emptyStateText }}</p>
         </template>
-        <p>{{ emptyStateText }}</p>
       </div>
 
       <div v-else class="file-grid">
@@ -927,9 +947,24 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
 .state--empty p,
 .state--empty-cell {
   margin: 0;
-  font-style: italic;
   text-align: center;
   color: var(--text-muted);
+}
+
+.empty-spinner {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border: 2px solid var(--border);
+  border-top-color: var(--brand);
+  border-radius: 999px;
+  animation: spin 0.72s linear infinite;
+}
+
+.empty-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+  opacity: 0.75;
 }
 
 .file-row {
@@ -1021,7 +1056,9 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  height: 52px;
+  padding: 0 16px;
+  background: var(--surface-muted);
   border-bottom: 1px solid var(--border-soft);
 }
 
@@ -1071,6 +1108,12 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
 .file-card:hover .file-card-main,
 .file-card.selected .file-card-main {
   background: var(--surface-sunken);
+}
+
+/* 键盘聚焦：卡片主体（role=button + tabindex）聚焦可见 */
+.file-card-main:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .file-card.selected .file-card-main {
@@ -1131,6 +1174,14 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
 .file-card.selected .file-card-checkbox {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* 触屏设备：卡片勾选常显，避免 hover-only 不可达 */
+@media (hover: none) {
+  .file-card-checkbox {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .file-card-inline-create .file-card-main {

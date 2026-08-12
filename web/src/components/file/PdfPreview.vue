@@ -580,7 +580,7 @@ onUnmounted(() => {
 .pdf-preview__password button:disabled { opacity: 0.45; }
 
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .pdf-preview__stage { inset: 58px 0 0; }
   .pdf-preview__pages { gap: 12px; padding: 16px 16px 88px; }
   .pdf-preview__toolbar { bottom: 10px; gap: 0; max-width: calc(100vw - 12px); }

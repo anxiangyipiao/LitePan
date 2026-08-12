@@ -56,23 +56,23 @@ const isSvgIcon = computed(() => /^[a-z0-9-]+$/i.test(props.icon));
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
-  color: #fff;
+  border-radius: var(--radius-md);
+  color: var(--text-on-brand);
   font-size: 18px;
   flex-shrink: 0;
   overflow: hidden;
 }
 .stat-card__icon--blue {
-  background: linear-gradient(135deg, var(--brand-start), var(--brand-end));
+  background: var(--brand-gradient);
 }
 .stat-card__icon--red {
-  background: linear-gradient(135deg, #ef4444, #f97316);
+  background: var(--tone-red);
 }
 .stat-card__icon--purple {
-  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  background: var(--tone-purple);
 }
 .stat-card__icon--amber {
-  background: linear-gradient(135deg, #f59e0b, #f97316);
+  background: var(--tone-amber);
 }
 .stat-card__main {
   min-width: 0;

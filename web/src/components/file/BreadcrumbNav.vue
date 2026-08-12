@@ -51,6 +51,18 @@ function go(index: number) {
   emit("navigate", index);
 }
 
+// 折叠「…」下拉：点击开/关（触屏可用），点击外部或选中项后关闭
+const dropdownOpen = ref(false);
+
+function chooseHidden(index: number) {
+  dropdownOpen.value = false;
+  go(index);
+}
+
+function onDocClick() {
+  dropdownOpen.value = false;
+}
+
 let resizeTimer: ReturnType<typeof setTimeout> | undefined;
 
 function onResize() {
@@ -60,9 +72,13 @@ function onResize() {
   }, 100);
 }
 
-onMounted(() => window.addEventListener("resize", onResize));
+onMounted(() => {
+  window.addEventListener("resize", onResize);
+  document.addEventListener("click", onDocClick);
+});
 onUnmounted(() => {
   window.removeEventListener("resize", onResize);
+  document.removeEventListener("click", onDocClick);
   clearTimeout(resizeTimer);
 });
 </script>
@@ -87,15 +103,27 @@ onUnmounted(() => {
         <span class="breadcrumb-item-label">{{ items[0].name }}</span>
       </span>
 
-      <span class="breadcrumb-ellipsis-dropdown">
-        <span class="breadcrumb-ellipsis">...</span>
-        <div class="breadcrumb-dropdown">
+      <span
+        class="breadcrumb-ellipsis-dropdown"
+        :class="{ 'breadcrumb-ellipsis-dropdown--open': dropdownOpen }"
+      >
+        <span
+          class="breadcrumb-ellipsis"
+          role="button"
+          tabindex="0"
+          :aria-expanded="dropdownOpen"
+          aria-label="展开中间路径"
+          @click.stop="dropdownOpen = !dropdownOpen"
+          @keydown.enter.prevent="dropdownOpen = !dropdownOpen"
+          @keydown.space.prevent="dropdownOpen = !dropdownOpen"
+        >...</span>
+        <div class="breadcrumb-dropdown" @click.stop>
           <div
             v-for="node in hiddenItems"
             :key="node.crumb.id"
             class="breadcrumb-dropdown-item"
             :title="node.crumb.name"
-            @click="go(node.index)"
+            @click="chooseHidden(node.index)"
           >
             <span class="breadcrumb-dropdown-item-label">{{ node.crumb.name }}</span>
           </div>
@@ -185,10 +213,13 @@ onUnmounted(() => {
 .breadcrumb-ellipsis {
   color: var(--text-muted);
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 6px 10px;
+  margin: -6px 0;
+  border-radius: 6px;
   transition: color 0.2s, background-color 0.2s;
   user-select: none;
+  display: inline-block;
+  line-height: 1;
 }
 
 .breadcrumb-ellipsis:hover {
@@ -214,10 +245,16 @@ onUnmounted(() => {
   padding: 4px 0;
 }
 
-.breadcrumb-ellipsis-dropdown:hover .breadcrumb-dropdown {
+.breadcrumb-ellipsis-dropdown:hover .breadcrumb-dropdown,
+.breadcrumb-ellipsis-dropdown--open .breadcrumb-dropdown {
   opacity: 1;
   visibility: visible;
   transform: translateX(-50%) translateY(0);
+}
+
+.breadcrumb-ellipsis-dropdown--open .breadcrumb-ellipsis {
+  color: var(--brand);
+  background-color: var(--surface-hover);
 }
 
 .breadcrumb-dropdown-item {

@@ -382,7 +382,7 @@ onMounted(async () => {
         <button
           v-if="loggedIn"
           type="button"
-          class="header-icon-btn"
+          class="header-icon-btn header-magnet-btn"
           title="磁力搜索"
           aria-label="磁力搜索"
           @click="magnetSearchOpen = true"
@@ -1127,6 +1127,26 @@ onMounted(async () => {
   gap: 10px;
 }
 
+/* 极窄屏：压缩间距、隐藏次要按钮，避免 header overflow:hidden 裁剪「管理后台」 */
+@media (max-width: 400px) {
+  .header__nav {
+    gap: 4px;
+  }
+  .header__logo {
+    margin-left: 4px;
+  }
+  .header-magnet-btn {
+    display: none;
+  }
+  .header-auth {
+    padding: 0 8px 0 6px;
+    font-size: 12px;
+  }
+  .header-auth__sep {
+    margin: 0 4px;
+  }
+}
+
 .header-auth {
   display: inline-flex;
   align-items: center;
@@ -1248,5 +1268,16 @@ onMounted(async () => {
 }
 .header-transfer-btn--failed .header-transfer-btn__badge {
   background: var(--danger);
+}
+
+/* 弱动效用户：关闭装饰天空（太阳/云/流星/种子）等持续动画 */
+@media (prefers-reduced-motion: reduce) {
+  .header__sky *,
+  .header__sky *::before,
+  .header__sky *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 </style>

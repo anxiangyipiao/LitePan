@@ -300,7 +300,7 @@ onUnmounted(() => {
 .docx-preview__divider { width: 1px; height: 24px; margin: 0 4px; background: rgb(145 174 216 / 18%); }
 
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .docx-preview__stage { inset: 58px 0 0; }
   .docx-preview__canvas { padding: 16px 16px 88px; }
   .docx-preview__toolbar { bottom: 10px; }

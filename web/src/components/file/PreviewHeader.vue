@@ -137,7 +137,7 @@ const emit = defineEmits<{
   .preview-header { grid-template-columns: 1fr auto 1fr; }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .preview-header { height: 58px; padding: 0 8px; gap: 4px; }
   .preview-header__back span,
   .preview-header__title span,

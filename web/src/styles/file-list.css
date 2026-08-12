@@ -300,7 +300,7 @@
   width: min(520px, 100%);
   min-width: 120px;
   height: 36px;
-  border: 1px solid #2196f3;
+  border: 1px solid var(--brand);
   border-radius: 8px;
   background: var(--surface);
   color: var(--text);
@@ -328,7 +328,7 @@
   height: 24px;
   border: none;
   border-radius: 50%;
-  color: #fff;
+  color: var(--text-on-brand);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -338,11 +338,12 @@
 }
 
 .file-list .folder-inline-btn.confirm {
-  background: #2196f3;
+  background: var(--brand);
 }
 
 .file-list .folder-inline-btn.cancel {
-  background: #d1d5db;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
 }
 
 .file-list .folder-inline-btn:disabled {
@@ -354,8 +355,8 @@
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
-  border: 2px solid #dbeafe;
-  border-top-color: #3b82f6;
+  border: 2px solid var(--tab-active-bg);
+  border-top-color: var(--brand-strong);
   border-radius: 999px;
   animation: spin 0.72s linear infinite;
 }
@@ -387,4 +388,23 @@
 .file-list .grid-rename-input {
   width: 100%;
   min-width: 0;
+}
+
+/* 触屏设备（无 hover 主输入）：行/卡操作常显、触控热区扩大，勾选靠常显 checkbox */
+@media (hover: none) {
+  .file-list .file-row-actions,
+  .file-list .file-card-actions {
+    opacity: 1;
+  }
+
+  .file-list .file-row-action,
+  .file-list .file-card-action {
+    width: 40px;
+    height: 40px;
+  }
+
+  .file-list .actions-col {
+    width: auto;
+    min-width: 0;
+  }
 }

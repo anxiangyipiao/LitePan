@@ -466,7 +466,7 @@ onUnmounted(() => {
 .image-preview__toolbar button:hover:not(:disabled) { color: #fff; background: rgb(255 255 255 / 10%); }
 .image-preview__toolbar .image-preview__scale { width: 68px; color: #8fc7ff; font-size: 12px; font-weight: 650; }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .image-preview__stage { inset: 58px 0 0; }
   .image-preview__stage > img { max-width: calc(100vw - 64px); max-height: calc(100dvh - 76px); }
   .image-preview__bottom { bottom: 10px; }

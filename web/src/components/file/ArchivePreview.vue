@@ -529,7 +529,7 @@ onUnmounted(() => {
 }
 
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .archive-preview__toolbar { inset: 58px 0 auto; height: 96px; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px; }
   .archive-preview__search { flex-basis: 34px; width: 100%; }
   .archive-preview__stage { inset: 154px 0 0; }

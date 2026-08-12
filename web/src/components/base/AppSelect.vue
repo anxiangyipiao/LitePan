@@ -137,7 +137,7 @@ onUnmounted(() => {
 }
 .select--open .select__trigger {
   border-color: var(--brand);
-  box-shadow: 0 0 0 2px rgba(76, 116, 223, 0.12);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 14%, transparent);
 }
 .select--disabled .select__trigger {
   opacity: 0.55;

@@ -1972,6 +1972,8 @@ defineExpose({
   font-size: 12px;
   color: var(--muted2);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .runs-status-mini {
@@ -3144,6 +3146,13 @@ defineExpose({
 
   .rail {
     position: static;
+  }
+}
+
+/* 窄屏：长元信息允许换行，避免横向溢出 */
+@media (max-width: 768px) {
+  .runs-item-meta-line {
+    white-space: normal;
   }
 }
 

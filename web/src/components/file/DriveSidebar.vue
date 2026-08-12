@@ -44,11 +44,13 @@ function driverText(a: Account): string {
         <span class="drive-sidebar__name">{{ a.name }}</span>
       </button>
     </div>
+    <span class="drive-sidebar__fade" aria-hidden="true" />
   </div>
 </template>
 
 <style scoped>
 .drive-sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -64,6 +66,17 @@ function driverText(a: Account): string {
   overflow-y: hidden;
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
+}
+
+/* 右侧渐隐：提示驱动条可横向滑动（不裁剪内容，纯视觉） */
+.drive-sidebar__fade {
+  position: absolute;
+  top: 8px;
+  bottom: 4px;
+  right: 0;
+  width: 24px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--bg));
 }
 
 .drive-sidebar__card {

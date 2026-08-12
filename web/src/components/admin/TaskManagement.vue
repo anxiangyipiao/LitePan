@@ -1529,7 +1529,8 @@ watch(activeTab, (tab) => {
 }
 
 .strm-task-table-wrap {
-  overflow: visible;
+  /* 恢复横向滚动，避免窄屏下操作列被静默裁出屏外（overflow:visible 会覆盖共享的 auto） */
+  overflow-x: auto;
 }
 
 .strm-task-table {

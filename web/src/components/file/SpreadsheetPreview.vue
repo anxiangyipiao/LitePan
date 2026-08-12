@@ -485,7 +485,7 @@ onUnmounted(() => {
 }
 
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .sheet-preview__toolbar {
     height: 96px;
     grid-template-columns: minmax(0, 1fr) auto;

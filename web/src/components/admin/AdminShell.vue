@@ -535,7 +535,7 @@ onBeforeUnmount(() => {
   grid-row: 2;
   min-height: 0;
   padding: 24px;
-  overflow-x: clip;
+  overflow-x: auto;
   overflow-y: auto;
   background: var(--bg);
 }
@@ -572,6 +572,11 @@ onBeforeUnmount(() => {
     box-shadow: 2px 0 16px rgba(15, 23, 42, 0.18);
   }
 
+  .admin--drawer-open .global-chrome {
+    /* 抽屉打开时把顶栏提到遮罩之上，汉堡可独立点击（backdrop z-index:110） */
+    z-index: 121;
+  }
+
   .global-chrome {
     --admin-chrome-h: 42px;
     grid-column: 1;
@@ -579,8 +584,19 @@ onBeforeUnmount(() => {
     padding-right: 14px;
   }
 
-  .global-chrome__context {
+  /* 移动端保留当前页名（crumb 省略），关闭抽屉后仍能知道所在页面 */
+  .global-chrome__crumb,
+  .global-chrome__sep {
     display: none;
+  }
+
+  .global-chrome__context {
+    display: flex;
+  }
+
+  .global-chrome__title {
+    max-width: 44vw;
+    font-size: 14px;
   }
 
   .global-loading-bar {

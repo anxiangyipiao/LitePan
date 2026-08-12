@@ -577,7 +577,7 @@ onUnmounted(() => {
   .audio-preview__shortcuts { display: none; }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .audio-preview__layout {
     inset: 58px 0 0;
     grid-template-columns: 1fr;
