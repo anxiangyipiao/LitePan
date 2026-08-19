@@ -266,7 +266,7 @@ function exitVr() {
 }
 
 watch(
-  () => props.videoEl,
+  () => [props.videoEl, props.fieldOfView, props.stereo] as const,
   () => init(),
 );
 
