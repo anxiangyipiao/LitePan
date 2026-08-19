@@ -5,6 +5,7 @@ import (
 	"io"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"litepan/internal/settings"
 )
@@ -13,6 +14,9 @@ type Service struct {
 	settings *settings.Service
 	store    *storeLayer
 	mu       sync.RWMutex
+	// lastMaintain 记录上次过期扫描时间，写块时按 maintainInterval 节流，避免每次全表扫描。
+	// 仅在调用方持有 s.mu 写锁时读写。
+	lastMaintain time.Time
 }
 
 type Options struct {

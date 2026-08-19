@@ -20,6 +20,12 @@ const (
 )
 
 // remoteWindowReader 用有界窗口合并 FUSE 小读，并按驱动建议并发预取顺序数据。
+//
+// 并发模型：
+//   - mu（读写锁）保护 window/windowOff/progressEnd/prefetch；窗口内拷贝持读锁可并行，
+//     不再让单个读请求串行化整条读取链路；
+//   - fetchMu 单飞网络拉取，多个读者需要同一缺失窗口时只拉一次；
+//   - 预取不持有 fetchMu，可被同步读取取消，避免卡死/阻塞其它窗口的拉取。
 type remoteWindowReader struct {
 	svc         *Service
 	ctx         context.Context
@@ -29,6 +35,8 @@ type remoteWindowReader struct {
 	concurrency int
 	windowSize  int64
 
+	mu          sync.RWMutex
+	fetchMu     sync.Mutex
 	window      []byte
 	windowOff   int64
 	prefetch    *remoteWindowPrefetch
@@ -100,21 +108,22 @@ func (r *remoteWindowReader) readAt(p []byte, off int64) (int, error) {
 	written := 0
 	for written < len(p) {
 		curOff := off + int64(written)
-		if !r.contains(curOff) {
-			if err := r.loadWindow(curOff); err != nil {
-				return written, err
+		r.mu.RLock()
+		if r.contains(curOff) {
+			start := curOff - r.windowOff
+			n := copy(p[written:], r.window[start:])
+			r.mu.RUnlock()
+			if n == 0 {
+				return written, io.ErrNoProgress
 			}
+			written += n
+			r.observeRead(curOff, int64(n))
+			continue
 		}
-		start := curOff - r.windowOff
-		if start < 0 || start >= int64(len(r.window)) {
-			return written, io.ErrUnexpectedEOF
+		r.mu.RUnlock()
+		if err := r.loadWindow(curOff); err != nil {
+			return written, err
 		}
-		n := copy(p[written:], r.window[start:])
-		if n == 0 {
-			return written, io.ErrNoProgress
-		}
-		r.observeRead(curOff, int64(n))
-		written += n
 	}
 	if eofAfterRead {
 		return written, io.EOF
@@ -126,49 +135,85 @@ func (r *remoteWindowReader) contains(off int64) bool {
 	return len(r.window) > 0 && off >= r.windowOff && off < r.windowOff+int64(len(r.window))
 }
 
-func (r *remoteWindowReader) loadWindow(off int64) error {
+func (r *remoteWindowReader) windowBounds(off int64) (int64, int64) {
 	windowOff := off / r.windowSize * r.windowSize
 	length := r.windowSize
 	if r.size > 0 {
 		if windowOff >= r.size {
-			return io.EOF
+			return windowOff, 0
 		}
 		if windowOff+length > r.size {
 			length = r.size - windowOff
 		}
 	}
+	return windowOff, length
+}
 
-	if r.prefetch != nil && r.prefetch.off == windowOff {
-		prefetch := r.prefetch
-		r.prefetch = nil
+func (r *remoteWindowReader) loadWindow(off int64) error {
+	windowOff, length := r.windowBounds(off)
+	if length <= 0 {
+		return io.EOF
+	}
+
+	// 命中匹配的预取：等它完成并直接复用（不持有 fetchMu，避免阻塞其它窗口拉取）。
+	r.mu.RLock()
+	pref := r.prefetch
+	r.mu.RUnlock()
+	if pref != nil && pref.off == windowOff {
 		select {
-		case result := <-prefetch.done:
-			if result.err == nil {
+		case res := <-pref.done:
+			r.mu.Lock()
+			if r.prefetch == pref {
+				r.prefetch = nil
+			}
+			r.mu.Unlock()
+			if res.err == nil && len(res.data) > 0 {
+				r.mu.Lock()
+				r.window = res.data
 				r.windowOff = windowOff
-				r.window = result.data
 				r.progressEnd = windowOff
+				r.mu.Unlock()
 				return nil
 			}
-			if err := r.ctx.Err(); err != nil {
-				return err
+			if r.ctx.Err() != nil {
+				return r.ctx.Err()
 			}
+			// 预取被并发取消/失败：回落到同步拉取。
 		case <-r.ctx.Done():
-			prefetch.cancel()
+			pref.cancel()
 			return r.ctx.Err()
 		}
 	}
-	if r.prefetch != nil {
-		r.prefetch.cancel()
-		r.prefetch = nil
+
+	// 无关预取：取消掉，避免占用网络带宽。
+	if pref != nil {
+		pref.cancel()
+		r.mu.Lock()
+		if r.prefetch == pref {
+			r.prefetch = nil
+		}
+		r.mu.Unlock()
 	}
+
+	// 同步单飞拉取：fetchMu 串行，重复需要的窗口只拉一次。
+	r.fetchMu.Lock()
+	defer r.fetchMu.Unlock()
+	r.mu.RLock()
+	if r.contains(off) {
+		r.mu.RUnlock()
+		return nil
+	}
+	r.mu.RUnlock()
 
 	data, err := r.fetchWindow(r.ctx, windowOff, length)
 	if err != nil {
 		return err
 	}
-	r.windowOff = windowOff
+	r.mu.Lock()
 	r.window = data
+	r.windowOff = windowOff
 	r.progressEnd = windowOff
+	r.mu.Unlock()
 	return nil
 }
 
@@ -176,6 +221,8 @@ func (r *remoteWindowReader) observeRead(off, length int64) {
 	if length <= 0 {
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	windowEnd := r.windowOff + int64(len(r.window))
 	if off < r.windowOff || off >= windowEnd {
 		return
@@ -191,11 +238,12 @@ func (r *remoteWindowReader) observeRead(off, length int64) {
 		r.progressEnd = end
 	}
 	if r.progressEnd-r.windowOff >= int64(len(r.window))/2 {
-		r.startNextPrefetch()
+		r.startNextPrefetchLocked()
 	}
 }
 
-func (r *remoteWindowReader) startNextPrefetch() {
+// startNextPrefetchLocked 必须在持有 r.mu 写锁时调用。
+func (r *remoteWindowReader) startNextPrefetchLocked() {
 	if len(r.window) == 0 {
 		return
 	}
@@ -225,6 +273,7 @@ func (r *remoteWindowReader) startNextPrefetch() {
 	}
 	r.prefetch = prefetch
 	r.prefetchWG.Add(1)
+	// 预取不持有 fetchMu：同步读取可直接取消它，避免卡住其它窗口的拉取。
 	go func() {
 		defer r.prefetchWG.Done()
 		data, err := r.fetchWindow(ctx, nextOff, length)
@@ -382,10 +431,12 @@ func (r *remoteWindowReader) close() error {
 	if r == nil {
 		return nil
 	}
+	r.mu.Lock()
 	if r.prefetch != nil {
 		r.prefetch.cancel()
 		r.prefetch = nil
 	}
+	r.mu.Unlock()
 	r.prefetchWG.Wait()
 	return nil
 }

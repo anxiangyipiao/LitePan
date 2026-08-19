@@ -410,4 +410,91 @@ func TestRemoteReaderCloseCancelsBlockedRead(t *testing.T) {
 	}
 }
 
+func TestRemoteReaderConcurrentReadsOnLoadedWindow(t *testing.T) {
+	data := make([]byte, 2*1024*1024)
+	for i := range data {
+		data[i] = byte(i % 233)
+	}
+	server, _ := newRangeTestServer(t, data, false)
+	reader := testRemoteReader(t, server, int64(len(data)))
+	configureRemoteWindow(t, reader, 512*1024, 512*1024, 1)
+
+	// 先加载窗口 0。
+	first := make([]byte, 4096)
+	if n, err := reader.ReadAt(first, 0); err != nil || n != len(first) {
+		t.Fatalf("first ReadAt = %d, %v", n, err)
+	}
+
+	// 同一已加载窗口内的并发读：应并行完成且数据正确。
+	const readers = 16
+	var wg sync.WaitGroup
+	errs := make(chan error, readers)
+	for i := 0; i < readers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			off := int64(i * 4096)
+			buf := make([]byte, 4096)
+			if n, err := reader.ReadAt(buf, off); err != nil || n != len(buf) {
+				errs <- fmt.Errorf("concurrent ReadAt(%d) = %d, %v", off, n, err)
+				return
+			}
+			for j := range buf {
+				if buf[j] != data[off+int64(j)] {
+					errs <- fmt.Errorf("concurrent ReadAt(%d) data mismatch at %d", off, j)
+					return
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+}
+
+func TestRemoteReaderConcurrentMissesShareOneFetch(t *testing.T) {
+	// 文件恰好等于一个窗口：并发读同一缺失窗口应单飞只拉一次，且窗口读满后无可预取的下一个窗口。
+	data := make([]byte, 256*1024)
+	for i := range data {
+		data[i] = byte(i % 199)
+	}
+	server, requestLog := newRangeTestServer(t, data, false)
+	reader := testRemoteReader(t, server, int64(len(data)))
+	configureRemoteWindow(t, reader, 256*1024, 256*1024, 1)
+
+	// 多个读者同时命中同一个未加载窗口：单飞应只拉一次。
+	const readers = 12
+	var wg sync.WaitGroup
+	errs := make(chan error, readers)
+	for range readers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			buf := make([]byte, 64*1024)
+			if n, err := reader.ReadAt(buf, 128*1024); err != nil || n != len(buf) {
+				errs <- fmt.Errorf("concurrent miss ReadAt = %d, %v", n, err)
+				return
+			}
+			for j := range buf {
+				if buf[j] != data[128*1024+j] {
+					errs <- fmt.Errorf("concurrent miss data mismatch at %d", j)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+
+	ranges := requestLog.snapshot()
+	if len(ranges) != 1 {
+		t.Fatalf("concurrent misses issued %d range requests, want 1 (single-flight)", len(ranges))
+	}
+}
+
 var _ io.ReaderAt = (*RemoteReader)(nil)

@@ -12,7 +12,7 @@ import (
 const fuseReaderUA = "LitePan-FUSE/1.0"
 
 type RemoteReader struct {
-	mu     sync.Mutex
+	mu     sync.RWMutex
 	window *remoteWindowReader
 	local  *localFileReader
 	cancel context.CancelFunc
@@ -75,18 +75,23 @@ func (r *RemoteReader) ReadAt(p []byte, off int64) (int, error) {
 	if r == nil {
 		return 0, io.EOF
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	// 只在快照阶段短暂持读锁，真正的读取（含窗口命中/缺失）在 r.window 内部
+	// 自行协调，允许并发读并行执行，不再整条串行化。
+	r.mu.RLock()
 	if r.closed {
+		r.mu.RUnlock()
 		return 0, io.ErrClosedPipe
 	}
-	if r.local != nil {
-		return r.local.ReadAt(p, off)
+	local := r.local
+	window := r.window
+	r.mu.RUnlock()
+	if local != nil {
+		return local.ReadAt(p, off)
 	}
-	if r.window == nil {
+	if window == nil {
 		return 0, io.EOF
 	}
-	return r.window.readAt(p, off)
+	return window.readAt(p, off)
 }
 
 func (r *RemoteReader) Size() int64 {

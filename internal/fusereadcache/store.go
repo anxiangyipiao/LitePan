@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -35,6 +37,12 @@ type storeLayer struct {
 	blocks      string
 	db          *sql.DB
 	lastTouches map[blockKey]int64
+	// touchesMu 只保护 lastTouches：touchBlock 在 s.mu.RLock 下运行，
+	// 并发读会同时写该 map，不隔离会触发 "concurrent map writes"。
+	touchesMu sync.Mutex
+	// usedBytes 是块占用量的内存计数，避免热路径上每次写块都做全表 SUM 扫描。
+	// 只在启动时用 DB 统计播种一次，之后由 putBlock/deleteBlock/clearAll 维护。
+	usedBytes atomic.Int64
 }
 
 func openStore(ctx context.Context, root string) (*storeLayer, error) {
@@ -68,12 +76,17 @@ CREATE INDEX IF NOT EXISTS idx_blocks_accessed ON blocks(accessed_at);
 		_ = db.Close()
 		return nil, err
 	}
-	return &storeLayer{
+	st := &storeLayer{
 		root:        root,
 		blocks:      filepath.Join(root, "blocks"),
 		db:          db,
 		lastTouches: make(map[blockKey]int64),
-	}, nil
+	}
+	// 用现有索引一次性播种 usedBytes（仅启动时一次全表统计）。
+	if used, _, err := st.stats(); err == nil {
+		st.usedBytes.Store(used)
+	}
+	return st, nil
 }
 
 func (s *storeLayer) Close() error {
@@ -115,14 +128,19 @@ func (s *storeLayer) loadBlockRange(accountID int64, fileID string, blockIdx, bl
 func (s *storeLayer) touchBlock(accountID int64, fileID string, blockIdx int64) error {
 	now := time.Now().Unix()
 	key := blockKey{AccountID: accountID, FileID: fileID, BlockIdx: blockIdx}
+	s.touchesMu.Lock()
 	if s.lastTouches[key] == now {
+		s.touchesMu.Unlock()
 		return nil
 	}
+	s.touchesMu.Unlock()
 	_, err := s.db.Exec(`
 UPDATE blocks SET accessed_at=? WHERE account_id=? AND file_id=? AND block_idx=?`,
 		now, accountID, fileID, blockIdx)
 	if err == nil {
+		s.touchesMu.Lock()
 		s.lastTouches[key] = now
+		s.touchesMu.Unlock()
 	}
 	return err
 }
@@ -152,16 +170,24 @@ ON CONFLICT(account_id,file_id,block_idx) DO UPDATE SET
   accessed_at=excluded.accessed_at`,
 		accountID, fileID, blockIdx, len(data), now, now)
 	if err == nil {
+		s.usedBytes.Add(int64(len(data)))
+		s.touchesMu.Lock()
 		s.lastTouches[blockKey{AccountID: accountID, FileID: fileID, BlockIdx: blockIdx}] = now
+		s.touchesMu.Unlock()
 	}
 	return err
 }
 
 func (s *storeLayer) deleteBlock(meta blockMeta) error {
 	_ = os.Remove(s.blockPath(meta.AccountID, meta.FileID, meta.BlockIdx))
+	s.touchesMu.Lock()
 	delete(s.lastTouches, blockKey{AccountID: meta.AccountID, FileID: meta.FileID, BlockIdx: meta.BlockIdx})
+	s.touchesMu.Unlock()
 	_, err := s.db.Exec(`DELETE FROM blocks WHERE account_id=? AND file_id=? AND block_idx=?`,
 		meta.AccountID, meta.FileID, meta.BlockIdx)
+	if err == nil {
+		s.usedBytes.Add(-meta.ByteLen)
+	}
 	return err
 }
 
@@ -308,7 +334,10 @@ func (s *storeLayer) clearAll() error {
 	}
 	_, err := s.db.Exec(`DELETE FROM blocks`)
 	if err == nil {
+		s.usedBytes.Store(0)
+		s.touchesMu.Lock()
 		clear(s.lastTouches)
+		s.touchesMu.Unlock()
 	}
 	return err
 }
