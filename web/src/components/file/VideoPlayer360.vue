@@ -6,6 +6,10 @@ import { isVrSupported } from "@/utils/video360";
 const props = defineProps<{
   /** VideoPreview 持有的同一个 <video>，three.js 以 VideoTexture 直接采样其解码帧 */
   videoEl: HTMLVideoElement | null;
+  /** 视野：180（半球，视角水平钳制 ±90°）或 360（整球） */
+  fieldOfView?: 180 | 360;
+  /** 立体格式：sbs（左右分屏，左半左眼/右半右眼）或 mono（单目） */
+  stereo?: "sbs" | "mono";
 }>();
 
 const emit = defineEmits<{
@@ -20,13 +24,18 @@ let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene | null = null;
 let camera: THREE.PerspectiveCamera | null = null;
 let geometry: THREE.SphereGeometry | null = null;
-let material: THREE.MeshBasicMaterial | null = null;
+let material: THREE.ShaderMaterial | null = null;
 let texture: THREE.VideoTexture | null = null;
 let session: XRSession | null = null;
 let ro: ResizeObserver | null = null;
 
-// 视角状态
-let yaw = 0;
+const is180 = props.fieldOfView === 180;
+const isSbs = props.stereo === "sbs";
+
+// 视角状态：初始朝向球面 u=0.5（画面中心）。180° 时 yaw 相对中心钳制 ±~83°。
+const FRONT = Math.PI;
+const VIEW_HALF = 1.45;
+let yaw = FRONT;
 let pitch = 0;
 const SENS = 0.0035;
 const MIN_FOV = 30;
@@ -45,6 +54,15 @@ let pinchDist = 0;
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, v));
+}
+
+function applyViewClamp() {
+  if (is180) {
+    yaw = clamp(yaw, FRONT - VIEW_HALF, FRONT + VIEW_HALF);
+  } else {
+    // 360°：yaw 回绕避免无限增大
+    yaw = ((yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+  }
 }
 
 function resize() {
@@ -106,11 +124,50 @@ function init() {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(fov, 1, 0.1, 100);
   camera.rotation.order = "YXZ";
-  geometry = new THREE.SphereGeometry(32, 128, 64);
+  // 180° 只渲染半球（水平 phi 扫 π），画面中心朝 +z，初始视角 yaw=π 对准
+  geometry = new THREE.SphereGeometry(32, 128, 64, 0, is180 ? Math.PI : Math.PI * 2);
   texture = new THREE.VideoTexture(video);
   texture.colorSpace = THREE.SRGBColorSpace;
-  material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
-  scene.add(new THREE.Mesh(geometry, material));
+
+  material = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    uniforms: {
+      map: { value: texture },
+      // SBS：帧横向采样 scale 0.5 + 偏移（左半 0 / 右半 0.5）；mono：scale 1
+      uScale: { value: isSbs ? 0.5 : 1 },
+      uOffset: { value: 0 },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D map;
+      uniform float uScale;
+      uniform float uOffset;
+      varying vec2 vUv;
+      void main() {
+        vec2 cuv = vec2(vUv.x * uScale + uOffset, vUv.y);
+        gl_FragColor = texture2D(map, cuv);
+      }
+    `,
+  });
+
+  const mesh = new THREE.Mesh(geometry, material);
+  // SBS 头显：左右眼各取半帧（left→uOffset 0，right→0.5）
+  if (isSbs) {
+    mesh.onBeforeRender = (rend, _scene, cam) => {
+      const xr = rend.xr;
+      if (xr.isPresenting && material) {
+        const cams = (xr.getCamera() as unknown as { cameras?: THREE.PerspectiveCamera[] }).cameras;
+        material.uniforms.uOffset.value = cams && cams.length > 1 && cam === cams[1] ? 0.5 : 0;
+      }
+    };
+  }
+  scene.add(mesh);
   renderer.xr.enabled = true;
   resize();
   ro = new ResizeObserver(resize);
@@ -158,7 +215,8 @@ function onPointerMove(e: PointerEvent) {
   dragMoved += Math.abs(e.clientX - (prev?.x ?? e.clientX)) + Math.abs(e.clientY - (prev?.y ?? e.clientY));
   const factor = fov / 80;
   yaw = yaw0 + (e.clientX - dragX) * SENS * factor;
-  pitch = clamp(pitch0 + (e.clientY - dragY) * SENS * factor, -1.45, 1.45);
+  pitch = clamp(pitch0 + (e.clientY - dragY) * SENS * factor, -VIEW_HALF, VIEW_HALF);
+  applyViewClamp();
 }
 
 function onPointerUp(e: PointerEvent) {
@@ -221,7 +279,13 @@ onUnmounted(teardown);
 </script>
 
 <template>
-  <div class="video-player-360" slot="centered-chrome" noautohide>
+  <div
+    class="video-player-360"
+    slot="centered-chrome"
+    noautohide
+    :data-fov="fieldOfView ?? 360"
+    :data-stereo="stereo ?? 'mono'"
+  >
     <canvas
       ref="canvasRef"
       class="video-player-360__canvas"

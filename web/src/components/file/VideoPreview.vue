@@ -10,7 +10,7 @@ import { useBodyScrollLock } from "@/composables/useBodyScrollLock";
 import { fileKind } from "@/utils/fileIcon";
 import { fileExtension } from "@/utils/format";
 import { decodeTextBytes } from "@/utils/textEncoding";
-import { is360File } from "@/utils/video360";
+import { detectVideo360, type Video360Config } from "@/utils/video360";
 import PreviewHeader from "./PreviewHeader.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
 
@@ -64,12 +64,14 @@ const mediaURL = computed(() => {
   return file ? filesApi.previewURL(props.accountId, file.id, file.name) : "";
 });
 
-// 360°/VR 模式：按文件名自动开启，控制条可手动切换；切换不打断播放（同一 <video> 继续）。
+// 360°/VR 模式：按文件名自动开启（含 180° 半球与左右立体），控制条可手动切换；切换不打断播放（同一 <video> 继续）。
 const vr360Mode = ref(false);
+const vr360Config = ref<Video360Config | null>(null);
 watch(
   currentFile,
   (file) => {
-    vr360Mode.value = !!file && is360File(file.name);
+    vr360Config.value = file ? detectVideo360(file.name) : null;
+    vr360Mode.value = vr360Config.value !== null;
   },
   { immediate: true },
 );
@@ -620,10 +622,12 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- 360°/VR 全景覆盖层：复用同一 <video>，three.js 球面渲染 -->
+          <!-- 360°/VR 全景覆盖层：复用同一 <video>，three.js 球面渲染（支持 180° 半球与左右立体） -->
           <VideoPlayer360
             v-if="vr360Mode"
             :video-el="videoRef"
+            :field-of-view="vr360Config?.fieldOfView"
+            :stereo="vr360Config?.stereo"
             :key="currentFile?.id ?? 'none'"
             @notice="showNotice"
           />
