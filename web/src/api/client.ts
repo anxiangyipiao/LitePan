@@ -23,6 +23,7 @@ interface RequestOptions {
   form?: URLSearchParams;
   skipAuthRedirect?: boolean;
   signal?: AbortSignal;
+  timeoutMs?: number;
 }
 
 function buildURL(path: string, query?: Query): string {
@@ -52,15 +53,17 @@ function shouldSkipAuthRedirect(path: string): boolean {
 }
 
 const defaultRequestTimeoutMs = 90_000;
+const getTimeoutMs = 15_000;
 
 async function request<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
   const controller = new AbortController();
   let timedOut = false;
   let cancelled = false;
+  const timeout = opts.timeoutMs ?? (method === "GET" ? getTimeoutMs : defaultRequestTimeoutMs);
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, defaultRequestTimeoutMs);
+  }, timeout);
   const onAbort = () => {
     cancelled = true;
     controller.abort();
@@ -126,7 +129,7 @@ async function request<T>(method: string, path: string, opts: RequestOptions = {
 }
 
 export const http = {
-  get: <T>(path: string, query?: Query) => request<T>("GET", path, { query }),
+  get: <T>(path: string, query?: Query, timeoutMs?: number) => request<T>("GET", path, { query, timeoutMs }),
   post: <T>(path: string, body?: unknown, query?: Query, signal?: AbortSignal) =>
     request<T>("POST", path, { body, query, signal }),
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, { body }),

@@ -41,6 +41,18 @@ export default defineConfig({
           if (id.includes('node_modules/vue') || id.includes('node_modules/pinia') || id.includes('node_modules/vue-router')) {
             return 'vue-vendor';
           }
+          if (id.includes('node_modules/pdfjs-dist')) {
+            return 'pdf-vendor';
+          }
+          if (id.includes('node_modules/xlsx')) {
+            return 'xlsx-vendor';
+          }
+          if (id.includes('node_modules/@zip.js')) {
+            return 'zip-vendor';
+          }
+          if (id.includes('node_modules/mpegts') || id.includes('node_modules/hls.js')) {
+            return 'media-vendor';
+          }
         }
       }
     }

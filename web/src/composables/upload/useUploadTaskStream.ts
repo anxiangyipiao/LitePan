@@ -9,6 +9,22 @@ export function useUploadTaskStream(deps: UploadTaskDeps, store: UploadTaskStore
   let uploadTaskEventSource: EventSource | null = null;
   let uploadTaskSseReconnectTimer: ReturnType<typeof setTimeout> | null = null;
   const refreshedSuccessfulTaskKeys = new Set<string>();
+  let pausedByHidden = false;
+
+  function onVisibilityChange() {
+    if (document.hidden) {
+      pausedByHidden = uploadTaskEventSource !== null || uploadTaskPollingTimer !== null;
+      disconnectUploadTaskStream();
+      stopUploadTaskPolling();
+    } else if (pausedByHidden) {
+      pausedByHidden = false;
+      if (store.uploadTaskPanelOpen.value) {
+        connectUploadTaskStream();
+      }
+    }
+  }
+
+  document.addEventListener("visibilitychange", onVisibilityChange);
 
   function refreshCurrentDirectoryForNewSuccess(tasks: UploadTask[]) {
     const currentSuccessKeys = new Set<string>();
@@ -108,6 +124,7 @@ export function useUploadTaskStream(deps: UploadTaskDeps, store: UploadTaskStore
   }
 
   function cleanupUploadTasks() {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
     store.localUploadTaskControllers.forEach((c) => c.abort());
     store.localUploadTaskControllers.clear();
     store.localUploadTaskPayloads.clear();

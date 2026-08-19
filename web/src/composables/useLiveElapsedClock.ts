@@ -15,10 +15,12 @@ export function useLiveElapsedClock() {
   let timer: number | null = null;
   let scopeActive = true;
   let shouldRun = false;
+  let pausedByHidden = false;
 
   function start() {
     if (!scopeActive || timer !== null) return;
     timer = window.setInterval(() => {
+      if (document.hidden) return;
       tick.value += 1;
     }, 1000);
   }
@@ -35,6 +37,18 @@ export function useLiveElapsedClock() {
     else stop();
   }
 
+  function onVisibilityChange() {
+    if (document.hidden) {
+      pausedByHidden = timer !== null;
+      stop();
+    } else if (pausedByHidden && scopeActive && shouldRun) {
+      pausedByHidden = false;
+      start();
+    }
+  }
+
+  document.addEventListener("visibilitychange", onVisibilityChange);
+
   onActivated(() => {
     scopeActive = true;
     if (shouldRun) start();
@@ -43,7 +57,10 @@ export function useLiveElapsedClock() {
     scopeActive = false;
     stop();
   });
-  onUnmounted(stop);
+  onUnmounted(() => {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    stop();
+  });
 
   return { tick, sync };
 }

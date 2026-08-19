@@ -109,25 +109,31 @@ func (s *Service) LoadSnapshot(dir string) (int, error) {
 }
 
 func (s *Service) exportSnapshotItems(now time.Time) []snapshotItem {
+	type itemCopy struct {
+		key       string
+		expiresAt time.Time
+		value     any
+	}
+	// Phase 1: 持锁拷贝引用
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	out := make([]snapshotItem, 0, len(s.items))
+	copies := make([]itemCopy, 0, len(s.items))
 	for _, el := range s.items {
 		en := el.Value.(*entry)
 		if !en.expiresAt.IsZero() && now.After(en.expiresAt) {
 			continue
 		}
-		kind, raw, err := encodeSnapshotValue(en.value)
+		copies = append(copies, itemCopy{key: en.key, expiresAt: en.expiresAt, value: en.value})
+	}
+	s.mu.Unlock()
+
+	// Phase 2: 释放锁后再序列化
+	out := make([]snapshotItem, 0, len(copies))
+	for _, c := range copies {
+		kind, raw, err := encodeSnapshotValue(c.value)
 		if err != nil {
 			continue
 		}
-		out = append(out, snapshotItem{
-			Key:       en.key,
-			ExpiresAt: en.expiresAt,
-			ValueKind: kind,
-			Value:     raw,
-		})
+		out = append(out, snapshotItem{Key: c.key, ExpiresAt: c.expiresAt, ValueKind: kind, Value: raw})
 	}
 	return out
 }

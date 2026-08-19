@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
 
-const maxReadConns = 4
+const maxReadConns = 16
 
 // DB 在 SQLite WAL 模式下使用单写、多读连接池。
 type DB struct {
@@ -36,7 +37,7 @@ func Open(ctx context.Context, opts Options) (*DB, error) {
 	}
 	write.SetMaxOpenConns(1)
 	write.SetMaxIdleConns(1)
-	write.SetConnMaxIdleTime(0)
+	write.SetConnMaxIdleTime(5 * time.Minute)
 
 	read, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -45,7 +46,7 @@ func Open(ctx context.Context, opts Options) (*DB, error) {
 	}
 	read.SetMaxOpenConns(maxReadConns)
 	read.SetMaxIdleConns(maxReadConns)
-	read.SetConnMaxIdleTime(0)
+	read.SetConnMaxIdleTime(5 * time.Minute)
 
 	// 先在写池建立连接：内存共享库需至少一条活动连接维持其存在。
 	if err := write.PingContext(ctx); err != nil {

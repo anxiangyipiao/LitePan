@@ -27,6 +27,7 @@ type Service struct {
 	managed   map[int64]struct{}
 	recalc    chan struct{}
 	firstLoop bool
+	gate      *Gate
 
 	schedulerLoop atomic.Bool
 
@@ -80,8 +81,13 @@ func NewService(opts Options) *Service {
 
 func (s *Service) nowTime() time.Time { return s.now() }
 
-// Gate 返回被动刷新闸门（与 Service 共享状态）。
-func (s *Service) Gate() *Gate { return &Gate{svc: s} }
+// Gate 返回被动刷新闸门（与 Service 共享状态，单例）。
+func (s *Service) Gate() *Gate {
+	if s.gate == nil {
+		s.gate = &Gate{svc: s}
+	}
+	return s.gate
+}
 
 // TriggerRecalculation 通知调度器重算；reason 写入合并后的 Info 检查时间日志。
 func (s *Service) TriggerRecalculation(reason string) {

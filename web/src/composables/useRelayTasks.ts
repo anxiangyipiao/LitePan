@@ -19,6 +19,20 @@ export function useRelayTasks() {
   let relayPollingTimer: ReturnType<typeof setInterval> | null = null;
   let relayEventSource: EventSource | null = null;
   let relaySseReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let pausedByHidden = false;
+  let panelOpen = false;
+
+  function onVisibilityChange() {
+    if (document.hidden) {
+      pausedByHidden = relayEventSource !== null || relayPollingTimer !== null;
+      disconnectRelayStream();
+    } else if (pausedByHidden && panelOpen) {
+      pausedByHidden = false;
+      connectRelayStream(panelOpen);
+    }
+  }
+
+  document.addEventListener("visibilitychange", onVisibilityChange);
 
   function ensureRelayTaskDisplayOrder(task: CrossTransferRelayTask) {
     const key = String(task.task_id || "");
@@ -122,7 +136,8 @@ export function useRelayTasks() {
     }, 3000);
   }
 
-  function connectRelayStream(panelOpen?: boolean) {
+  function connectRelayStream(panelOpenArg?: boolean) {
+    panelOpen = panelOpenArg || false;
     if (!panelOpen || relayEventSource) return;
     if (typeof window === "undefined" || !window.EventSource) {
       startRelayPolling();
@@ -162,6 +177,7 @@ export function useRelayTasks() {
   }
 
   onUnmounted(() => {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
     disconnectRelayStream();
   });
 

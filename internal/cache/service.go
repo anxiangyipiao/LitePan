@@ -362,15 +362,15 @@ func (s *Service) sweepExpired() {
 	now := time.Now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var expired []*list.Element
-	for _, el := range s.items {
+	// 从链表尾部（最旧）向前遍历，遇到未过期就停止
+	for el := s.ll.Back(); el != nil; {
+		prev := el.Prev()
 		en := el.Value.(*entry)
-		if !en.expiresAt.IsZero() && now.After(en.expiresAt) {
-			expired = append(expired, el)
+		if en.expiresAt.IsZero() || now.Before(en.expiresAt) {
+			break
 		}
-	}
-	for _, el := range expired {
 		s.removeElement(el)
 		s.expirations.Add(1)
+		el = prev
 	}
 }

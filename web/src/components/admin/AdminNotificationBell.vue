@@ -262,15 +262,29 @@ function handleDocumentClick(e: MouseEvent) {
   open.value = false;
 }
 
+function onVisibilityChange() {
+  if (document.hidden) {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = undefined;
+    }
+  } else if (!pollTimer) {
+    refreshUnread();
+    pollTimer = setInterval(refreshUnread, 30000);
+  }
+}
+
 onMounted(() => {
   refreshUnread();
   pollTimer = setInterval(refreshUnread, 30000);
   document.addEventListener("click", handleDocumentClick);
+  document.addEventListener("visibilitychange", onVisibilityChange);
 });
 
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer);
   document.removeEventListener("click", handleDocumentClick);
+  document.removeEventListener("visibilitychange", onVisibilityChange);
 });
 </script>
 

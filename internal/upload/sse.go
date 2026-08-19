@@ -6,7 +6,7 @@ import (
 )
 
 func (m *Manager) Subscribe() chan []byte {
-	ch := make(chan []byte, 2)
+	ch := make(chan []byte, 16)
 	m.subMu.Lock()
 	m.subs[ch] = struct{}{}
 	m.subMu.Unlock()

@@ -77,6 +77,9 @@ func (s *Service) onCredentialsPersisted(ctx context.Context, accountID int64) {
 	name := s.accountName(ctx, accountID)
 	s.log.Info("请求链路触发认证凭证回写", "account_id", accountID, "account", name)
 	s.markSuccess(ctx, accountID, st)
+	if s.gate != nil {
+		s.gate.InvalidateStateCache(accountID)
+	}
 }
 
 func (s *Service) applyTokenSchedule(drv driver.Driver, st *domain.AuthState) {

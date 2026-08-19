@@ -29,6 +29,7 @@ type Manager struct {
 type managedInstance struct {
 	drv        Driver
 	configHash string
+	rawConfig  string
 	lastUsed   time.Time
 }
 
@@ -60,6 +61,16 @@ func (m *Manager) Get(ctx context.Context, accountID int64) (Driver, error) {
 	if !acc.IsActive {
 		return nil, domain.Errorf(domain.CodeValidation, "账号已停用")
 	}
+
+	m.mu.Lock()
+	if inst, ok := m.instances[accountID]; ok && inst.rawConfig == acc.Config {
+		inst.lastUsed = time.Now()
+		drv := inst.drv
+		m.mu.Unlock()
+		return drv, nil
+	}
+	m.mu.Unlock()
+
 	hash := configHash(acc.Config)
 
 	m.mu.Lock()
@@ -89,9 +100,10 @@ func (m *Manager) Get(ctx context.Context, accountID int64) (Driver, error) {
 	if inst, ok := m.instances[accountID]; ok && inst.configHash == hash {
 		_ = drv.Drop(ctx)
 		inst.lastUsed = time.Now()
+		inst.rawConfig = acc.Config
 		return inst.drv, nil
 	}
-	m.instances[accountID] = &managedInstance{drv: drv, configHash: hash, lastUsed: time.Now()}
+	m.instances[accountID] = &managedInstance{drv: drv, configHash: hash, rawConfig: acc.Config, lastUsed: time.Now()}
 	return drv, nil
 }
 

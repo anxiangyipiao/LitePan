@@ -148,6 +148,7 @@ func NewRouter(d Deps) http.Handler {
 	r.Use(chimw.Recoverer)
 
 	r.Route("/api", func(r chi.Router) {
+		r.Use(chimw.Compress(5))
 		r.Get("/health", h.health)
 		r.Get("/auth/status", h.authStatus)
 		r.Post("/auth/login", h.authLogin)

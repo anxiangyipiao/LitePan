@@ -8,10 +8,12 @@ export function useConditionalPolling(options: {
 }) {
   let timer: number | null = null;
   let scopeActive = true;
+  let pausedByHidden = false;
 
   function start() {
     if (!scopeActive || timer !== null) return;
     timer = window.setInterval(() => {
+      if (document.hidden) return;
       if (options.tickWhen && !options.tickWhen()) return;
       void options.onTick();
     }, options.intervalMs);
@@ -32,6 +34,18 @@ export function useConditionalPolling(options: {
     return timer !== null;
   }
 
+  function onVisibilityChange() {
+    if (document.hidden) {
+      pausedByHidden = timer !== null;
+      stop();
+    } else if (pausedByHidden && scopeActive) {
+      pausedByHidden = false;
+      sync();
+    }
+  }
+
+  document.addEventListener("visibilitychange", onVisibilityChange);
+
   onActivated(() => {
     scopeActive = true;
     sync();
@@ -40,7 +54,10 @@ export function useConditionalPolling(options: {
     scopeActive = false;
     stop();
   });
-  onUnmounted(stop);
+  onUnmounted(() => {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    stop();
+  });
 
   return { start, stop, sync, isActive };
 }

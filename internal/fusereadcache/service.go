@@ -12,7 +12,7 @@ import (
 type Service struct {
 	settings *settings.Service
 	store    *storeLayer
-	mu       sync.Mutex
+	mu       sync.RWMutex
 }
 
 type Options struct {
@@ -95,9 +95,9 @@ func (s *Service) ReadAt(ctx context.Context, accountID int64, fileID string, de
 		}
 
 		blockDest := dest[written : written+int(need)]
-		s.mu.Lock()
+		s.mu.RLock()
 		n, ok, err := s.store.loadBlockRange(accountID, fileID, blockIdx, blockOff, blockDest)
-		s.mu.Unlock()
+		s.mu.RUnlock()
 		if err != nil && err != io.EOF {
 			return written, err
 		}

@@ -3,7 +3,6 @@ import "@fortawesome/fontawesome-free/css/all.min.css";
 import {
   computed,
   defineAsyncComponent,
-  onBeforeUnmount,
   onMounted,
   ref,
   watch,
@@ -56,8 +55,6 @@ const router = useRouter();
 const auth = useAuthStore();
 const { dirty, confirmLeave, discardChanges } = useUnsavedChanges();
 let resetBrowserLocationOnLeave = false;
-let preloadTimer: number | null = null;
-let preloadIdleHandle: number | null = null;
 const preloadedPages = new Set<string>();
 
 const mustChangePassword = computed(() => auth.mustChangePassword);
@@ -98,21 +95,6 @@ function preloadAdminPage(key: string) {
   if (!loader || preloadedPages.has(key)) return;
   preloadedPages.add(key);
   void loader().catch(() => preloadedPages.delete(key));
-}
-
-function preloadAdminPages() {
-  navKeys.forEach(preloadAdminPage);
-}
-
-function scheduleAdminPagePreload() {
-  preloadTimer = window.setTimeout(() => {
-    preloadTimer = null;
-    if ("requestIdleCallback" in window) {
-      preloadIdleHandle = window.requestIdleCallback(preloadAdminPages, { timeout: 1500 });
-      return;
-    }
-    preloadAdminPages();
-  }, 300);
 }
 
 async function loadAdminUiConfig() {
@@ -222,20 +204,13 @@ watch(mustChangePassword, (locked) => {
 onMounted(async () => {
   // 守卫进入后台时已拉取过认证状态，有缓存则跳过，避免重复的 /auth/status 往返。
   if (!auth.loaded) await auth.load();
-  // 后台 UI 配置只影响“返回首页”按钮样式，不在首屏关键路径上，后台并行拉取。
+  // 后台 UI 配置只影响"返回首页"按钮样式，不在首屏关键路径上，后台并行拉取。
   void loadAdminUiConfig();
   if (mustChangePassword.value) {
     page.value = "settings";
     router.replace({ query: buildPageQuery("settings") });
   }
-  scheduleAdminPagePreload();
-});
-
-onBeforeUnmount(() => {
-  if (preloadTimer !== null) window.clearTimeout(preloadTimer);
-  if (preloadIdleHandle !== null && "cancelIdleCallback" in window) {
-    window.cancelIdleCallback(preloadIdleHandle);
-  }
+  // 不再全量预加载所有后台页面，改为 sidebar hover 时按需预加载（@preload 事件）。
 });
 </script>
 

@@ -54,11 +54,12 @@ func fileListPayload(list []domain.FileItem) int64 {
 	if len(list) == 0 {
 		return 2
 	}
-	_, raw, err := encodeSnapshotValue(list)
-	if err != nil {
-		return int64(len(list)) * 128
+	var total int64
+	for _, f := range list {
+		total += int64(len(f.ID)) + int64(len(f.Name)) + int64(len(f.Thumb))
+		total += 64 // 每项结构体开销
 	}
-	return int64(len(raw))
+	return total
 }
 
 func fileItemPayload(f domain.FileItem) int64 {

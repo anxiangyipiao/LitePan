@@ -58,12 +58,14 @@ func Subscribe[T any](b *Bus, h Handler[T]) {
 	b.mu.Unlock()
 }
 
-// Publish 异步发布事件；总线已关闭时静默丢弃。
+// Publish 异步发布事件；队列满时丢弃并打日志，总线已关闭时静默丢弃。
 func (b *Bus) Publish(ctx context.Context, evt any) {
 	env := envelope{ctx: ctx, evt: evt, typ: reflect.TypeOf(evt)}
 	select {
 	case b.queue <- env:
 	case <-b.closed:
+	default:
+		b.log.Warn("event queue full, dropping event", "event", env.typ.String())
 	}
 }
 
