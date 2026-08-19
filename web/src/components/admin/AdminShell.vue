@@ -227,7 +227,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .admin {
   --admin-chrome-h: 44px;
-  --sidebar-width: 180px;
+  --sidebar-width: 56px;
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   grid-template-rows: var(--admin-chrome-h) minmax(0, 1fr);
@@ -271,14 +271,14 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 72px;
+  height: 52px;
   padding: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .sidebar__logo {
-  max-width: 100px;
-  max-height: 38px;
+  max-width: 32px;
+  max-height: 32px;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -291,8 +291,9 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 2px;
-  padding: 8px 10px 12px;
+  padding: 8px 0;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
@@ -313,23 +314,24 @@ onBeforeUnmount(() => {
 
 .sidebar__footer {
   flex-shrink: 0;
-  padding: 12px 10px;
+  padding: 8px 0;
+  display: flex;
+  justify-content: center;
   border-top: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  height: 38px;
-  padding: 0 14px;
-  width: 100%;
-  text-align: left;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border: none;
   background: transparent;
   color: rgba(255, 255, 255, 0.85);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
+  border-radius: 10px;
+  font-size: 0;
   transition: all 0.2s ease;
   cursor: pointer;
 }
@@ -364,16 +366,16 @@ onBeforeUnmount(() => {
 }
 
 .nav-item__icon {
-  margin-right: 12px;
+  margin-right: 0;
   flex-shrink: 0;
 }
 
 .nav-item__label {
-  min-width: 0;
+  display: none;
 }
 
 .admin--collapsed .sidebar__header {
-  height: 98px;
+  height: 52px;
   padding: 0;
 }
 
