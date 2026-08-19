@@ -9,6 +9,8 @@ services:
       - "5211:5211"
     environment:
       - TZ=Asia/Shanghai
+      # 可选：关闭 Origin 来源校验（解决反代/内网访问报"请求来源不受信任"）
+      # - LITEPAN_DISABLE_CSRF_CHECK=true
     volumes:
       - ./data:/app/data
       - ./strm:/app/strm

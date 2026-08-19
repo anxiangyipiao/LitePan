@@ -54,6 +54,9 @@ func RequestOriginHost(r *http.Request) string {
 }
 
 func RequestOriginAllowed(r *http.Request, allowed []string, trustedOriginHost ...string) bool {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("LITEPAN_DISABLE_CSRF_CHECK")), "true") {
+		return true
+	}
 	requestOrigin := requestOrigin(r)
 	if requestOrigin == "" {
 		return true
