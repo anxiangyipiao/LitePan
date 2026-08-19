@@ -56,25 +56,44 @@ func scanStrmFiles(root string) ([]strmEntry, error) {
 }
 
 func groupWorks(root string, entries []strmEntry) []workGroup {
-	byKey := make(map[string]*workGroup, len(entries))
-	order := make([]string, 0, len(entries))
-	for _, e := range entries {
-		key, absDir, flat := workKeyForStrm(root, e)
-		g, ok := byKey[key]
-		if !ok {
-			g = &workGroup{relKey: key, absDir: absDir, flatFile: flat}
-			byKey[key] = g
-			order = append(order, key)
-		}
-		g.entries = append(g.entries, e)
+	// Step 1: 按目录分组，同时记录每个目录下的文件列表
+	type dirBucket struct {
+		absDir  string
+		entries []strmEntry
+		flat    bool // true = 文件直接在 library root 下
 	}
-	out := make([]workGroup, 0, len(order))
-	for _, key := range order {
-		g := byKey[key]
-		sort.Slice(g.entries, func(i, j int) bool {
-			return g.entries[i].relPath < g.entries[j].relPath
+	byDir := make(map[string]*dirBucket)
+	dirOrder := make([]string, 0)
+	for _, e := range entries {
+		key, absDir, flatFile := workKeyForStrm(root, e)
+		b, ok := byDir[key]
+		if !ok {
+			b = &dirBucket{absDir: absDir, flat: flatFile != ""}
+			byDir[key] = b
+			dirOrder = append(dirOrder, key)
+		}
+		b.entries = append(b.entries, e)
+	}
+
+	// Step 2: 按目录产出 workGroup。扁平文件（非 root、非剧集目录）各自独立。
+	out := make([]workGroup, 0, len(entries))
+	for _, key := range dirOrder {
+		b := byDir[key]
+		sort.Slice(b.entries, func(i, j int) bool {
+			return b.entries[i].relPath < b.entries[j].relPath
 		})
-		out = append(out, *g)
+		needSplit := !b.flat && len(b.entries) > 1 && !isFlatTVShowDir(b.absDir)
+		if needSplit {
+			for _, e := range b.entries {
+				out = append(out, workGroup{relKey: filepath.ToSlash(e.relPath), absDir: b.absDir, flatFile: e.absPath, entries: []strmEntry{e}})
+			}
+		} else {
+			flatFile := ""
+			if b.flat && len(b.entries) == 1 {
+				flatFile = b.entries[0].absPath
+			}
+			out = append(out, workGroup{relKey: key, absDir: b.absDir, flatFile: flatFile, entries: b.entries})
+		}
 	}
 	return out
 }
@@ -208,6 +227,36 @@ func isStructuralWorkSubdir(dir string) bool {
 		return false
 	}
 	return hasTVParentEvidence(filepath.Dir(dir), dir)
+}
+
+// isFlatTVShowDir 检测一个目录是否应保持分组：剧集目录（tvshow.nfo / Season 子目录 / 多文件含 SxxExx）或 JAV 番号目录。
+func isFlatTVShowDir(dir string) bool {
+	if fileExists(filepath.Join(dir, "tvshow.nfo")) {
+		return true
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.IsDir() && rules.IsSeasonDirName(e.Name()) {
+			return true
+		}
+	}
+	sxxCount := 0
+	hasJAV := false
+	for _, e := range entries {
+		if !e.IsDir() && strings.EqualFold(filepath.Ext(e.Name()), ".strm") {
+			stem := strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))
+			if explicitSeasonEpisodeFileRe.MatchString(stem) {
+				sxxCount++
+			}
+			if rules.FindJAVNumber(stem) != "" {
+				hasJAV = true
+			}
+		}
+	}
+	return sxxCount >= 2 || hasJAV
 }
 
 func hasTVParentEvidence(parentDir, currentDir string) bool {
