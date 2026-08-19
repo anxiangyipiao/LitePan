@@ -35,6 +35,8 @@ import AppModal from "@/components/base/AppModal.vue";
 import AppInput from "@/components/base/AppInput.vue";
 import TaskPanel from "@/components/upload/TaskPanel.vue";
 import OfflineDownloadModal from "./OfflineDownloadModal.vue";
+import MobileSidebar from "@/components/mobile/MobileSidebar.vue";
+import BottomSheet from "@/components/mobile/BottomSheet.vue";
 
 type FocusableInput = {
   focus: () => void;
@@ -84,6 +86,14 @@ const nameAlignApplyTotal = ref(0);
 const nameAlignApplyProgress = ref(0);
 const activePreview = ref<ActiveFilePreview | null>(null);
 let nameAlignApplyTimer: number | undefined;
+
+// Mobile UI state
+const mobileSidebarOpen = ref(false);
+const bottomSheetOpen = ref(false);
+const bottomSheetTarget = ref<FileItem | null>(null);
+const pullRefreshing = ref(false);
+let pullStartY = 0;
+let pulling = false;
 
 const selectedAccountName = computed(
   () => accounts.value.find((a) => a.id === currentAccountId.value)?.name || "",
@@ -403,6 +413,49 @@ function startCreateFolder() {
 function setView(v: "list" | "grid") {
   view.value = v;
   localStorage.setItem("litepan_view", v);
+}
+
+// Mobile: open bottom sheet for file operations
+function openFileBottomSheet(file: FileItem) {
+  bottomSheetTarget.value = file;
+  bottomSheetOpen.value = true;
+}
+function closeBottomSheet() {
+  bottomSheetOpen.value = false;
+  bottomSheetTarget.value = null;
+}
+function bottomSheetAction(action: string) {
+  const file = bottomSheetTarget.value;
+  if (!file) return;
+  closeBottomSheet();
+  switch (action) {
+    case "rename": fileActions.renameFile(file, file.name); break;
+    case "download": fileActions.downloadFile(file); break;
+    case "move": fileActions.requestSingleMove(file); break;
+    case "copy": fileActions.requestSingleCopy(file); break;
+    case "delete": fileActions.deleteFile(file); break;
+    case "strm": openNameAlign(file); break;
+  }
+}
+
+// Mobile: pull-to-refresh
+function onPullStart(e: TouchEvent) {
+  pullStartY = e.touches[0].clientY;
+  pulling = true;
+}
+function onPullMove(e: TouchEvent) {
+  if (!pulling) return;
+  const delta = e.touches[0].clientY - pullStartY;
+  if (delta > 60 && !refreshing.value && !loading.value) {
+    pullRefreshing.value = true;
+  }
+}
+function onPullEnd() {
+  if (pullRefreshing.value) {
+    store.refreshFiles();
+    setTimeout(() => { pullRefreshing.value = false; }, 1500);
+  }
+  pulling = false;
 }
 
 function normalizeCrumbs(raw: unknown): Crumb[] | null {
@@ -818,6 +871,59 @@ onUnmounted(() => {
 
 <template>
   <div class="browser">
+    <!-- Mobile sidebar drawer -->
+    <MobileSidebar :open="mobileSidebarOpen" @close="mobileSidebarOpen = false">
+      <div class="mobile-sidebar__drives">
+        <DriveSidebar
+          v-if="accounts.length > 0"
+          :accounts="accounts"
+          :model-value="currentAccountId"
+          @update:model-value="(id) => { store.selectAccount(id); mobileSidebarOpen = false; }"
+        />
+      </div>
+      <div v-if="isAdmin" class="mobile-sidebar__favorites">
+        <FavoritesSidebar
+          :items="favorites"
+          :accounts="accounts"
+          :current-crumb-ids="currentCrumbIds"
+          :current-account-id="currentAccountId"
+          :current-folder-favorited="currentFolderFavorited"
+          :drag-active="false"
+          @add-current="openFavoriteNameModal"
+          @collapse="mobileSidebarOpen = false"
+          @open="(f) => { store.openFavorite(f); mobileSidebarOpen = false; }"
+          @rename="openFavoriteRenameModal"
+          @remove="store.removeFavorite"
+          @move="store.moveFavorite"
+        />
+      </div>
+    </MobileSidebar>
+
+    <!-- File operation bottom sheet -->
+    <BottomSheet :open="bottomSheetOpen" :title="bottomSheetTarget?.name" @close="closeBottomSheet">
+      <div class="mobile-sheet-actions">
+        <button class="mobile-sheet-action" @click="bottomSheetAction('download')">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>下载</span>
+        </button>
+        <button class="mobile-sheet-action" @click="bottomSheetAction('move')">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          <span>移动</span>
+        </button>
+        <button class="mobile-sheet-action" @click="bottomSheetAction('copy')">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span>复制</span>
+        </button>
+        <button class="mobile-sheet-action" @click="bottomSheetAction('rename')">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+          <span>重命名</span>
+        </button>
+        <button class="mobile-sheet-action mobile-sheet-action--danger" @click="bottomSheetAction('delete')">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          <span>删除</span>
+        </button>
+      </div>
+    </BottomSheet>
     <div v-if="accounts.length > 0" class="browser__drives-strip">
       <DriveSidebar
         :accounts="accounts"
@@ -838,6 +944,18 @@ onUnmounted(() => {
         <span class="browser__refresh-text">正在强制刷新…</span>
       </div>
       <div class="browser__panel-top">
+        <button
+          type="button"
+          class="browser__hamburger"
+          aria-label="打开导航"
+          @click="mobileSidebarOpen = true"
+        >
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
         <BreadcrumbNav class="browser__breadcrumb" :items="breadcrumb" @navigate="store.goTo" />
         <FileToolbar
           :is-admin="isAdmin"
@@ -913,7 +1031,16 @@ onUnmounted(() => {
           />
         </div>
 
-        <div class="browser__main">
+        <div
+          class="browser__main"
+          @touchstart.passive="onPullStart"
+          @touchmove.passive="onPullMove"
+          @touchend="onPullEnd"
+        >
+          <div v-if="pullRefreshing" class="browser__pull-indicator">
+            <BusySpinner variant="notch" :size="22" color="var(--brand)" />
+            <span>下拉刷新</span>
+          </div>
           <FileTable
             :files="files"
             :view="view"
@@ -937,6 +1064,7 @@ onUnmounted(() => {
             :active-drop-target-id="dragMove.targetId"
             :can-drop-on-folder="canDropOnFolder"
             @open="onOpen"
+            @more-actions="openFileBottomSheet"
             @sort-by="sortBy"
             @set-sort="({ key, order }) => sortBy(key, order)"
             @generate-current-directory-strm="handleGenerateCurrentDirectoryStrm"
@@ -1288,5 +1416,80 @@ onUnmounted(() => {
 .strm-prompt-bar__action:disabled {
   opacity: 0.6;
   cursor: wait;
+}
+
+/* ---- Mobile: hamburger button ---- */
+.browser__hamburger {
+  display: none;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  color: var(--text-primary, #1f2937);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.browser__hamburger:active {
+  background: var(--bg-secondary, #f3f4f6);
+}
+@media (max-width: 768px) {
+  .browser__hamburger {
+    display: inline-flex;
+  }
+}
+
+/* ---- Mobile: sidebar content ---- */
+.mobile-sidebar__drives {
+  padding: 8px 0;
+}
+.mobile-sidebar__favorites {
+  border-top: 1px solid var(--border-soft, #e5e7eb);
+  padding: 8px 0;
+}
+
+/* ---- Mobile: bottom sheet actions grid ---- */
+.mobile-sheet-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 8px 12px;
+}
+.mobile-sheet-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 8px;
+  border: none;
+  background: none;
+  border-radius: 12px;
+  color: var(--text-primary, #1f2937);
+  font-size: 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-sheet-action:active {
+  background: var(--bg-secondary, #f3f4f6);
+}
+.mobile-sheet-action--danger {
+  color: #ef4444;
+}
+.mobile-sheet-action--danger:active {
+  background: #fef2f2;
+}
+
+/* ---- Mobile: pull-to-refresh indicator ---- */
+.browser__pull-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 0;
+  color: var(--text-muted, #9ca3af);
+  font-size: 13px;
 }
 </style>

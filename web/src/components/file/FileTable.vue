@@ -48,6 +48,7 @@ const emit = defineEmits<{
   "sort-by": [key: SortKey];
   "set-sort": [payload: { key: SortKey; order: SortOrder }];
   "generate-current-directory-strm": [];
+  "more-actions": [file: FileItem];
   "drag-file-start": [file: FileItem];
   "drag-file-end": [];
   "drag-enter-folder": [file: FileItem];
@@ -683,7 +684,7 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
                 class="file-row-action"
                 title="更多"
                 aria-label="更多"
-                @click="openContextMenu($event, f)"
+                @click="isTouchDevice ? emit('more-actions', f) : openContextMenu($event, f)"
               >
                 <SvgIcon name="dots-h" :size="15" />
               </button>
