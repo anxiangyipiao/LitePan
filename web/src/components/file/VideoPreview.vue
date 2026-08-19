@@ -86,6 +86,21 @@ function applyManualConfig(fieldOfView: 180 | 360, stereo: "sbs" | "mono") {
   vr360Mode.value = true;
   vrMenuOpen.value = false;
 }
+
+// 外部播放器
+const playerMenuOpen = ref(false);
+const playerMenuRef = ref<HTMLElement | null>(null);
+const externalPlayers = [
+  { name: "VLC", icon: "fa-brands fa-vlc", buildUrl: (url: string) => `vlc://${url}` },
+  { name: "PotPlayer", icon: "fa-solid fa-play", buildUrl: (url: string) => `potplayer://${url}` },
+  { name: "IINA", icon: "fa-solid fa-play", buildUrl: (url: string) => `iina://weblink?url=${encodeURIComponent(url)}` },
+  { name: "mpv", icon: "fa-solid fa-play", buildUrl: (url: string) => `mpv://${url}` },
+];
+function openExternalPlayer(url: string) {
+  window.location.href = url;
+  playerMenuOpen.value = false;
+}
+
 const selectedSubtitleId = ref("");
 
 function fileStem(name: string) {
@@ -146,6 +161,9 @@ function handleDocumentPointerDown(event: PointerEvent) {
   }
   if (vrMenuOpen.value && target && !vrMenuRef.value?.contains(target)) {
     vrMenuOpen.value = false;
+  }
+  if (playerMenuOpen.value && target && !playerMenuRef.value?.contains(target)) {
+    playerMenuOpen.value = false;
   }
 }
 
@@ -402,10 +420,11 @@ function isEditableTarget(target: EventTarget | null) {
 }
 
 function handleKeydown(event: KeyboardEvent) {
-  if (event.key === "Escape" && (subtitleMenuOpen.value || vrMenuOpen.value)) {
+  if (event.key === "Escape" && (subtitleMenuOpen.value || vrMenuOpen.value || playerMenuOpen.value)) {
     event.preventDefault();
     subtitleMenuOpen.value = false;
     vrMenuOpen.value = false;
+    playerMenuOpen.value = false;
     return;
   }
   if (isEditableTarget(event.target)) return;
@@ -699,6 +718,34 @@ onUnmounted(() => {
                         </button>
                       </div>
                     </div>
+                  </div>
+                </Transition>
+              </div>
+              <div ref="playerMenuRef" class="video-preview__player-menu">
+                <button
+                  type="button"
+                  class="video-preview__player-trigger"
+                  :class="{ 'is-active': playerMenuOpen }"
+                  aria-label="外部播放器"
+                  title="用外部播放器打开"
+                  @click.stop="playerMenuOpen = !playerMenuOpen"
+                >
+                  <i class="fa-solid fa-display" aria-hidden="true"></i>
+                </button>
+                <Transition name="subtitle-menu">
+                  <div v-if="playerMenuOpen" class="video-preview__player-popover" role="menu" aria-label="选择播放器">
+                    <div class="video-preview__player-heading">选择播放器</div>
+                    <button
+                      v-for="player in externalPlayers"
+                      :key="player.name"
+                      type="button"
+                      class="video-preview__player-option"
+                      role="menuitem"
+                      @click="openExternalPlayer(player.buildUrl(mediaURL))"
+                    >
+                      <i :class="player.icon" aria-hidden="true"></i>
+                      <span>{{ player.name }}</span>
+                    </button>
                   </div>
                 </Transition>
               </div>
@@ -1012,7 +1059,7 @@ onUnmounted(() => {
 
 .video-preview__controls {
   display: grid;
-  grid-template-columns: 50px auto minmax(180px, 1fr) 44px 105px minmax(104px, 128px) 44px 68px 32px 44px;
+  grid-template-columns: 50px auto minmax(180px, 1fr) 44px 105px minmax(104px, 128px) 44px 68px 32px 32px 44px;
   align-items: center;
   gap: 7px;
   min-height: 52px;
@@ -1169,6 +1216,74 @@ onUnmounted(() => {
   backdrop-filter: blur(18px);
 }
 
+.video-preview__player-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.video-preview__player-trigger {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  outline: none;
+  background: transparent;
+  color: #7f91a9;
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 150ms ease, background 150ms ease;
+}
+.video-preview__player-trigger:hover,
+.video-preview__player-trigger.is-active { color: #c7d3e4; background: rgb(255 255 255 / 11%); }
+.video-preview__player-trigger:focus-visible { box-shadow: inset 0 0 0 1px #2698ff; }
+
+.video-preview__player-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 30;
+  width: max-content;
+  min-width: 160px;
+  padding: 7px;
+  overflow: hidden;
+  color: #eaf3ff;
+  border: 1px solid rgb(89 151 224 / 26%);
+  border-radius: 11px;
+  background: rgb(6 17 34 / 96%);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 48%), 0 0 0 1px rgb(0 0 0 / 22%);
+  backdrop-filter: blur(18px);
+}
+.video-preview__player-heading {
+  padding: 7px 9px 9px;
+  color: #f5f9ff;
+  font-size: 12px;
+  font-weight: 650;
+}
+.video-preview__player-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 10px;
+  color: #9fb0c6;
+  text-align: left;
+  border: 0;
+  border-radius: 7px;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 150ms ease, background 150ms ease;
+}
+.video-preview__player-option:hover { color: #edf7ff; background: rgb(255 255 255 / 7%); }
+.video-preview__player-option:focus-visible { box-shadow: inset 0 0 0 1px #2698ff; }
+.video-preview__player-option i { width: 16px; text-align: center; font-size: 13px; }
+
 .video-preview__shortcuts {
   min-height: 25px;
   display: flex;
@@ -1181,7 +1296,7 @@ onUnmounted(() => {
 .video-preview__shortcuts i { opacity: 0.56; }
 
 @media (max-width: 1100px) {
-  .video-preview__controls { grid-template-columns: 46px auto minmax(130px, 1fr) 42px 84px 96px 42px 62px 28px 42px; }
+  .video-preview__controls { grid-template-columns: 46px auto minmax(130px, 1fr) 42px 84px 96px 42px 62px 28px 28px 42px; }
 }
 
 @media (max-width: 768px) {
@@ -1193,7 +1308,8 @@ onUnmounted(() => {
   .video-preview__controls { grid-template-columns: 42px minmax(62px, auto) minmax(70px, 1fr) 40px 40px 40px; gap: 1px; }
   .video-preview__controls media-volume-range,
   .video-preview__controls media-playback-rate-button,
-  .video-preview__vr-menu-trigger { display: none; }
+  .video-preview__vr-menu-trigger,
+  .video-preview__player-trigger { display: none; }
   .video-preview__subtitle-button { grid-template-columns: 1fr; padding: 0; }
   .video-preview__subtitle-button > span,
   .video-preview__subtitle-chevron { display: none; }
