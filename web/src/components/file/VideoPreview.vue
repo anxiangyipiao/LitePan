@@ -67,14 +67,25 @@ const mediaURL = computed(() => {
 // 360°/VR 模式：按文件名自动开启（含 180° 半球与左右立体），控制条可手动切换；切换不打断播放（同一 <video> 继续）。
 const vr360Mode = ref(false);
 const vr360Config = ref<Video360Config | null>(null);
+// 手动 VR 设置：用户通过齿轮弹窗选择后覆盖自动检测值；切集时重置。
+const vrManualConfig = ref<Video360Config | null>(null);
+const vrMenuOpen = ref(false);
+const vrMenuRef = ref<HTMLElement | null>(null);
+const vrEffectiveConfig = computed(() => vrManualConfig.value ?? vr360Config.value);
 watch(
   currentFile,
   (file) => {
     vr360Config.value = file ? detectVideo360(file.name) : null;
     vr360Mode.value = vr360Config.value !== null;
+    vrManualConfig.value = null;
   },
   { immediate: true },
 );
+function applyManualConfig(fieldOfView: 180 | 360, stereo: "sbs" | "mono") {
+  vrManualConfig.value = { fieldOfView, stereo };
+  vr360Mode.value = true;
+  vrMenuOpen.value = false;
+}
 const selectedSubtitleId = ref("");
 
 function fileStem(name: string) {
@@ -129,9 +140,13 @@ function selectSubtitle(fileId: string) {
 }
 
 function handleDocumentPointerDown(event: PointerEvent) {
-  if (!subtitleMenuOpen.value) return;
   const target = event.target instanceof Node ? event.target : null;
-  if (target && !subtitleMenuRef.value?.contains(target)) subtitleMenuOpen.value = false;
+  if (subtitleMenuOpen.value && target && !subtitleMenuRef.value?.contains(target)) {
+    subtitleMenuOpen.value = false;
+  }
+  if (vrMenuOpen.value && target && !vrMenuRef.value?.contains(target)) {
+    vrMenuOpen.value = false;
+  }
 }
 
 function clearSubtitleTrack() {
@@ -387,9 +402,10 @@ function isEditableTarget(target: EventTarget | null) {
 }
 
 function handleKeydown(event: KeyboardEvent) {
-  if (event.key === "Escape" && subtitleMenuOpen.value) {
+  if (event.key === "Escape" && (subtitleMenuOpen.value || vrMenuOpen.value)) {
     event.preventDefault();
     subtitleMenuOpen.value = false;
+    vrMenuOpen.value = false;
     return;
   }
   if (isEditableTarget(event.target)) return;
@@ -607,12 +623,82 @@ onUnmounted(() => {
                 type="button"
                 class="video-preview__vr-toggle"
                 :class="{ 'is-active': vr360Mode }"
-                :aria-label="vr360Mode ? '退出 360° 视角' : '进入 360° 视角'"
-                :title="vr360Mode ? '退出 360° 视角' : '进入 360° 视角'"
+                :aria-label="vr360Mode ? '退出 VR 模式' : '进入 VR 模式'"
+                :title="vr360Mode ? '退出 VR 模式' : '进入 VR 模式'"
                 @click="vr360Mode = !vr360Mode"
               >
                 <i class="fa-solid fa-vr-cardboard" aria-hidden="true"></i>
               </button>
+              <div ref="vrMenuRef" class="video-preview__vr-menu">
+                <button
+                  type="button"
+                  class="video-preview__vr-menu-trigger"
+                  :class="{ 'is-active': vrMenuOpen }"
+                  aria-label="VR 播放设置"
+                  title="VR 播放设置"
+                  @click.stop="vrMenuOpen = !vrMenuOpen"
+                >
+                  <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                </button>
+                <Transition name="subtitle-menu">
+                  <div v-if="vrMenuOpen" class="video-preview__vr-popover" role="menu" aria-label="VR 播放设置">
+                    <div class="video-preview__vr-heading">
+                      <span>VR 播放设置</span>
+                      <small v-if="vr360Config">自动检测: {{ vr360Config.fieldOfView }}° {{ vr360Config.stereo === "sbs" ? "左右" : "单目" }}</small>
+                    </div>
+                    <div class="video-preview__vr-section">
+                      <span class="video-preview__vr-label">视角</span>
+                      <div class="video-preview__vr-options">
+                        <button
+                          type="button"
+                          class="video-preview__vr-option"
+                          :class="{ 'is-selected': (vrManualConfig ?? vr360Config)?.fieldOfView === 180 }"
+                          role="menuitemradio"
+                          @click="applyManualConfig(180, (vrManualConfig ?? vr360Config)?.stereo ?? 'mono')"
+                        >
+                          <span>180° 半球</span>
+                          <i v-if="(vrManualConfig ?? vr360Config)?.fieldOfView === 180" class="fa-solid fa-check" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          class="video-preview__vr-option"
+                          :class="{ 'is-selected': (vrManualConfig ?? vr360Config)?.fieldOfView === 360 }"
+                          role="menuitemradio"
+                          @click="applyManualConfig(360, (vrManualConfig ?? vr360Config)?.stereo ?? 'mono')"
+                        >
+                          <span>360° 全景</span>
+                          <i v-if="(vrManualConfig ?? vr360Config)?.fieldOfView === 360" class="fa-solid fa-check" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                    <div class="video-preview__vr-section">
+                      <span class="video-preview__vr-label">立体</span>
+                      <div class="video-preview__vr-options">
+                        <button
+                          type="button"
+                          class="video-preview__vr-option"
+                          :class="{ 'is-selected': (vrManualConfig ?? vr360Config)?.stereo === 'sbs' }"
+                          role="menuitemradio"
+                          @click="applyManualConfig((vrManualConfig ?? vr360Config)?.fieldOfView ?? 360, 'sbs')"
+                        >
+                          <span>左右 SBS</span>
+                          <i v-if="(vrManualConfig ?? vr360Config)?.stereo === 'sbs'" class="fa-solid fa-check" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          class="video-preview__vr-option"
+                          :class="{ 'is-selected': (vrManualConfig ?? vr360Config)?.stereo === 'mono' }"
+                          role="menuitemradio"
+                          @click="applyManualConfig((vrManualConfig ?? vr360Config)?.fieldOfView ?? 360, 'mono')"
+                        >
+                          <span>单目</span>
+                          <i v-if="(vrManualConfig ?? vr360Config)?.stereo === 'mono'" class="fa-solid fa-check" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </Transition>
+              </div>
               <media-fullscreen-button aria-label="全屏" />
             </media-control-bar>
 
@@ -626,8 +712,8 @@ onUnmounted(() => {
           <VideoPlayer360
             v-if="vr360Mode"
             :video-el="videoRef"
-            :field-of-view="vr360Config?.fieldOfView"
-            :stereo="vr360Config?.stereo"
+            :field-of-view="vrEffectiveConfig?.fieldOfView"
+            :stereo="vrEffectiveConfig?.stereo"
             :key="currentFile?.id ?? 'none'"
             @notice="showNotice"
           />
@@ -923,7 +1009,7 @@ onUnmounted(() => {
 
 .video-preview__controls {
   display: grid;
-  grid-template-columns: 50px auto minmax(180px, 1fr) 44px 105px minmax(104px, 128px) 44px 68px 44px 44px;
+  grid-template-columns: 50px auto minmax(180px, 1fr) 44px 105px minmax(104px, 128px) 44px 68px 44px 32px 44px;
   align-items: center;
   gap: 7px;
   min-height: 52px;
@@ -943,6 +1029,104 @@ onUnmounted(() => {
 .video-preview__queue-toggle.is-active { color: #2794ff; }
 .video-preview__vr-toggle { width: 42px; height: 42px; border-radius: 8px; color: #cfdaea; font-size: 17px; }
 .video-preview__vr-toggle.is-active { color: #2794ff; }
+.video-preview__vr-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.video-preview__vr-menu-trigger {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  outline: none;
+  background: transparent;
+  color: #7f91a9;
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 150ms ease, background 150ms ease;
+}
+.video-preview__vr-menu-trigger:hover,
+.video-preview__vr-menu-trigger.is-active { color: #c7d3e4; background: rgb(255 255 255 / 11%); }
+.video-preview__vr-menu-trigger:focus-visible { box-shadow: inset 0 0 0 1px #2698ff; }
+
+.video-preview__vr-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 7px 9px 9px;
+  color: #f5f9ff;
+  font-size: 12px;
+  font-weight: 650;
+}
+.video-preview__vr-heading small { color: #71839b; font-size: 10px; font-weight: 500; }
+
+.video-preview__vr-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 9px 6px;
+}
+.video-preview__vr-label {
+  flex-shrink: 0;
+  width: 28px;
+  color: #7f91a9;
+  font-size: 11px;
+  font-weight: 600;
+}
+.video-preview__vr-options {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+.video-preview__vr-option {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 10px;
+  color: #9fb0c6;
+  text-align: center;
+  border: 0;
+  border-radius: 7px;
+  outline: none;
+  background: rgb(255 255 255 / 5%);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 150ms ease, background 150ms ease;
+}
+.video-preview__vr-option:hover { color: #edf7ff; background: rgb(255 255 255 / 10%); }
+.video-preview__vr-option:focus-visible { box-shadow: inset 0 0 0 1px #2698ff; }
+.video-preview__vr-option.is-selected {
+  color: #fff;
+  background: linear-gradient(90deg, rgb(22 126 229 / 42%), rgb(22 126 229 / 18%));
+}
+.video-preview__vr-option .fa-check { color: #45a9ff; font-size: 10px; }
+
+.video-preview__vr-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 30;
+  width: max-content;
+  min-width: 220px;
+  max-width: min(300px, calc(100vw - 24px));
+  padding: 7px;
+  overflow: hidden;
+  color: #eaf3ff;
+  border: 1px solid rgb(89 151 224 / 26%);
+  border-radius: 11px;
+  background: rgb(6 17 34 / 96%);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 48%), 0 0 0 1px rgb(0 0 0 / 22%);
+  backdrop-filter: blur(18px);
+}
 
 .video-preview__shortcuts {
   min-height: 25px;
@@ -956,7 +1140,7 @@ onUnmounted(() => {
 .video-preview__shortcuts i { opacity: 0.56; }
 
 @media (max-width: 1100px) {
-  .video-preview__controls { grid-template-columns: 46px auto minmax(130px, 1fr) 42px 84px 96px 42px 62px 42px 42px; }
+  .video-preview__controls { grid-template-columns: 46px auto minmax(130px, 1fr) 42px 84px 96px 42px 62px 42px 28px 42px; }
 }
 
 @media (max-width: 768px) {
@@ -965,9 +1149,10 @@ onUnmounted(() => {
   .video-preview__notice { bottom: 310px; max-width: 86vw; overflow: hidden; text-overflow: ellipsis; }
   .video-preview__queue { grid-template-columns: 28px minmax(0, 1fr) 28px; gap: 3px; margin-bottom: 8px; }
   .episode-card { flex-basis: 158px; min-height: 70px; }
-  .video-preview__controls { grid-template-columns: 42px minmax(62px, auto) minmax(70px, 1fr) 40px 40px 40px 40px 40px; gap: 1px; }
+  .video-preview__controls { grid-template-columns: 42px minmax(62px, auto) minmax(70px, 1fr) 40px 40px 40px 40px; gap: 1px; }
   .video-preview__controls media-volume-range,
-  .video-preview__controls media-playback-rate-button { display: none; }
+  .video-preview__controls media-playback-rate-button,
+  .video-preview__vr-menu-trigger { display: none; }
   .video-preview__subtitle-button { grid-template-columns: 1fr; padding: 0; }
   .video-preview__subtitle-button > span,
   .video-preview__subtitle-chevron { display: none; }
