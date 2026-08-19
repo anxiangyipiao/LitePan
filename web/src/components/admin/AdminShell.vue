@@ -63,7 +63,8 @@ function syncViewport() {
 }
 
 function syncSidebarWidthVar() {
-  const width = isMobile.value ? "0px" : sidebarCollapsed.value ? "64px" : "220px";
+  // 与下方 .admin / .admin--collapsed 的实际宽度保持一致，供 Teleport 到 body 的抽屉对齐。
+  const width = isMobile.value ? "0px" : sidebarCollapsed.value ? "64px" : "56px";
   document.documentElement.style.setProperty("--sidebar-width", width);
 }
 
@@ -255,13 +256,23 @@ onBeforeUnmount(() => {
   z-index: 120;
   position: relative;
   min-height: 0;
+  /* 覆盖 pdfjs-dist 全局 .sidebar 规则（pdf-vendor 会给任意 .sidebar 强加
+     239px 宽 / 180px 最小宽 / 边框 / 圆角 / 内边距），否则侧栏会溢出网格列遮住内容 */
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  box-sizing: border-box;
+  padding: 0;
+  border: none;
+  border-right: 1px solid var(--admin-sidebar-border);
+  border-radius: 0;
+  border-top-right-radius: var(--radius-lg);
+  backdrop-filter: none;
   display: flex;
   flex-direction: column;
   background: var(--admin-sidebar-bg);
-  border-right: 1px solid var(--admin-sidebar-border);
   box-shadow: var(--admin-sidebar-shadow);
   color: #fff;
-  border-top-right-radius: var(--radius-lg);
   transition: transform 0.28s ease, box-shadow 0.28s ease;
 }
 
@@ -564,6 +575,7 @@ onBeforeUnmount(() => {
     top: 0;
     left: 0;
     width: min(260px, 82vw);
+    min-width: 0;
     height: 100vh;
     transform: translateX(-100%);
     border-top-right-radius: 0;
