@@ -588,6 +588,43 @@ onBeforeUnmount(() => {
     box-shadow: 2px 0 16px rgba(15, 23, 42, 0.18);
   }
 
+  /* 抽屉导航改为整行「图标 + 文字」，图标放大，避免 260px 抽屉里只有小图标悬空 */
+  .sidebar__nav {
+    align-items: stretch;
+    padding: 10px 12px;
+    gap: 4px;
+  }
+
+  .nav-item {
+    width: 100%;
+    height: 52px;
+    justify-content: flex-start;
+    padding: 0 14px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+  }
+
+  .sidebar__nav .nav-item__icon {
+    width: 26px;
+    font-size: 21px;
+    margin-right: 12px;
+  }
+
+  .nav-item__label {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .nav-item--home {
+    margin-top: 6px;
+  }
+
   .admin--drawer-open .global-chrome {
     /* 抽屉打开时把顶栏提到遮罩之上，汉堡可独立点击（backdrop z-index:110） */
     z-index: 121;

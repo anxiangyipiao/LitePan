@@ -853,6 +853,7 @@ onUnmounted(() => {
       <div class="mobile-sidebar__drives">
         <DriveSidebar
           v-if="accounts.length > 0"
+          vertical
           :accounts="accounts"
           :model-value="currentAccountId"
           @update:model-value="(id) => { store.selectAccount(id); mobileSidebarOpen = false; }"
@@ -1276,6 +1277,11 @@ onUnmounted(() => {
   .browser {
     gap: 12px;
     padding: 12px 0;
+  }
+
+  /* 移动端顶部盘条与抽屉导航功能重叠，隐藏盘条、保留汉堡抽屉，让出竖向空间 */
+  .browser__drives-strip {
+    display: none;
   }
 
   .browser__panel-top {

@@ -4,6 +4,8 @@ import type { Account } from "@/api/types";
 const props = defineProps<{
   accounts: Account[];
   modelValue: number | null;
+  /** 竖排导航列表模式（移动端抽屉）：图标 + 名称整行，替代横向卡片 */
+  vertical?: boolean;
 }>();
 const emit = defineEmits<{ "update:modelValue": [number] }>();
 
@@ -20,7 +22,7 @@ function driverText(a: Account): string {
 </script>
 
 <template>
-  <div class="drive-sidebar">
+  <div class="drive-sidebar" :class="{ 'drive-sidebar--vertical': vertical }">
     <div class="drive-sidebar__list">
       <button
         v-for="a in props.accounts"
@@ -166,35 +168,93 @@ function driverText(a: Account): string {
   color: var(--brand-strong);
 }
 
-/* 移动端压缩盘条卡片：更小更紧凑，让出竖向空间给文件区 */
+/* 移动端盘条卡片：触控目标与可读性优先，仍保持紧凑让出竖向空间 */
 @media (max-width: 768px) {
   .drive-sidebar__list {
-    gap: 8px;
-    padding: 8px 2px 2px;
+    gap: 10px;
+    padding: 10px 2px 4px;
   }
 
   .drive-sidebar__card {
-    width: 72px;
-    min-height: 54px;
-    gap: 4px;
-    padding: 6px 4px;
-    border-radius: 10px;
+    width: 84px;
+    min-height: 62px;
+    gap: 5px;
+    padding: 8px 4px;
+    border-radius: 12px;
   }
 
   .drive-sidebar__badge {
-    width: 26px;
-    height: 26px;
-    border-radius: 8px;
-    font-size: 11px;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    font-size: 12px;
   }
 
   .drive-sidebar__badge-text {
-    max-width: 24px;
+    max-width: 26px;
   }
 
   .drive-sidebar__name {
-    max-width: 64px;
-    font-size: 11px;
+    max-width: 76px;
+    font-size: 12px;
   }
+}
+
+/* ---- 竖排导航列表模式（移动端抽屉） ---- */
+.drive-sidebar--vertical {
+  min-height: 0;
+}
+
+.drive-sidebar--vertical .drive-sidebar__list {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.drive-sidebar--vertical .drive-sidebar__card {
+  width: 100%;
+  min-height: 52px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+}
+
+.drive-sidebar--vertical .drive-sidebar__card:hover {
+  transform: none;
+  box-shadow: none;
+  background: var(--surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.drive-sidebar--vertical .drive-sidebar__card--active {
+  background-color: color-mix(in srgb, var(--brand) 10%, var(--surface));
+  background-image: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.drive-sidebar--vertical .drive-sidebar__badge {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.drive-sidebar--vertical .drive-sidebar__name {
+  max-width: none;
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.drive-sidebar--vertical .drive-sidebar__fade {
+  display: none;
 }
 </style>
