@@ -5,10 +5,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"litepan/internal/mediaorganize/rules"
 )
+
+// stripCDSuffix 去除文件名中的 CD 后缀（如 -CD1、-cd2、-CD10），用于 NFO/海报命名。
+var cdSuffixRe = regexp.MustCompile(`(?i)-CD\d+$`)
+
+func stripCDSuffix(name string) string {
+	return cdSuffixRe.ReplaceAllString(name, "")
+}
 
 type movieNFO struct {
 	XMLName  xml.Name `xml:"movie"`
@@ -81,12 +89,12 @@ func workMetaPaths(g workGroup, mediaType string) (nfoPath, posterPath string) {
 
 func primaryStrmStem(g workGroup) string {
 	if g.flatFile != "" {
-		return strings.TrimSuffix(g.flatFile, filepath.Ext(g.flatFile))
+		return stripCDSuffix(strings.TrimSuffix(g.flatFile, filepath.Ext(g.flatFile)))
 	}
 	if len(g.entries) == 0 {
 		return ""
 	}
-	return strings.TrimSuffix(g.entries[0].absPath, filepath.Ext(g.entries[0].absPath))
+	return stripCDSuffix(strings.TrimSuffix(g.entries[0].absPath, filepath.Ext(g.entries[0].absPath)))
 }
 
 func workHasNFO(g workGroup, mediaType string) bool {
@@ -113,11 +121,11 @@ func workNFOCandidates(g workGroup, mediaType string) []string {
 	}
 	out := make([]string, 0, len(g.entries)+2)
 	if g.flatFile != "" {
-		stem := strings.TrimSuffix(g.flatFile, filepath.Ext(g.flatFile))
+		stem := stripCDSuffix(strings.TrimSuffix(g.flatFile, filepath.Ext(g.flatFile)))
 		return []string{stem + ".nfo"}
 	}
 	for _, e := range g.entries {
-		stem := strings.TrimSuffix(e.absPath, filepath.Ext(e.absPath))
+		stem := stripCDSuffix(strings.TrimSuffix(e.absPath, filepath.Ext(e.absPath)))
 		out = append(out, stem+".nfo")
 	}
 	// 兼容上一版误写的 movie.nfo
@@ -128,7 +136,7 @@ func workNFOCandidates(g workGroup, mediaType string) []string {
 func workPosterCandidates(g workGroup, mediaType string) []string {
 	_ = mediaType
 	if g.flatFile != "" {
-		stem := strings.TrimSuffix(g.flatFile, filepath.Ext(g.flatFile))
+		stem := stripCDSuffix(strings.TrimSuffix(g.flatFile, filepath.Ext(g.flatFile)))
 		return []string{stem + "-poster.jpg", stem + ".jpg"}
 	}
 	out := []string{
@@ -137,7 +145,7 @@ func workPosterCandidates(g workGroup, mediaType string) []string {
 		filepath.Join(g.absDir, "cover.jpg"),
 	}
 	for _, e := range g.entries {
-		stem := strings.TrimSuffix(e.absPath, filepath.Ext(e.absPath))
+		stem := stripCDSuffix(strings.TrimSuffix(e.absPath, filepath.Ext(e.absPath)))
 		out = append(out, stem+"-poster.jpg", stem+".jpg")
 	}
 	return out

@@ -91,9 +91,6 @@ let nameAlignApplyTimer: number | undefined;
 const mobileSidebarOpen = ref(false);
 const bottomSheetOpen = ref(false);
 const bottomSheetTarget = ref<FileItem | null>(null);
-const pullRefreshing = ref(false);
-let pullStartY = 0;
-let pulling = false;
 
 const selectedAccountName = computed(
   () => accounts.value.find((a) => a.id === currentAccountId.value)?.name || "",
@@ -436,26 +433,6 @@ function bottomSheetAction(action: string) {
     case "delete": fileActions.deleteFile(file); break;
     case "strm": openNameAlign(file); break;
   }
-}
-
-// Mobile: pull-to-refresh
-function onPullStart(e: TouchEvent) {
-  pullStartY = e.touches[0].clientY;
-  pulling = true;
-}
-function onPullMove(e: TouchEvent) {
-  if (!pulling) return;
-  const delta = e.touches[0].clientY - pullStartY;
-  if (delta > 60 && !refreshing.value && !loading.value) {
-    pullRefreshing.value = true;
-  }
-}
-function onPullEnd() {
-  if (pullRefreshing.value) {
-    store.refreshFiles();
-    setTimeout(() => { pullRefreshing.value = false; }, 1500);
-  }
-  pulling = false;
 }
 
 function normalizeCrumbs(raw: unknown): Crumb[] | null {
@@ -1031,16 +1008,7 @@ onUnmounted(() => {
           />
         </div>
 
-        <div
-          class="browser__main"
-          @touchstart.passive="onPullStart"
-          @touchmove.passive="onPullMove"
-          @touchend="onPullEnd"
-        >
-          <div v-if="pullRefreshing" class="browser__pull-indicator">
-            <BusySpinner variant="notch" :size="22" color="var(--brand)" />
-            <span>下拉刷新</span>
-          </div>
+        <div class="browser__main">
           <FileTable
             :files="files"
             :view="view"
@@ -1480,16 +1448,5 @@ onUnmounted(() => {
 }
 .mobile-sheet-action--danger:active {
   background: #fef2f2;
-}
-
-/* ---- Mobile: pull-to-refresh indicator ---- */
-.browser__pull-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 0;
-  color: var(--text-muted, #9ca3af);
-  font-size: 13px;
 }
 </style>
