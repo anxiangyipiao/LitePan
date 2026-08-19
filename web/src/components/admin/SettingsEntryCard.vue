@@ -32,14 +32,14 @@ defineProps<{
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 108px;
-  padding: 18px 18px 18px 20px;
-  border-radius: var(--radius-xl);
+  min-height: 72px;
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(99, 121, 168, 0.16);
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.94)),
     var(--surface);
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
   cursor: pointer;
   text-align: left;
   transition: background 0.15s ease;
@@ -59,12 +59,12 @@ defineProps<{
 }
 
 .settings-entry-card__icon {
-  width: 46px;
-  height: 46px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(244, 248, 255, 0.92);
   border: 1px solid rgba(76, 116, 223, 0.18);
   color: var(--brand, #4c74df);
@@ -72,8 +72,8 @@ defineProps<{
 }
 
 .settings-entry-card__icon svg {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   display: block;
   fill: currentColor;
 }
@@ -130,7 +130,7 @@ defineProps<{
 
 @media (max-width: 860px) {
   .settings-entry-card {
-    min-height: 96px;
+    min-height: 64px;
   }
 }
 </style>
