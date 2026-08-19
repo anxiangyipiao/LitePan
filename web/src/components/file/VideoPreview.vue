@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import "media-chrome";
 import "media-chrome/dist/lang/zh-CN.js";
 import { setLanguage } from "media-chrome/dist/utils/i18n.js";
@@ -10,8 +10,12 @@ import { useBodyScrollLock } from "@/composables/useBodyScrollLock";
 import { fileKind } from "@/utils/fileIcon";
 import { fileExtension } from "@/utils/format";
 import { decodeTextBytes } from "@/utils/textEncoding";
+import { is360File } from "@/utils/video360";
 import PreviewHeader from "./PreviewHeader.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
+
+// 360°/VR 播放器懒加载：普通视频不拉取 three 及其分包
+const VideoPlayer360 = defineAsyncComponent(() => import("./VideoPlayer360.vue"));
 
 const props = defineProps<{
   accountId: number;
@@ -59,6 +63,16 @@ const mediaURL = computed(() => {
   const file = currentFile.value;
   return file ? filesApi.previewURL(props.accountId, file.id, file.name) : "";
 });
+
+// 360°/VR 模式：按文件名自动开启，控制条可手动切换；切换不打断播放（同一 <video> 继续）。
+const vr360Mode = ref(false);
+watch(
+  currentFile,
+  (file) => {
+    vr360Mode.value = !!file && is360File(file.name);
+  },
+  { immediate: true },
+);
 const selectedSubtitleId = ref("");
 
 function fileStem(name: string) {
@@ -587,6 +601,16 @@ onUnmounted(() => {
                 <i class="fa-solid fa-list-ul" aria-hidden="true" />
               </button>
               <media-playback-rate-button rates="0.5 0.75 1 1.25 1.5 2" />
+              <button
+                type="button"
+                class="video-preview__vr-toggle"
+                :class="{ 'is-active': vr360Mode }"
+                :aria-label="vr360Mode ? '退出 360° 视角' : '进入 360° 视角'"
+                :title="vr360Mode ? '退出 360° 视角' : '进入 360° 视角'"
+                @click="vr360Mode = !vr360Mode"
+              >
+                <i class="fa-solid fa-vr-cardboard" aria-hidden="true"></i>
+              </button>
               <media-fullscreen-button aria-label="全屏" />
             </media-control-bar>
 
@@ -595,6 +619,14 @@ onUnmounted(() => {
               <span>空格 播放暂停</span><i>·</i><span>P 上一集丨N 下一集</span><i>·</i><span>M 静音切换</span>
             </div>
           </div>
+
+          <!-- 360°/VR 全景覆盖层：复用同一 <video>，three.js 球面渲染 -->
+          <VideoPlayer360
+            v-if="vr360Mode"
+            :video-el="videoRef"
+            :key="currentFile?.id ?? 'none'"
+            @notice="showNotice"
+          />
         </media-controller>
       </section>
     </main>
@@ -887,7 +919,7 @@ onUnmounted(() => {
 
 .video-preview__controls {
   display: grid;
-  grid-template-columns: 50px auto minmax(180px, 1fr) 44px 105px minmax(104px, 128px) 44px 68px 44px;
+  grid-template-columns: 50px auto minmax(180px, 1fr) 44px 105px minmax(104px, 128px) 44px 68px 44px 44px;
   align-items: center;
   gap: 7px;
   min-height: 52px;
@@ -905,6 +937,8 @@ onUnmounted(() => {
 .video-preview__controls media-volume-range { --media-range-track-height: 4px; }
 .video-preview__queue-toggle { width: 42px; height: 42px; border-radius: 8px; color: #cfdaea; font-size: 17px; }
 .video-preview__queue-toggle.is-active { color: #2794ff; }
+.video-preview__vr-toggle { width: 42px; height: 42px; border-radius: 8px; color: #cfdaea; font-size: 17px; }
+.video-preview__vr-toggle.is-active { color: #2794ff; }
 
 .video-preview__shortcuts {
   min-height: 25px;
@@ -918,7 +952,7 @@ onUnmounted(() => {
 .video-preview__shortcuts i { opacity: 0.56; }
 
 @media (max-width: 1100px) {
-  .video-preview__controls { grid-template-columns: 46px auto minmax(130px, 1fr) 42px 84px 96px 42px 62px 42px; }
+  .video-preview__controls { grid-template-columns: 46px auto minmax(130px, 1fr) 42px 84px 96px 42px 62px 42px 42px; }
 }
 
 @media (max-width: 768px) {
@@ -927,7 +961,7 @@ onUnmounted(() => {
   .video-preview__notice { bottom: 310px; max-width: 86vw; overflow: hidden; text-overflow: ellipsis; }
   .video-preview__queue { grid-template-columns: 28px minmax(0, 1fr) 28px; gap: 3px; margin-bottom: 8px; }
   .episode-card { flex-basis: 158px; min-height: 70px; }
-  .video-preview__controls { grid-template-columns: 42px minmax(62px, auto) minmax(70px, 1fr) 40px 40px 40px 40px; gap: 1px; }
+  .video-preview__controls { grid-template-columns: 42px minmax(62px, auto) minmax(70px, 1fr) 40px 40px 40px 40px 40px; gap: 1px; }
   .video-preview__controls media-volume-range,
   .video-preview__controls media-playback-rate-button { display: none; }
   .video-preview__subtitle-button { grid-template-columns: 1fr; padding: 0; }
