@@ -1,6 +1,6 @@
 services:
   litepan:
-    image: ponphil/litepan:beta
+    build: .
     container_name: litepan
     environment:
       - TZ=Asia/Shanghai
