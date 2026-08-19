@@ -113,6 +113,8 @@ export function useFileTableInline(options: {
   function openContextMenu(event: MouseEvent, file: FileItem) {
     if (!options.isAdmin.value || renameSaving.value || deleteSaving.value) return;
     if (isInlineRenaming(file)) return;
+    // 触摸设备不弹右键菜单，走底部面板
+    if (window.matchMedia("(hover: none)").matches) return;
 
     const items = contextMenuItemsFor(file);
     if (!items.length) return;

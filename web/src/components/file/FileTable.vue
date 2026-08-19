@@ -895,7 +895,7 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
                 class="file-card-action"
                 title="更多"
                 aria-label="更多"
-                @click="openContextMenu($event, f)"
+                @click="isTouchDevice ? emit('more-actions', f) : openContextMenu($event, f)"
               >
                 <SvgIcon name="dots-h" :size="14" />
               </button>
