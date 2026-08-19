@@ -175,7 +175,9 @@ onBeforeUnmount(() => {
       </nav>
 
       <footer class="sidebar__footer">
-        <AdminAccountChip :compact="sidebarCompact" @logout="emit('logout')" />
+        <!-- 侧栏桌面端恒为 56px 纯图标模式，账户芯片必须始终紧凑（仅头像），
+             否则完整芯片（125px 宽）溢出侧栏并左移出屏 -->
+        <AdminAccountChip :compact="!isMobile" @logout="emit('logout')" />
       </footer>
     </aside>
 
