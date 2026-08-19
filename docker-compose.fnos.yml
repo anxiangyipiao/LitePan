@@ -4,6 +4,7 @@ services:
     container_name: litepan
     environment:
       - TZ=Asia/Shanghai
+      - LITEPAN_DISABLE_CSRF_CHECK=true
     volumes:
       - /vol1/1000/docker/litepango/data:/app/data
       - /vol1/1000/docker/litepango/strm:/app/strm
