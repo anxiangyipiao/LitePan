@@ -619,21 +619,11 @@ onUnmounted(() => {
                 <i class="fa-solid fa-list-ul" aria-hidden="true" />
               </button>
               <media-playback-rate-button rates="0.5 0.75 1 1.25 1.5 2" />
-              <button
-                type="button"
-                class="video-preview__vr-toggle"
-                :class="{ 'is-active': vr360Mode }"
-                :aria-label="vr360Mode ? '退出 VR 模式' : '进入 VR 模式'"
-                :title="vr360Mode ? '退出 VR 模式' : '进入 VR 模式'"
-                @click="vr360Mode = !vr360Mode"
-              >
-                <i class="fa-solid fa-vr-cardboard" aria-hidden="true"></i>
-              </button>
               <div ref="vrMenuRef" class="video-preview__vr-menu">
                 <button
                   type="button"
                   class="video-preview__vr-menu-trigger"
-                  :class="{ 'is-active': vrMenuOpen }"
+                  :class="{ 'is-active': vrMenuOpen || vr360Mode }"
                   aria-label="VR 播放设置"
                   title="VR 播放设置"
                   @click.stop="vrMenuOpen = !vrMenuOpen"
@@ -645,6 +635,19 @@ onUnmounted(() => {
                     <div class="video-preview__vr-heading">
                       <span>VR 播放设置</span>
                       <small v-if="vr360Config">自动检测: {{ vr360Config.fieldOfView }}° {{ vr360Config.stereo === "sbs" ? "左右" : "单目" }}</small>
+                    </div>
+                    <div class="video-preview__vr-section">
+                      <button
+                        type="button"
+                        class="video-preview__vr-toggle-btn"
+                        :class="{ 'is-active': vr360Mode }"
+                        @click="vr360Mode = !vr360Mode"
+                      >
+                        <span class="video-preview__vr-toggle-track">
+                          <span class="video-preview__vr-toggle-thumb"></span>
+                        </span>
+                        <span>{{ vr360Mode ? "VR 已开启" : "VR 已关闭" }}</span>
+                      </button>
                     </div>
                     <div class="video-preview__vr-section">
                       <span class="video-preview__vr-label">视角</span>
@@ -1009,7 +1012,7 @@ onUnmounted(() => {
 
 .video-preview__controls {
   display: grid;
-  grid-template-columns: 50px auto minmax(180px, 1fr) 44px 105px minmax(104px, 128px) 44px 68px 44px 32px 44px;
+  grid-template-columns: 50px auto minmax(180px, 1fr) 44px 105px minmax(104px, 128px) 44px 68px 32px 44px;
   align-items: center;
   gap: 7px;
   min-height: 52px;
@@ -1027,8 +1030,6 @@ onUnmounted(() => {
 .video-preview__controls media-volume-range { --media-range-track-height: 4px; }
 .video-preview__queue-toggle { width: 42px; height: 42px; border-radius: 8px; color: #cfdaea; font-size: 17px; }
 .video-preview__queue-toggle.is-active { color: #2794ff; }
-.video-preview__vr-toggle { width: 42px; height: 42px; border-radius: 8px; color: #cfdaea; font-size: 17px; }
-.video-preview__vr-toggle.is-active { color: #2794ff; }
 .video-preview__vr-menu {
   position: relative;
   display: flex;
@@ -1052,6 +1053,46 @@ onUnmounted(() => {
 .video-preview__vr-menu-trigger:hover,
 .video-preview__vr-menu-trigger.is-active { color: #c7d3e4; background: rgb(255 255 255 / 11%); }
 .video-preview__vr-menu-trigger:focus-visible { box-shadow: inset 0 0 0 1px #2698ff; }
+
+.video-preview__vr-toggle-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  outline: none;
+  background: transparent;
+  color: #9fb0c6;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 150ms ease, background 150ms ease;
+}
+.video-preview__vr-toggle-btn:hover { color: #edf7ff; background: rgb(255 255 255 / 7%); }
+.video-preview__vr-toggle-btn.is-active { color: #45a9ff; }
+.video-preview__vr-toggle-track {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: rgb(255 255 255 / 15%);
+  transition: background 200ms ease;
+}
+.video-preview__vr-toggle-btn.is-active .video-preview__vr-toggle-track { background: #1a7cff; }
+.video-preview__vr-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 200ms ease;
+}
+.video-preview__vr-toggle-btn.is-active .video-preview__vr-toggle-thumb { transform: translateX(14px); }
 
 .video-preview__vr-heading {
   display: flex;
@@ -1140,7 +1181,7 @@ onUnmounted(() => {
 .video-preview__shortcuts i { opacity: 0.56; }
 
 @media (max-width: 1100px) {
-  .video-preview__controls { grid-template-columns: 46px auto minmax(130px, 1fr) 42px 84px 96px 42px 62px 42px 28px 42px; }
+  .video-preview__controls { grid-template-columns: 46px auto minmax(130px, 1fr) 42px 84px 96px 42px 62px 28px 42px; }
 }
 
 @media (max-width: 768px) {
@@ -1149,7 +1190,7 @@ onUnmounted(() => {
   .video-preview__notice { bottom: 310px; max-width: 86vw; overflow: hidden; text-overflow: ellipsis; }
   .video-preview__queue { grid-template-columns: 28px minmax(0, 1fr) 28px; gap: 3px; margin-bottom: 8px; }
   .episode-card { flex-basis: 158px; min-height: 70px; }
-  .video-preview__controls { grid-template-columns: 42px minmax(62px, auto) minmax(70px, 1fr) 40px 40px 40px 40px; gap: 1px; }
+  .video-preview__controls { grid-template-columns: 42px minmax(62px, auto) minmax(70px, 1fr) 40px 40px 40px; gap: 1px; }
   .video-preview__controls media-volume-range,
   .video-preview__controls media-playback-rate-button,
   .video-preview__vr-menu-trigger { display: none; }
