@@ -11,8 +11,8 @@ import (
 	"litepan/internal/mediaorganize/rules"
 )
 
-// stripCDSuffix 去除文件名中的 CD 后缀（如 -CD1、-cd2、-CD10），用于 NFO/海报命名。
-var cdSuffixRe = regexp.MustCompile(`(?i)-CD\d+$`)
+// stripCDSuffix 去除文件名中的 CD 后缀（如 -CD1、.cd2、-CD10），用于 NFO/海报命名。
+var cdSuffixRe = regexp.MustCompile(`(?i)[._-]CD\d+$`)
 
 func stripCDSuffix(name string) string {
 	return cdSuffixRe.ReplaceAllString(name, "")
