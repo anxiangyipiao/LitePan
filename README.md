@@ -52,6 +52,85 @@
 
 <br>
 
+## ▎ Docker 部署
+
+### 环境要求
+
+- Docker ≥ 20.10
+- Docker Compose ≥ 2.0
+
+### 方式一：docker-compose（推荐）
+
+```bash
+# 克隆项目
+git clone https://github.com/anxiangyipiao/LitePan.git
+cd LitePan
+
+# 启动（自动构建镜像 + 后台运行）
+docker compose up -d --build
+```
+
+启动后访问 `http://你的IP:5211`，默认管理员账号密码均为 `admin`。
+
+常用命令：
+
+```bash
+# 查看日志
+docker compose logs -f
+
+# 停止
+docker compose down
+
+# 重新构建（代码更新后）
+docker compose up -d --build
+```
+
+### 方式二：飞牛 NAS（fnOS）
+
+```bash
+git clone https://github.com/anxiangyipiao/LitePan.git
+cd LitePan
+docker compose -f docker-compose.fnos.yml up -d --build
+```
+
+> fnOS 配置使用 `network_mode: "host"`，无需映射端口，直接访问 `http://你的IP:5211`。
+
+### 方式三：手动构建
+
+```bash
+docker build -t litepan .
+
+docker run -d \
+  --name litepan \
+  -p 5211:5211 \
+  -v ./data:/app/data \
+  -v ./strm:/app/strm \
+  -v ./mounts:/app/mounts:shared \
+  --device /dev/fuse:/dev/fuse \
+  --privileged \
+  litepan
+```
+
+### 数据目录说明
+
+| 容器路径 | 说明 | 建议 |
+|---------|------|------|
+| `/app/data` | 数据库、配置、日志 | 必须持久化 |
+| `/app/strm` | STRM 文件输出目录 | 必须持久化 |
+| `/app/mounts` | FUSE 挂载点 | 需要 `:shared` 挂载模式 |
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `LITEPAN_DATA_DIR` | `/app/data` | 数据存储目录 |
+| `LITEPAN_STRM_DIR` | `/app/strm` | STRM 输出目录 |
+| `LITEPAN_LISTEN` | `:5211` | 监听地址 |
+| `LITEPAN_LOG_LEVEL` | `info` | 日志级别（debug/info/warn/error） |
+| `TZ` | `Asia/Shanghai` | 时区 |
+
+<br>
+
 ## ▎ 功能简述
 
 <table>
