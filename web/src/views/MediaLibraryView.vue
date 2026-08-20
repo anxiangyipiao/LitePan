@@ -41,14 +41,29 @@ function goDetail(item: MediaLibraryItem) {
 const configOpen = ref(false);
 const configSaving = ref(false);
 const rootDraft = ref<MediaLibraryRoot[]>([]);
+const batchPaths = ref("");
 
 function openConfig() {
   rootDraft.value = roots.value.map((r) => ({ ...r }));
+  batchPaths.value = "";
   configOpen.value = true;
 }
 
 function addRootRow() {
   rootDraft.value.push({ id: "", name: "", path: "" });
+}
+
+// 批量添加：每行一个绝对路径，自动生成根目录行
+function addBatchPaths() {
+  const paths = batchPaths.value
+    .split(/\r?\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (!paths.length) return;
+  for (const p of paths) {
+    rootDraft.value.push({ id: "", name: "", path: p });
+  }
+  batchPaths.value = "";
 }
 
 async function saveRoots() {
@@ -313,7 +328,18 @@ const subtitle = (item: MediaLibraryItem) => {
     <div v-if="configOpen" class="ml-config-mask" @click.self="configOpen = false">
       <div class="ml-config">
         <h3 class="ml-config-title">影视库配置</h3>
-        <p class="ml-config-desc">填写服务器本地刮削输出目录（绝对路径），每个库一行。</p>
+        <p class="ml-config-desc">填写服务器本地刮削输出目录（绝对路径）。多个路径会自动聚合展示在「全部库」。</p>
+
+        <div class="ml-config-batch">
+          <textarea
+            v-model="batchPaths"
+            class="ml-config-textarea"
+            rows="3"
+            placeholder="批量添加路径：每行一个绝对路径，如&#10;/data/strm/movies&#10;/data/strm/tv&#10;D:\media\movies"
+          ></textarea>
+          <button type="button" class="ml-config-add" @click="addBatchPaths">批量添加</button>
+        </div>
+
         <div v-for="(r, i) in rootDraft" :key="i" class="ml-config-row">
           <input v-model="r.name" class="ml-config-input ml-config-name" placeholder="库名（如：电影库）" />
           <input v-model="r.path" class="ml-config-input" placeholder="/data/strm/movies 或 D:\\media\\movies" />
@@ -719,6 +745,25 @@ const subtitle = (item: MediaLibraryItem) => {
   margin: 0;
   font-size: 12px;
   color: var(--text-muted, #64748b);
+}
+
+.ml-config-batch {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.ml-config-textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft, #e2e8f0);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  resize: vertical;
+  background: var(--surface-sunken, #f8fafc);
+  color: var(--text-regular, #334155);
 }
 
 .ml-config-row {

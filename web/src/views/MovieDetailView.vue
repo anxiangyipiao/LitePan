@@ -69,6 +69,10 @@ function playEpisode(ep: MediaLibraryEpisode) {
     </div>
 
     <template v-else-if="detail">
+      <RouterLink to="/movies" class="detail-back" title="返回影视">
+        ← 返回影视
+      </RouterLink>
+
       <div v-if="detail.backdrop_url" class="detail-hero" :style="{ backgroundImage: `url(${detail.backdrop_url})` }">
         <div class="detail-hero__shade" />
       </div>
@@ -91,6 +95,26 @@ function playEpisode(ep: MediaLibraryEpisode) {
               <span v-if="detail.media_type === 'tv' && detail.tv_state === 'updating'"> · 追更中</span>
               <span v-if="detail.ep_tmdb"> · 共 {{ detail.ep_tmdb }} 集</span>
             </p>
+
+            <div v-if="detail.genres?.length" class="detail-genres">
+              <span v-for="g in detail.genres" :key="g" class="detail-genre">{{ g }}</span>
+            </div>
+
+            <div v-if="detail.runtime || detail.studio || detail.director || detail.tmdb_id" class="detail-facts">
+              <span v-if="detail.runtime">时长 {{ detail.runtime }} 分钟</span>
+              <span v-if="detail.director">导演 {{ detail.director }}</span>
+              <span v-if="detail.studio">{{ detail.studio }}</span>
+              <a
+                v-if="detail.tmdb_id"
+                :href="`https://www.themoviedb.org/${detail.media_type === 'tv' ? 'tv' : 'movie'}/${detail.tmdb_id}`"
+                target="_blank"
+                rel="noopener"
+                class="detail-tmdb"
+              >
+                TMDB ↗
+              </a>
+            </div>
+
             <p v-if="detail.overview" class="detail-overview">{{ detail.overview }}</p>
 
             <div v-if="!isTV" class="detail-actions">
@@ -161,6 +185,24 @@ function playEpisode(ep: MediaLibraryEpisode) {
   color: var(--danger);
 }
 
+.detail-back {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  padding: 14px 20px 8px;
+  color: var(--text-regular);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--bg);
+}
+
+.detail-back:hover {
+  color: var(--brand);
+}
+
 .detail-hero {
   position: relative;
   height: 280px;
@@ -227,6 +269,41 @@ function playEpisode(ep: MediaLibraryEpisode) {
   font-size: 14px;
   line-height: 1.7;
   color: var(--text-regular);
+}
+
+.detail-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.detail-genre {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+  color: var(--brand-strong, var(--brand));
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.detail-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.detail-tmdb {
+  color: var(--brand);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.detail-tmdb:hover {
+  text-decoration: underline;
 }
 
 .detail-actions {

@@ -53,6 +53,10 @@ export interface MediaLibraryDetail {
   poster_url?: string;
   backdrop_url?: string;
   overview?: string;
+  genres?: string[];
+  runtime?: string;
+  studio?: string;
+  director?: string;
   play_url?: string;
   episodes?: MediaLibraryEpisode[];
 }

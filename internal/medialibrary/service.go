@@ -79,6 +79,10 @@ type Detail struct {
 	PosterURL   string    `json:"poster_url,omitempty"`
 	BackdropURL string    `json:"backdrop_url,omitempty"`
 	Overview    string    `json:"overview,omitempty"`
+	Genres      []string  `json:"genres,omitempty"`  // nfo 类型标签
+	Runtime     string    `json:"runtime,omitempty"` // 时长（分钟）
+	Studio      string    `json:"studio,omitempty"`  // 制片/发行
+	Director    string    `json:"director,omitempty"`
 	PlayURL     string    `json:"play_url,omitempty"` // 电影直播；剧集为首集
 	Episodes    []Episode `json:"episodes,omitempty"` // 剧集选集列表
 }
@@ -311,6 +315,7 @@ func (s *Service) Detail(ctx context.Context, libID, id string) (*Detail, error)
 		return nil, err
 	}
 	relDir := strings.TrimSpace(it.RelDir)
+	info := readNFOInfo(root.Path, relDir, it.MediaType)
 
 	d := &Detail{
 		ID:          it.ID,
@@ -326,7 +331,11 @@ func (s *Service) Detail(ctx context.Context, libID, id string) (*Detail, error)
 		TVState:     it.TVState,
 		Status:      it.Status,
 		PosterURL:   rebuildPosterURL(libID, it.PosterURL),
-		Overview:    readNFOPlot(root.Path, relDir, it.MediaType),
+		Overview:    info.Plot,
+		Genres:      info.Genres,
+		Runtime:     info.Runtime,
+		Studio:      info.Studio,
+		Director:    info.Director,
 		BackdropURL: s.resolveBackdropURL(libID, root.Path, relDir, it),
 	}
 	if it.MediaType == strmscrape.MediaTypeTV {
@@ -398,10 +407,15 @@ func (s *Service) listEpisodes(rootPath string, it strmscrape.Item) []Episode {
 	return eps
 }
 
-// movieNFO / tvshowNFO 是 Kodi/Emby 兼容 nfo 的最小解析结构（仅取简介）。
+// movieNFO / tvshowNFO 是 Kodi/Emby 兼容 nfo 的最小解析结构。
 type movieNFO struct {
-	Title string `xml:"title"`
-	Plot  string `xml:"plot"`
+	Title    string   `xml:"title"`
+	Year     string   `xml:"year"`
+	Plot     string   `xml:"plot"`
+	Runtime  string   `xml:"runtime"`
+	Genres   []string `xml:"genre"`
+	Studio   string   `xml:"studio"`
+	Director string   `xml:"director"`
 }
 
 type tvshowNFO struct {
@@ -409,28 +423,49 @@ type tvshowNFO struct {
 	Plot  string `xml:"plot"`
 }
 
-// readNFOPlot 读取条目目录下 movie.nfo / tvshow.nfo 的简介。
-func readNFOPlot(rootPath, relDir, mediaType string) string {
+// nfoInfo nfo 解析出的可展示详情字段。
+type nfoInfo struct {
+	Plot     string
+	Genres   []string
+	Runtime  string
+	Studio   string
+	Director string
+}
+
+// readNFOInfo 读取条目目录下 movie.nfo / tvshow.nfo 的详情字段。
+func readNFOInfo(rootPath, relDir, mediaType string) nfoInfo {
 	name := "tvshow.nfo"
 	if mediaType == strmscrape.MediaTypeMovie {
 		name = "movie.nfo"
 	}
 	data, err := os.ReadFile(filepath.Join(rootPath, relDir, name))
 	if err != nil {
-		return ""
+		return nfoInfo{}
 	}
 	if mediaType == strmscrape.MediaTypeTV {
 		var nf tvshowNFO
 		if err := xml.Unmarshal(data, &nf); err != nil {
-			return ""
+			return nfoInfo{}
 		}
-		return strings.TrimSpace(nf.Plot)
+		return nfoInfo{Plot: strings.TrimSpace(nf.Plot)}
 	}
 	var nf movieNFO
 	if err := xml.Unmarshal(data, &nf); err != nil {
-		return ""
+		return nfoInfo{}
 	}
-	return strings.TrimSpace(nf.Plot)
+	genres := make([]string, 0, len(nf.Genres))
+	for _, g := range nf.Genres {
+		if t := strings.TrimSpace(g); t != "" {
+			genres = append(genres, t)
+		}
+	}
+	return nfoInfo{
+		Plot:     strings.TrimSpace(nf.Plot),
+		Genres:   genres,
+		Runtime:  strings.TrimSpace(nf.Runtime),
+		Studio:   strings.TrimSpace(nf.Studio),
+		Director: strings.TrimSpace(nf.Director),
+	}
 }
 
 func fileExists(path string) bool {
