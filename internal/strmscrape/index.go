@@ -360,11 +360,11 @@ func buildItemListWhere(query ItemListQuery) (string, []any) {
 		args = append(args, query.TVState)
 	}
 	if strings.TrimSpace(query.Genre) != "" {
-		clauses = append(clauses, `instr(chr(31) || genres_csv || chr(31), chr(31) || ? || chr(31)) > 0`)
+		clauses = append(clauses, `instr(char(31) || genres_csv || char(31), char(31) || ? || char(31)) > 0`)
 		args = append(args, strings.TrimSpace(query.Genre))
 	}
 	if strings.TrimSpace(query.Actor) != "" {
-		clauses = append(clauses, `instr(chr(31) || actors_csv || chr(31), chr(31) || ? || chr(31)) > 0`)
+		clauses = append(clauses, `instr(char(31) || actors_csv || char(31), char(31) || ? || char(31)) > 0`)
 		args = append(args, strings.TrimSpace(query.Actor))
 	}
 	if len(clauses) == 0 {
