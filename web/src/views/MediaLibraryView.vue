@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onActivated, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onActivated, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import {
@@ -12,9 +12,8 @@ import { getApiErrorMessage } from "@/api/client";
 import { useVirtualPosterWall } from "@/composables/useVirtualPosterWall";
 import { useAuthStore } from "@/stores/auth";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
-import BusySpinner from "@/components/base/BusySpinner.vue";
 
-const PAGE = 120;
+const ROWS_PER_PAGE = 7;
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
@@ -30,11 +29,14 @@ const facetGenres = ref<string[]>([]);
 const facetActors = ref<string[]>([]);
 const items = ref<MediaLibraryItem[]>([]);
 const total = ref(0);
+const page = ref(1);
 const loading = ref(false);
 const refreshing = ref(false);
 const error = ref("");
 
 const wall = useVirtualPosterWall(items);
+const pageSize = computed(() => Math.max(1, wall.cols.value || 4) * ROWS_PER_PAGE);
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
 
 // 点海报 → 独立详情页
 function goDetail(item: MediaLibraryItem) {
@@ -126,11 +128,11 @@ async function loadRoots() {
 
 let seq = 0;
 async function fetchItems(reset: boolean) {
+  if (reset) page.value = 1;
+  const targetPage = reset ? 1 : page.value;
   const s = ++seq;
-  if (reset) {
-    loading.value = true;
-    error.value = "";
-  }
+  loading.value = true;
+  if (reset) error.value = "";
   try {
     const res = await mediaLibraryApi.items({
       lib: libId.value || undefined,
@@ -138,12 +140,30 @@ async function fetchItems(reset: boolean) {
       keyword: keyword.value.trim() || undefined,
       genre: genreFilter.value || undefined,
       actor: actorFilter.value || undefined,
-      limit: PAGE,
-      offset: reset ? 0 : items.value.length,
+      limit: pageSize.value,
+      offset: (targetPage - 1) * pageSize.value,
     });
     if (s !== seq) return;
-    items.value = reset ? res.items : [...items.value, ...res.items];
+    items.value = res.items;
     total.value = res.total;
+    // 后端 total 可能小于当前页（删除后页码越界），自动回退到最后一页
+    const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value));
+    if (targetPage > maxPage) {
+      page.value = maxPage;
+      // 越界时重拉一次
+      const fix = await mediaLibraryApi.items({
+        lib: libId.value || undefined,
+        sort: sort.value,
+        keyword: keyword.value.trim() || undefined,
+        genre: genreFilter.value || undefined,
+        actor: actorFilter.value || undefined,
+        limit: pageSize.value,
+        offset: (maxPage - 1) * pageSize.value,
+      });
+      if (s !== seq) return;
+      items.value = fix.items;
+      total.value = fix.total;
+    }
   } catch (e) {
     if (s !== seq) return;
     error.value = getApiErrorMessage(e, "影视库加载失败");
@@ -170,31 +190,12 @@ async function refresh() {
   }
 }
 
-function hasMore() {
-  return items.value.length < total.value;
-}
-
-// ---- 加载更多哨兵 ----
-const loadMoreEl = ref<HTMLElement | null>(null);
-let loadMoreObserver: IntersectionObserver | null = null;
-
-function bindLoadMore(el: unknown) {
-  loadMoreEl.value = el instanceof Element ? (el as HTMLElement) : null;
-  void nextTick(updateLoadMoreObserver);
-}
-
-async function updateLoadMoreObserver() {
-  loadMoreObserver?.disconnect();
-  loadMoreObserver = null;
-  if (!hasMore() || !loadMoreEl.value) return;
-  loadMoreObserver = new window.IntersectionObserver(
-    (entries) => {
-      if (!entries.some((entry) => entry.isIntersecting)) return;
-      void fetchItems(false);
-    },
-    { root: null, rootMargin: "400px 0px", threshold: 0 },
-  );
-  loadMoreObserver.observe(loadMoreEl.value);
+function goPage(p: number) {
+  const n = Math.min(totalPages.value, Math.max(1, p));
+  if (n === page.value) return;
+  page.value = n;
+  void fetchItems(false);
+  requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
 }
 
 // ---- 过滤联动 ----
@@ -237,9 +238,12 @@ watch(
   },
 );
 
-onUnmounted(() => {
-  loadMoreObserver?.disconnect();
-  loadMoreObserver = null;
+watch(pageSize, (n, o) => {
+  if (n === o || !o) return;
+  // 列数变化导致每页条数变化，保持当前页首项不变
+  const firstIndex = (page.value - 1) * (o as number);
+  page.value = Math.floor(firstIndex / (n as number)) + 1;
+  void fetchItems(false);
 });
 
 const typeLabel = (t: string) => (t === "tv" ? "剧集" : "电影");
@@ -338,52 +342,62 @@ const subtitle = (item: MediaLibraryItem) => {
       </p>
     </div>
 
-    <div v-else :ref="wall.rootEl" class="ml-wall-root">
-      <div class="ml-wall-phantom" :style="{ height: `${wall.totalHeight.value}px` }">
-        <div
-          class="ml-wall"
-          :style="{ ...wall.gridStyle.value, transform: `translateY(${wall.offsetY.value}px)` }"
-        >
-          <article
-            v-for="item in wall.visibleItems.value"
-            :key="item.lib_id + item.tmdb_id + item.folder_name"
-            class="ml-card"
-            role="button"
-            tabindex="0"
-            :title="`查看详情：${item.title}`"
-            @click="goDetail(item)"
-            @keydown.enter="goDetail(item)"
+    <div v-else>
+      <div :ref="wall.rootEl" class="ml-wall-root">
+        <div class="ml-wall-phantom" :style="{ height: `${wall.totalHeight.value}px` }">
+          <div
+            class="ml-wall"
+            :style="{ ...wall.gridStyle.value, transform: `translateY(${wall.offsetY.value}px)` }"
           >
-            <div class="ml-card__poster">
-              <img
-                v-if="item.poster_url"
-                :src="item.poster_url"
-                :alt="item.title"
-                loading="lazy"
-                decoding="async"
-              />
-              <div v-else class="ml-card__placeholder">{{ item.title.slice(0, 1) }}</div>
-              <span v-if="item.media_type === 'tv' && item.tv_state === 'updating'" class="ml-card__badge">
-                追更
-              </span>
-              <span v-if="!item.play_url" class="ml-card__badge ml-card__badge--muted">无源</span>
-            </div>
-            <div class="ml-card__meta">
-              <div class="ml-card__title" :title="item.title">{{ item.title }}</div>
-              <div class="ml-card__sub">{{ subtitle(item) }}</div>
-            </div>
-          </article>
+            <article
+              v-for="item in wall.visibleItems.value"
+              :key="item.lib_id + item.tmdb_id + item.folder_name"
+              class="ml-card"
+              role="button"
+              tabindex="0"
+              :title="`查看详情：${item.title}`"
+              @click="goDetail(item)"
+              @keydown.enter="goDetail(item)"
+            >
+              <div class="ml-card__poster">
+                <img
+                  v-if="item.poster_url"
+                  :src="item.poster_url"
+                  :alt="item.title"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div v-else class="ml-card__placeholder">{{ item.title.slice(0, 1) }}</div>
+                <span v-if="item.media_type === 'tv' && item.tv_state === 'updating'" class="ml-card__badge">
+                  追更
+                </span>
+                <span v-if="!item.play_url" class="ml-card__badge ml-card__badge--muted">无源</span>
+              </div>
+              <div class="ml-card__meta">
+                <div class="ml-card__title" :title="item.title">{{ item.title }}</div>
+                <div class="ml-card__sub">{{ subtitle(item) }}</div>
+              </div>
+            </article>
+          </div>
         </div>
       </div>
-      <div
-        v-if="hasMore()"
-        :ref="bindLoadMore"
-        class="ml-wall-foot"
-        aria-hidden="true"
-      >
-        <BusySpinner :size="18" />
-        <span>加载更多…</span>
-      </div>
+
+      <nav v-if="totalPages > 1" class="ml-pager" aria-label="分页">
+        <button type="button" class="ml-pager-btn" :disabled="page <= 1" @click="goPage(page - 1)">上一页</button>
+        <template v-for="p in totalPages" :key="p">
+          <button
+            v-if="p === 1 || p === totalPages || Math.abs(p - page) <= 2"
+            type="button"
+            class="ml-pager-btn"
+            :class="{ 'ml-pager-btn--active': p === page }"
+            @click="goPage(p)"
+          >{{ p }}</button>
+          <span v-else-if="p === page - 3 || p === page + 3" class="ml-pager-ellipsis">…</span>
+        </template>
+        <button type="button" class="ml-pager-btn" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</button>
+        <span class="ml-pager-info">{{ total }} 部 · 第 {{ page }}/{{ totalPages }} 页 · 每页 {{ pageSize }}（7 行）</span>
+      </nav>
+      <p v-else class="ml-pager-info ml-pager-info--single">{{ total }} 部 · 每页 {{ pageSize }}（7 行）</p>
     </div>
 
     <!-- 配置弹窗 -->
@@ -661,14 +675,53 @@ const subtitle = (item: MediaLibraryItem) => {
   text-overflow: ellipsis;
 }
 
-.ml-wall-foot {
+.ml-pager {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
   padding: 18px 0 4px;
-  color: var(--text-muted, #64748b);
+}
+
+.ml-pager-btn {
+  min-width: 36px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-soft, #e2e8f0);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--text-regular, #334155);
   font-size: 13px;
+  cursor: pointer;
+}
+
+.ml-pager-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ml-pager-btn--active {
+  background: var(--brand, #4f8ef7);
+  border-color: var(--brand, #4f8ef7);
+  color: #fff;
+}
+
+.ml-pager-ellipsis {
+  padding: 0 2px;
+  color: var(--text-muted, #64748b);
+}
+
+.ml-pager-info {
+  margin-left: 8px;
+  color: var(--text-muted, #64748b);
+  font-size: 12px;
+}
+
+.ml-pager-info--single {
+  display: block;
+  text-align: center;
+  padding: 14px 0 2px;
 }
 
 /* 播放器 */
