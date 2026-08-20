@@ -1145,26 +1145,13 @@ onUnmounted(() => {
   background: transparent;
 }
 .browser__content {
+  /* 收藏夹侧栏已改为 Edge 式下拉，内容区单列撑满。
+     注意不要用 `grid-template-columns: 0 minmax(0,1fr)` —— 那会给已删除的收藏夹槽位
+     留 0px 首列，唯一子元素 .browser__main 会被自动放入首列导致宽度 0，
+     网格视图 auto-fill 塌缩成单列、每项占一行。 */
   display: grid;
-  grid-template-columns: 0 minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 0;
-}
-.browser__content--with-favorites {
-  grid-template-columns: 168px minmax(0, 1fr);
-}
-.browser__content--favorites-transition-ready {
-  transition: grid-template-columns 0.22s ease;
-}
-.browser__favorites-slot {
-  min-width: 0;
-  overflow: hidden;
-}
-.browser__content--with-favorites .browser__favorites-slot {
-  border-right: 1px solid var(--border-soft);
-}
-.browser__favorites-slot :deep(.favorites-sidebar) {
-  height: 100%;
-  border-right: none;
 }
 .browser__main {
   min-width: 0;
@@ -1250,35 +1237,6 @@ onUnmounted(() => {
   .browser__breadcrumb {
     width: 100%;
     flex-basis: 100%;
-  }
-
-  .browser__content--with-favorites {
-    grid-template-columns: 1fr;
-  }
-
-  .browser__favorites-slot {
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-    border-right: none;
-  }
-
-  .browser__content--with-favorites .browser__favorites-slot {
-    max-height: 360px;
-    opacity: 1;
-    overflow-y: auto;
-    border-bottom: 1px solid var(--border-soft);
-  }
-
-  /* 移动端收藏夹是内容自适应高度（由槽位滚动），不再按列高撑满 */
-  .browser__favorites-slot :deep(.favorites-sidebar) {
-    height: auto;
-  }
-
-  .browser__content--favorites-transition-ready .browser__favorites-slot {
-    transition:
-      max-height 0.22s ease,
-      opacity 0.18s ease;
   }
 }
 
