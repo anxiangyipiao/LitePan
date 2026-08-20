@@ -125,19 +125,10 @@ function playEpisode(ep: MediaLibraryEpisode) {
               <span v-for="(a, i) in detail.actors" :key="i" class="detail-actor">{{ a }}</span>
             </div>
 
-            <div v-if="detail.runtime || detail.studio || detail.director || detail.tmdb_id" class="detail-facts">
+            <div v-if="detail.runtime || detail.studio || detail.director" class="detail-facts">
               <span v-if="detail.runtime">时长 {{ detail.runtime }} 分钟</span>
               <span v-if="detail.director">导演 {{ detail.director }}</span>
               <span v-if="detail.studio">{{ detail.studio }}</span>
-              <a
-                v-if="detail.tmdb_id"
-                :href="`https://www.themoviedb.org/${detail.media_type === 'tv' ? 'tv' : 'movie'}/${detail.tmdb_id}`"
-                target="_blank"
-                rel="noopener"
-                class="detail-tmdb"
-              >
-                TMDB ↗
-              </a>
             </div>
 
             <p v-if="detail.overview" class="detail-overview">{{ detail.overview }}</p>
@@ -238,8 +229,9 @@ function playEpisode(ep: MediaLibraryEpisode) {
 .detail-hero {
   position: relative;
   height: 280px;
-  background-size: cover;
-  background-position: center 30%;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
 .detail-hero__shade {
@@ -265,7 +257,7 @@ function playEpisode(ep: MediaLibraryEpisode) {
   width: 180px;
   aspect-ratio: 2 / 3;
   border-radius: 12px;
-  object-fit: cover;
+  object-fit: contain;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
   background: var(--surface-sunken);
   display: flex;
@@ -424,16 +416,6 @@ function playEpisode(ep: MediaLibraryEpisode) {
   margin: 0 0 10px;
   font-size: 13px;
   color: var(--text-muted);
-}
-
-.detail-tmdb {
-  color: var(--brand);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.detail-tmdb:hover {
-  text-decoration: underline;
 }
 
 .detail-actions {
