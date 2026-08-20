@@ -21,7 +21,6 @@ const auth = useAuthStore();
 
 const roots = ref<MediaLibraryRoot[]>([]);
 const libId = ref("");
-const typeFilter = ref<"" | "movie" | "tv">("");
 const sort = ref<MediaLibrarySort>("title_asc");
 const keyword = ref("");
 const searchDraft = ref("");
@@ -135,7 +134,6 @@ async function fetchItems(reset: boolean) {
   try {
     const res = await mediaLibraryApi.items({
       lib: libId.value || undefined,
-      type: typeFilter.value || undefined,
       sort: sort.value,
       keyword: keyword.value.trim() || undefined,
       genre: genreFilter.value || undefined,
@@ -159,7 +157,6 @@ async function refresh() {
   try {
     await mediaLibraryApi.refresh({
       lib: libId.value || undefined,
-      type: typeFilter.value || undefined,
       sort: sort.value,
       keyword: keyword.value.trim() || undefined,
       genre: genreFilter.value || undefined,
@@ -201,7 +198,7 @@ async function updateLoadMoreObserver() {
 }
 
 // ---- 过滤联动 ----
-watch([libId, typeFilter, sort, genreFilter, actorFilter], () => void fetchItems(true));
+watch([libId, sort, genreFilter, actorFilter], () => void fetchItems(true));
 watch(libId, () => void loadFacets());
 
 function submitSearch() {
@@ -214,7 +211,6 @@ function clearFacetFilters() {
   searchDraft.value = "";
   genreFilter.value = "";
   actorFilter.value = "";
-  typeFilter.value = "";
   // 清掉 URL 上的 ?genre/?actor/?keyword，避免刷新后又带回
   void router.replace({ path: "/movies", query: {} });
   void fetchItems(true);
@@ -258,80 +254,62 @@ const subtitle = (item: MediaLibraryItem) => {
 <template>
   <div class="ml-page">
     <header class="ml-topbar">
-      <h1 class="ml-title">影视</h1>
+      <div class="ml-topbar__primary">
+        <h1 class="ml-title">影视</h1>
 
-      <select v-model="libId" class="ml-control" aria-label="选择影视库">
-        <option value="">全部库</option>
-        <option v-for="r in roots" :key="r.id" :value="r.id">{{ r.name }}</option>
-      </select>
+        <select v-model="libId" class="ml-control ml-control--lib" aria-label="选择影视库">
+          <option value="">全部库</option>
+          <option v-for="r in roots" :key="r.id" :value="r.id">{{ r.name }}</option>
+        </select>
 
-      <div class="ml-type-toggle" role="group" aria-label="类型筛选">
+        <select v-model="sort" class="ml-control" aria-label="排序">
+          <option value="title_asc">名称</option>
+          <option value="year_desc">年份 ↓</option>
+          <option value="year_asc">年份 ↑</option>
+        </select>
+
+        <form class="ml-search" @submit.prevent="submitSearch">
+          <input v-model="searchDraft" class="ml-search-input" placeholder="搜索片名…" />
+        </form>
+
         <button
           type="button"
-          class="ml-type-btn"
-          :class="{ 'is-active': typeFilter === '' }"
-          @click="typeFilter = ''"
+          class="ml-icon-btn"
+          title="刷新索引"
+          aria-label="刷新索引"
+          :disabled="refreshing"
+          @click="refresh"
         >
-          全部
+          <SvgIcon name="refresh" :size="15" />
         </button>
         <button
+          v-if="auth.isAdmin"
           type="button"
-          class="ml-type-btn"
-          :class="{ 'is-active': typeFilter === 'movie' }"
-          @click="typeFilter = 'movie'"
+          class="ml-icon-btn"
+          title="配置影视库"
+          aria-label="配置影视库"
+          @click="openConfig"
         >
-          电影
-        </button>
-        <button
-          type="button"
-          class="ml-type-btn"
-          :class="{ 'is-active': typeFilter === 'tv' }"
-          @click="typeFilter = 'tv'"
-        >
-          剧集
+          <SvgIcon name="settings" :size="15" />
         </button>
       </div>
 
-      <select v-model="sort" class="ml-control" aria-label="排序">
-        <option value="title_asc">名称</option>
-        <option value="year_desc">年份 ↓</option>
-        <option value="year_asc">年份 ↑</option>
-      </select>
+      <div v-if="facetGenres.length || facetActors.length" class="ml-topbar__facets">
+        <select v-if="facetGenres.length" v-model="genreFilter" class="ml-control" aria-label="按分类筛选">
+          <option value="">全部分类</option>
+          <option v-for="g in facetGenres" :key="g" :value="g">{{ g }}</option>
+        </select>
 
-      <select v-model="genreFilter" class="ml-control" aria-label="按分类筛选">
-        <option value="">全部分类</option>
-        <option v-for="g in facetGenres" :key="g" :value="g">{{ g }}</option>
-      </select>
+        <select v-if="facetActors.length" v-model="actorFilter" class="ml-control" aria-label="按演员筛选">
+          <option value="">全部演员</option>
+          <option v-for="a in facetActors" :key="a" :value="a">{{ a }}</option>
+        </select>
 
-      <select v-model="actorFilter" class="ml-control" aria-label="按演员筛选">
-        <option value="">全部演员</option>
-        <option v-for="a in facetActors" :key="a" :value="a">{{ a }}</option>
-      </select>
-
-      <form class="ml-search" @submit.prevent="submitSearch">
-        <input v-model="searchDraft" class="ml-search-input" placeholder="搜索片名…" />
-      </form>
-
-      <button
-        type="button"
-        class="ml-icon-btn"
-        title="刷新索引"
-        aria-label="刷新索引"
-        :disabled="refreshing"
-        @click="refresh"
-      >
-        <SvgIcon name="refresh" :size="15" />
-      </button>
-      <button
-        v-if="auth.isAdmin"
-        type="button"
-        class="ml-icon-btn"
-        title="配置影视库"
-        aria-label="配置影视库"
-        @click="openConfig"
-      >
-        <SvgIcon name="settings" :size="15" />
-      </button>
+        <span v-if="genreFilter || actorFilter" class="ml-facet-count">
+          已选：{{ [genreFilter, actorFilter].filter(Boolean).join(" · ") }}
+          <button type="button" class="ml-facet-clear" @click="clearFacetFilters">清除</button>
+        </span>
+      </div>
     </header>
 
     <p v-if="error" class="ml-error">{{ error }}</p>
@@ -350,15 +328,11 @@ const subtitle = (item: MediaLibraryItem) => {
 
     <div v-else-if="items.length === 0 && !loading" class="ml-empty">
       <p class="ml-empty-title">
-        {{
-          keyword || genreFilter || actorFilter || typeFilter
-            ? "没有匹配的影视"
-            : "影视库为空"
-        }}
+        {{ keyword || genreFilter || actorFilter ? "没有匹配的影视" : "影视库为空" }}
       </p>
-      <p v-if="!keyword && !genreFilter && !actorFilter && !typeFilter" class="ml-empty-sub">该库还没有可展示的条目。</p>
+      <p v-if="!keyword && !genreFilter && !actorFilter" class="ml-empty-sub">该库还没有可展示的条目。</p>
       <p v-else class="ml-empty-sub">
-        当前筛选（分类/演员/类型/关键词）无匹配，试试
+        当前筛选（分类/演员/关键词）无匹配，试试
         <button type="button" class="ml-empty-link" @click="clearFacetFilters">清除筛选</button>
         或
         <button type="button" class="ml-empty-link" @click="refresh">刷新索引</button>。
@@ -457,10 +431,44 @@ const subtitle = (item: MediaLibraryItem) => {
 
 .ml-topbar {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
   margin-bottom: 16px;
+}
+
+.ml-topbar__primary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ml-topbar__facets {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ml-facet-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand) 10%, var(--surface));
+  color: var(--text-regular, #334155);
+  font-size: 12px;
+  border: 1px solid var(--border-soft, #e2e8f0);
+}
+
+.ml-facet-clear {
+  border: none;
+  background: transparent;
+  color: var(--brand, #4f8ef7);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .ml-title {
@@ -478,28 +486,11 @@ const subtitle = (item: MediaLibraryItem) => {
   background: var(--surface, #fff);
   color: var(--text-regular, #334155);
   font-size: 13px;
+  min-width: 110px;
 }
 
-.ml-type-toggle {
-  display: inline-flex;
-  border: 1px solid var(--border-soft, #e2e8f0);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.ml-type-btn {
-  appearance: none;
-  border: none;
-  background: var(--surface, #fff);
-  color: var(--text-muted, #64748b);
-  padding: 7px 12px;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.ml-type-btn.is-active {
-  background: var(--brand, #4f8ef7);
-  color: #fff;
+.ml-control--lib {
+  min-width: 140px;
 }
 
 .ml-search {
@@ -1111,6 +1102,11 @@ const subtitle = (item: MediaLibraryItem) => {
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.ml-topbar__primary .ml-search {
+  flex: 1 1 200px;
+  min-width: 160px;
 }
 
 @media (max-width: 640px) {
