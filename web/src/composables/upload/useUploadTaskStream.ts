@@ -8,6 +8,7 @@ export function useUploadTaskStream(deps: UploadTaskDeps, store: UploadTaskStore
   let uploadTaskPollingTimer: ReturnType<typeof setInterval> | null = null;
   let uploadTaskEventSource: EventSource | null = null;
   let uploadTaskSseReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let uploadTaskPollIntervalMs = 1000;
   const refreshedSuccessfulTaskKeys = new Set<string>();
   let pausedByHidden = false;
 
@@ -62,18 +63,32 @@ export function useUploadTaskStream(deps: UploadTaskDeps, store: UploadTaskStore
       store.uploadTasks.value = await uploadApi.listTasks();
       store.uploadTasks.value.forEach(store.ensureUploadTaskDisplayOrder);
       refreshCurrentDirectoryForNewSuccess(store.uploadTasks.value);
-      if (store.activeUploadTasks.value.length === 0 && !store.uploadTaskPanelOpen.value) {
-        stopUploadTaskPolling();
-      }
       await hooks.startScheduler();
     } catch (e) {
       console.error("获取上传任务失败:", e);
+    } finally {
+      adaptUploadTaskPolling();
     }
+  }
+
+  // 轮询节奏自适应：有活跃任务 1s 快速刷新；面板开着但空闲 3s 低频保活；否则停止。
+  function adaptUploadTaskPolling() {
+    const active = store.activeUploadTasks.value.length > 0;
+    const panelOpen = store.uploadTaskPanelOpen.value;
+    const target = active ? 1000 : panelOpen ? 3000 : 0;
+    if (target === 0) {
+      stopUploadTaskPolling();
+      return;
+    }
+    if (uploadTaskPollingTimer && target === uploadTaskPollIntervalMs) return;
+    uploadTaskPollIntervalMs = target;
+    stopUploadTaskPolling();
+    startUploadTaskPolling();
   }
 
   function startUploadTaskPolling() {
     if (uploadTaskPollingTimer) return;
-    uploadTaskPollingTimer = setInterval(() => void fetchUploadTasks(), 400);
+    uploadTaskPollingTimer = setInterval(() => void fetchUploadTasks(), uploadTaskPollIntervalMs);
   }
 
   function stopUploadTaskPolling() {

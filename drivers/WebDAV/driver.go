@@ -2,7 +2,9 @@ package webdav
 
 import (
 	"context"
+	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/studio-b12/gowebdav"
 
@@ -16,6 +18,10 @@ type Driver struct {
 	add Addition
 
 	client *gowebdav.Client
+
+	// redirectClient 复用直连模式的跳转探测客户端，避免每次解析直链新建连接池。
+	redirectMu     sync.Mutex
+	redirectClient *http.Client
 }
 
 var config = driver.Config{
@@ -161,6 +167,20 @@ func (d *Driver) ensureClient() (*gowebdav.Client, error) {
 		return nil, domain.Errorf(domain.CodeInternal, "WebDAV 客户端未初始化")
 	}
 	return d.client, nil
+}
+
+// redirectProbeClient 懒构建跳转探测客户端并复用（连接池保持 keep-alive）。
+func (d *Driver) redirectProbeClient() *http.Client {
+	d.redirectMu.Lock()
+	defer d.redirectMu.Unlock()
+	if d.redirectClient == nil {
+		d.redirectClient = &http.Client{
+			Transport:     buildTransport(d.add),
+			Timeout:       secondsOr(d.add.Timeout, defaultTimeout),
+			CheckRedirect: webDAVRedirectPolicy,
+		}
+	}
+	return d.redirectClient
 }
 
 // webdavPath 从 os.FileInfo 中提取 gowebdav File 的完整路径（若可获取）。

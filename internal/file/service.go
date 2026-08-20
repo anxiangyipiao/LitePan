@@ -415,6 +415,7 @@ func (s *Service) publishMutation(ctx context.Context, e eventbus.FileMutated) {
 	s.invalidateLookupIndexes(e.AccountID, e.ParentID, e.OldParentID)
 	if s.cache != nil {
 		cache.ApplyMutation(s.cache, e)
+		e.CacheHandled = true
 	}
 	if s.bus != nil {
 		s.bus.Publish(ctx, e)

@@ -273,6 +273,15 @@ export const useBrowserStore = defineStore("browser", () => {
     await loadFiles(opts);
   }
 
+  // 后端已把命中率并入 /files/list 响应；缺省（旧后端）时回退到独立接口。
+  function applyCacheHitRate(rate?: number) {
+    if (typeof rate === "number") {
+      cacheRate.value = `${rate}%`;
+      return;
+    }
+    void fetchCacheHitRate();
+  }
+
   async function fetchCacheHitRate() {
     try {
       const data = await publicApi.cacheHitRate();
@@ -299,7 +308,7 @@ export const useBrowserStore = defineStore("browser", () => {
       files.value = res.items;
       filesResortTick.value += 1;
       responseTime.value = `${Math.round(performance.now() - started)}ms`;
-      void fetchCacheHitRate();
+      applyCacheHitRate(res.hit_rate);
     } catch (e) {
       if (isStaleFileListRequest(requestSeq, accountId, parentId)) return;
       if (!silent) files.value = [];
@@ -347,7 +356,7 @@ export const useBrowserStore = defineStore("browser", () => {
       files.value = res.items;
       filesResortTick.value += 1;
       responseTime.value = `${Math.round(performance.now() - started)}ms`;
-      void fetchCacheHitRate();
+      applyCacheHitRate(res.hit_rate);
       toast.success(`强制刷新成功，获取到 ${res.items.length} 个项目`);
     } catch (e) {
       if (isStaleRefreshRequest(requestSeq, accountId, parentId)) return;

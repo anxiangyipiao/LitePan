@@ -41,7 +41,11 @@ func (h *Handler) listFiles(w http.ResponseWriter, r *http.Request) {
 	for _, it := range items {
 		dtos = append(dtos, fileToDTO(it))
 	}
-	writeOK(w, map[string]any{"parent_id": parent, "items": dtos})
+	writeOK(w, map[string]any{
+		"parent_id": parent,
+		"items":     dtos,
+		"hit_rate":  roundHitRate(hitRateFrom(h.listHits)),
+	})
 }
 
 func (h *Handler) fileInfo(w http.ResponseWriter, r *http.Request) {

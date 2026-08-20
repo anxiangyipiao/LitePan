@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"litepan/internal/domain"
+	"litepan/pkg/ttlcache"
 )
 
 // Manager 管理并复用静态配置未变化的驱动实例。
@@ -24,6 +25,9 @@ type Manager struct {
 
 	mu        sync.Mutex
 	instances map[int64]*managedInstance
+
+	// accCache 记忆化账号行，避免每个驱动调用都查一次 SQLite；Drop 时同步失效。
+	accCache *ttlcache.Cache[int64, *domain.Account]
 }
 
 type managedInstance struct {
@@ -44,7 +48,21 @@ func NewManager(repo domain.AccountRepository, authStates domain.AuthStateReposi
 		log:        log,
 		delays:     NewDelayController(),
 		instances:  make(map[int64]*managedInstance),
+		accCache:   ttlcache.New[int64, *domain.Account](60*time.Second, 512),
 	}
+}
+
+// account 带 TTL 缓存的账号行读取；账号配置变更最多延迟 60s 触发驱动重建（Drop 会立即失效）。
+func (m *Manager) account(ctx context.Context, accountID int64) (*domain.Account, error) {
+	if acc, ok := m.accCache.Get(accountID); ok {
+		return acc, nil
+	}
+	acc, err := m.repo.Get(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	m.accCache.Set(accountID, acc)
+	return acc, nil
 }
 
 // SetAuthPersistHook 注册认证凭证写回后的回调（认证子系统用于同步状态机）。
@@ -54,7 +72,7 @@ func (m *Manager) SetAuthPersistHook(fn func(ctx context.Context, accountID int6
 
 // Get 返回账号对应的驱动实例：配置未变则复用，变了则重建。
 func (m *Manager) Get(ctx context.Context, accountID int64) (Driver, error) {
-	acc, err := m.repo.Get(ctx, accountID)
+	acc, err := m.account(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -228,6 +246,7 @@ func (m *Manager) persistAuth(ctx context.Context, accountID int64, creds domain
 
 // Drop 丢弃某账号的缓存实例（账号配置变更/删除时调用）。
 func (m *Manager) Drop(ctx context.Context, accountID int64) {
+	m.accCache.Delete(accountID)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if inst, ok := m.instances[accountID]; ok {

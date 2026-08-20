@@ -90,7 +90,9 @@ func saveUploadTemp(dir string, src io.Reader, name string) (string, int64, erro
 		return "", 0, domain.Wrap(domain.CodeInternal, err)
 	}
 	defer out.Close()
-	n, err := io.Copy(out, src)
+	// 大文件：1MB 缓冲替代 io.Copy 默认 32KB，减少 copy 循环次数。
+	buf := make([]byte, 1<<20)
+	n, err := io.CopyBuffer(out, src, buf)
 	if err != nil {
 		_ = os.Remove(path)
 		return "", 0, domain.Wrap(domain.CodeInternal, err)

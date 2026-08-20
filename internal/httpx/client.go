@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	DefaultTimeout        = 30 * time.Second
-	defaultIdleConnTimeout = 90 * time.Second
+	DefaultTimeout             = 30 * time.Second
+	defaultIdleConnTimeout     = 90 * time.Second
+	defaultMaxIdleConnsPerHost = 16
 )
 
 type ClientOptions struct {
@@ -38,6 +39,13 @@ func NewClient(opts ClientOptions) *http.Client {
 	if opts.DisableKeepAlives {
 		tr.DisableKeepAlives = true
 		tr.MaxIdleConnsPerHost = 0
+	} else if tr.MaxIdleConnsPerHost < defaultMaxIdleConnsPerHost {
+		// 默认克隆自 http.DefaultTransport（MaxIdleConnsPerHost=2），
+		// 同一账号高并发/并行 Range 时连接被频繁关闭重建，提升空闲上限复用连接。
+		tr.MaxIdleConnsPerHost = defaultMaxIdleConnsPerHost
+	}
+	if tr.MaxIdleConns > 0 && tr.MaxIdleConns < 2*defaultMaxIdleConnsPerHost {
+		tr.MaxIdleConns = 2 * defaultMaxIdleConnsPerHost
 	}
 	if opts.Proxy != nil {
 		tr.Proxy = opts.Proxy

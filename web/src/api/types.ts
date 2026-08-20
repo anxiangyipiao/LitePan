@@ -81,6 +81,8 @@ export interface FileItem {
 export interface FileListResult {
   parent_id: string;
   items: FileItem[];
+  /** 目录缓存命中率（后端已合并进列表响应，避免额外请求） */
+  hit_rate?: number;
 }
 
 export interface FileDeletePayload {

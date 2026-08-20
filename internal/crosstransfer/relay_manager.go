@@ -262,13 +262,16 @@ func (m *RelayManager) snapshotPayload() string {
 }
 
 func (m *RelayManager) broadcast() {
-	payload := m.snapshotPayload()
 	m.subscribersMu.Lock()
 	subs := make([]chan string, 0, len(m.subscribers))
 	for ch := range m.subscribers {
 		subs = append(subs, ch)
 	}
 	m.subscribersMu.Unlock()
+	if len(subs) == 0 {
+		return
+	}
+	payload := m.snapshotPayload()
 	for _, ch := range subs {
 		select {
 		case ch <- payload:

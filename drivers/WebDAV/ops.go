@@ -83,11 +83,7 @@ func (d *Driver) proxyDownloadHeaders(ua string) http.Header {
 }
 
 func (d *Driver) resolveAnonymousRedirect(ctx context.Context, resourceURL, ua string) (string, bool) {
-	client := &http.Client{
-		Transport:     buildTransport(d.add),
-		Timeout:       secondsOr(d.add.Timeout, defaultTimeout),
-		CheckRedirect: webDAVRedirectPolicy,
-	}
+	client := d.redirectProbeClient()
 	redirectURL := d.followRedirectURL(ctx, client, resourceURL, ua, true)
 	if redirectURL == "" || redirectURL == resourceURL {
 		return "", false

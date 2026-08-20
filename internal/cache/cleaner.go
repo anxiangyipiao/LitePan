@@ -27,6 +27,10 @@ func (cl *Cleaner) Register(bus *eventbus.Bus) {
 }
 
 func (cl *Cleaner) handle(e eventbus.FileMutated) {
+	// 发布方已同步失效（file.Service.publishMutation）时跳过，避免重复 O(n) 扫描。
+	if e.CacheHandled {
+		return
+	}
 	ApplyMutation(cl.cache, e)
 }
 

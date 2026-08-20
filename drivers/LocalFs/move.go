@@ -187,7 +187,9 @@ func copyFile(src, dst string, mode os.FileMode) error {
 		return err
 	}
 	defer out.Close()
-	if _, err := io.Copy(out, in); err != nil {
+	// 大文件：1MB 缓冲替代 io.Copy 默认 32KB，减少 copy 循环次数。
+	buf := make([]byte, 1<<20)
+	if _, err := io.CopyBuffer(out, in, buf); err != nil {
 		return err
 	}
 	return out.Close()

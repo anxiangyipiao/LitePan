@@ -181,15 +181,27 @@ export function useOfflineDownloads(deps: Deps) {
     }
   }
 
+  // 轮询节奏：10s 低频 + 后台标签页暂停；refresh=false 只读任务状态，避免每 10s 强制驱动刷新。
   function ensurePolling() {
     if (pollTimer !== undefined) window.clearTimeout(pollTimer);
     pollTimer = undefined;
+    if (document.hidden) return;
     if (activeTasks.value.length === 0) return;
     pollTimer = window.setTimeout(async () => {
       pollTimer = undefined;
-      await fetchTasks(true, true);
-    }, 5000);
+      await fetchTasks(false, true);
+    }, 10000);
   }
+
+  function onOfflineVisibilityChange() {
+    if (document.hidden) {
+      if (pollTimer !== undefined) window.clearTimeout(pollTimer);
+      pollTimer = undefined;
+    } else if (activeTasks.value.length > 0) {
+      void fetchTasks(false, true);
+    }
+  }
+  document.addEventListener("visibilitychange", onOfflineVisibilityChange);
 
   function statusText(task: OfflineDownloadTask) {
     switch (task.status) {
@@ -213,6 +225,7 @@ export function useOfflineDownloads(deps: Deps) {
 
   onUnmounted(() => {
     if (pollTimer !== undefined) window.clearTimeout(pollTimer);
+    document.removeEventListener("visibilitychange", onOfflineVisibilityChange);
   });
 
   return {

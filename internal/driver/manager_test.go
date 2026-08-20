@@ -90,6 +90,8 @@ func TestManagerRebuildsOnConfigChange(t *testing.T) {
 	if err := st.Accounts.Update(ctx, &acc); err != nil {
 		t.Fatalf("update: %v", err)
 	}
+	// 生产路径：account.Service.Update → dropDriver → Manager.Drop 失效账号行与实例缓存。
+	mgr.Drop(ctx, id)
 	d2, err := mgr.Get(ctx, id)
 	if err != nil {
 		t.Fatalf("get after change: %v", err)

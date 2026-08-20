@@ -27,6 +27,12 @@ func (m *Manager) SnapshotPayload() []byte {
 }
 
 func (m *Manager) broadcast() {
+	m.subMu.Lock()
+	empty := len(m.subs) == 0
+	m.subMu.Unlock()
+	if empty {
+		return
+	}
 	payload := m.SnapshotPayload()
 	m.subMu.Lock()
 	defer m.subMu.Unlock()

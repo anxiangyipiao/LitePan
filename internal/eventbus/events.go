@@ -28,6 +28,10 @@ type FileMutated struct {
 	ModTime     time.Time
 	FileIDs     []string
 	OldParentID string
+
+	// CacheHandled 表示发布方已同步执行过缓存失效（如 file.Service.publishMutation），
+	// 订阅方（cache.Cleaner）应跳过重复 ApplyMutation，避免失效两遍。
+	CacheHandled bool
 }
 
 // OfflineDownloadCompleted 离线下载任务首次进入成功状态。
