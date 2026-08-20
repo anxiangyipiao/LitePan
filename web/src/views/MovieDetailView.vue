@@ -69,9 +69,11 @@ function playEpisode(ep: MediaLibraryEpisode) {
     </div>
 
     <template v-else-if="detail">
-      <RouterLink to="/movies" class="detail-back" title="返回影视">
-        ← 返回影视
-      </RouterLink>
+      <div class="detail-topbar">
+        <RouterLink to="/movies" class="detail-back" title="返回影视">
+          ← 返回影视
+        </RouterLink>
+      </div>
 
       <div v-if="detail.backdrop_url" class="detail-hero" :style="{ backgroundImage: `url(${detail.backdrop_url})` }">
         <div class="detail-hero__shade" />
@@ -84,8 +86,15 @@ function playEpisode(ep: MediaLibraryEpisode) {
             :src="detail.poster_url"
             :alt="detail.title"
             class="detail-poster"
+            :class="{ 'detail-poster--lift': detail.backdrop_url }"
           />
-          <div v-else class="detail-poster detail-poster--empty">{{ detail.title.slice(0, 1) }}</div>
+          <div
+            v-else
+            class="detail-poster detail-poster--empty"
+            :class="{ 'detail-poster--lift': detail.backdrop_url }"
+          >
+            {{ detail.title.slice(0, 1) }}
+          </div>
 
           <div class="detail-info">
             <h1 class="detail-title">{{ detail.title }}</h1>
@@ -185,18 +194,19 @@ function playEpisode(ep: MediaLibraryEpisode) {
   color: var(--danger);
 }
 
+.detail-topbar {
+  padding: 14px 20px 6px;
+  background: var(--bg);
+}
+
 .detail-back {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   display: inline-flex;
   align-items: center;
-  padding: 14px 20px 8px;
+  gap: 6px;
   color: var(--text-regular);
   text-decoration: none;
   font-size: 14px;
   font-weight: 600;
-  background: var(--bg);
 }
 
 .detail-back:hover {
@@ -219,8 +229,7 @@ function playEpisode(ep: MediaLibraryEpisode) {
 .detail-body {
   max-width: 900px;
   margin: 0 auto;
-  padding: 0 20px 32px;
-  margin-top: -8px;
+  padding: 16px 20px 32px;
 }
 
 .detail-main {
@@ -237,13 +246,17 @@ function playEpisode(ep: MediaLibraryEpisode) {
   object-fit: cover;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
   background: var(--surface-sunken);
-  margin-top: -72px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 48px;
   font-weight: 700;
   color: var(--text-muted);
+}
+
+/* 仅当存在背景图时让海报上移叠在背景图底部（无背景图时保持原位，避免盖住返回栏） */
+.detail-poster--lift {
+  margin-top: -72px;
 }
 
 .detail-info {

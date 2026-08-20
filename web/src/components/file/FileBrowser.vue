@@ -24,6 +24,7 @@ import { publicApi } from "@/api/public";
 import DriveSidebar from "./DriveSidebar.vue";
 import BreadcrumbNav from "./BreadcrumbNav.vue";
 import FavoritesSidebar from "./FavoritesSidebar.vue";
+import FavoritesDropdown from "./FavoritesDropdown.vue";
 import FileToolbar from "./FileToolbar.vue";
 import FileTable from "./FileTable.vue";
 import FilePreviewHost from "./FilePreviewHost.vue";
@@ -72,7 +73,6 @@ const favoriteNameInputRef = ref<FocusableInput | null>(null);
 const favoriteNameMode = ref<"create" | "rename">("create");
 const favoriteRenameTarget = ref<BrowserFavoriteItem | null>(null);
 const browserBootstrapping = ref(true);
-const favoritesTransitionReady = ref(false);
 const nameAlignOpen = ref(false);
 const nameAlignLoading = ref(false);
 const nameAlignApplying = ref(false);
@@ -194,7 +194,6 @@ watch(
     }
   },
 );
-const showFavorites = computed(() => isAdmin.value && favoritesOpen.value);
 const currentCrumbIds = computed(() => breadcrumb.value.map((item) => item.id));
 const currentFolderFavorited = computed(
   () =>
@@ -265,17 +264,6 @@ function canDropOnFolder(file: FileItem) {
   return file.is_dir && canDropToParent(file.id);
 }
 
-// 全局收藏跨账号，用 账号+文件夹ID 作为拖放目标键
-function favoriteDropKey(item: BrowserFavoriteItem) {
-  return `${item.account_id ?? 0}:${item.id}`;
-}
-
-function canDropOnFavorite(item: BrowserFavoriteItem) {
-  // 仅当前账号的收藏可作为拖放目标，跨盘收藏不接受文件拖入
-  if (item.account_id != null && item.account_id !== currentAccountId.value) return false;
-  return canDropToParent(item.id, item.crumbs.map((crumb) => crumb.id));
-}
-
 function startDragMove(file: FileItem) {
   if (!isAdmin.value) return;
   dragMove.active = true;
@@ -309,30 +297,6 @@ async function handleFolderDrop(file: FileItem) {
   const targets = [...dragMove.files];
   resetDragMove();
   await fileActions.moveTargetsToParent(targets, file.id);
-}
-
-function handleFavoriteDragEnter(item: BrowserFavoriteItem) {
-  if (!canDropOnFavorite(item)) {
-    if (dragMove.targetId === favoriteDropKey(item)) dragMove.targetId = "";
-    return;
-  }
-  dragMove.targetId = favoriteDropKey(item);
-}
-
-function handleFavoriteDragLeave(item: BrowserFavoriteItem) {
-  if (dragMove.targetId === favoriteDropKey(item)) {
-    dragMove.targetId = "";
-  }
-}
-
-async function handleFavoriteDrop(item: BrowserFavoriteItem) {
-  if (!canDropOnFavorite(item)) {
-    resetDragMove();
-    return;
-  }
-  const targets = [...dragMove.files];
-  resetDragMove();
-  await fileActions.moveTargetsToParent(targets, item.id);
 }
 
 async function handleGenerateCurrentDirectoryStrm() {
@@ -834,9 +798,6 @@ onMounted(async () => {
   await store.loadFavorites({ silent: true });
   browserBootstrapping.value = false;
   await nextTick();
-  window.requestAnimationFrame(() => {
-    favoritesTransitionReady.value = true;
-  });
   void loadInitialTaskState();
 });
 
@@ -956,6 +917,24 @@ onUnmounted(() => {
           @toggle-favorites="store.toggleFavoritesOpen"
         />
       </div>
+
+      <!-- 收藏夹下拉面板（Edge 式：点工具栏按钮弹出） -->
+      <FavoritesDropdown
+        v-if="isAdmin && favoritesOpen"
+        class="browser__favorites-dropdown"
+        :items="favorites"
+        :accounts="accounts"
+        :current-crumb-ids="currentCrumbIds"
+        :current-account-id="currentAccountId"
+        :current-folder-favorited="currentFolderFavorited"
+        @add-current="openFavoriteNameModal"
+        @collapse="store.toggleFavoritesOpen"
+        @open="store.openFavorite"
+        @rename="openFavoriteRenameModal"
+        @remove="store.removeFavorite"
+        @move="store.moveFavorite"
+      />
+
       <div v-if="strmPrompt.showPrompt.value && !strmGenerating" class="strm-prompt-bar">
         <div class="strm-prompt-bar__main">
           <span class="strm-prompt-bar__dot" aria-hidden="true" />
@@ -979,36 +958,7 @@ onUnmounted(() => {
           </button>
         </span>
       </div>
-      <div
-        class="browser__content"
-        :class="{
-          'browser__content--with-favorites': showFavorites,
-          'browser__content--favorites-transition-ready': favoritesTransitionReady,
-        }"
-      >
-        <div class="browser__favorites-slot">
-          <FavoritesSidebar
-            v-if="isAdmin"
-            :items="favorites"
-            :accounts="accounts"
-            :current-crumb-ids="currentCrumbIds"
-            :current-account-id="currentAccountId"
-            :current-folder-favorited="currentFolderFavorited"
-            :drag-active="dragMove.active"
-            :active-drop-target-id="dragMove.targetId"
-            :can-drop-on-favorite="canDropOnFavorite"
-            @add-current="openFavoriteNameModal"
-            @collapse="store.toggleFavoritesOpen"
-            @open="store.openFavorite"
-            @rename="openFavoriteRenameModal"
-            @remove="store.removeFavorite"
-            @move="store.moveFavorite"
-            @drag-enter="handleFavoriteDragEnter"
-            @drag-leave="handleFavoriteDragLeave"
-            @drop="handleFavoriteDrop"
-          />
-        </div>
-
+      <div class="browser__content">
         <div class="browser__main">
           <FileTable
             :files="files"
@@ -1180,6 +1130,13 @@ onUnmounted(() => {
   flex: 1 1 auto;
   min-width: 0;
 }
+.browser__favorites-dropdown {
+  position: absolute;
+  top: 62px;
+  right: 16px;
+  z-index: 60;
+}
+
 .browser__panel-top :deep(.file-toolbar) {
   flex: 0 1 auto;
   padding: 0;
