@@ -278,6 +278,19 @@ func (p *Planner) groupEntries(entries []batchEntry) (map[groupKey][]batchEntry,
 			key.setYear(year)
 			key.setSeason(movieParsed.Season)
 			key.setEpisode(movieParsed.Episode)
+		} else if p.ScatterMoviePerFile && !isTV {
+			isoTitle := scatteredMovieIsolationBase(entry.item.Name, fileParsed)
+			if isoTitle == "" {
+				isoTitle = strings.TrimSpace(fileParsed.Title)
+			}
+			if isoTitle == "" {
+				isoTitle = strings.TrimSpace(entry.item.Name)
+			}
+			key = groupKey{
+				mediaKind: "movie",
+				title:     isoTitle,
+			}
+			key.setYear(fileParsed.Year)
 		} else {
 			key = groupKey{
 				mediaKind: "movie",
@@ -314,6 +327,19 @@ func shouldPreferStructuredMovieDir(fileParsed, dirParsed rules.ParsedMedia, anc
 		}
 	}
 	return true
+}
+
+func scatteredMovieIsolationBase(fileName string, parsed rules.ParsedMedia) string {
+	stem, _ := rules.SplitBasename(fileName)
+	stem = rules.StripReleaseSitePrefix(stem)
+	base := rules.SanitizeFilename(strings.TrimSpace(stem))
+	if base != "" {
+		return base
+	}
+	if t := strings.TrimSpace(parsed.Title); t != "" {
+		return t
+	}
+	return strings.TrimSpace(fileName)
 }
 
 func sameLooseTitle(a, b string) bool {

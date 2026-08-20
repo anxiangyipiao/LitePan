@@ -11,6 +11,7 @@ export interface MediaOrganizeTaskConfig {
   use_tmdb?: boolean;
   overwrite_existing?: boolean;
   recursive?: boolean;
+  scatter_movie_per_file?: boolean;
   account_id?: string | number;
 }
 
@@ -109,6 +110,7 @@ export type MediaOrganizeTaskInput = {
   use_tmdb: boolean;
   overwrite_existing?: boolean;
   recursive?: boolean;
+  scatter_movie_per_file?: boolean;
 };
 
 export function fetchMediaOrganizeTasks() {

@@ -20,10 +20,21 @@ func TaskConfigFromMap(cfg map[string]any) TaskConfig {
 		UseTMDB:           rules.SettingBool(cfg["use_tmdb"], false),
 		OverwriteExisting: rules.SettingBool(cfg["overwrite_existing"], false),
 		Recursive:            rules.SettingBool(cfg["recursive"], false),
+		ScatterMoviePerFile:  scatterMoviePerFileFromMap(cfg),
 		SeasonFolderTemplate: strings.TrimSpace(strMap(cfg, "season_folder_template")),
 		FileExtensions:       strings.TrimSpace(strMap(cfg, "file_extensions")),
 		MetadataExtensions:   strings.TrimSpace(strMap(cfg, "metadata_extensions")),
 	}
+}
+
+func scatterMoviePerFileFromMap(cfg map[string]any) bool {
+	if cfg == nil {
+		return true
+	}
+	if _, ok := cfg["scatter_movie_per_file"]; !ok {
+		return true
+	}
+	return rules.SettingBool(cfg["scatter_movie_per_file"], true)
 }
 
 func strMap(m map[string]any, key string) string {

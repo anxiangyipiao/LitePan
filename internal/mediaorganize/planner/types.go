@@ -38,6 +38,7 @@ type TaskConfig struct {
 	UseTMDB           bool
 	OverwriteExisting bool
 	Recursive            bool
+	ScatterMoviePerFile  bool
 	SeasonFolderTemplate string
 	FileExtensions       string
 	MetadataExtensions   string

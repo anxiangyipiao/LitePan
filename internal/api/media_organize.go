@@ -26,33 +26,35 @@ type mediaOrganizeTaskDTO struct {
 }
 
 type mediaOrganizeTaskCreateDTO struct {
-	TaskName          string `json:"task_name"`
-	AccountID         int64  `json:"account_id"`
-	TargetDirectory   string `json:"target_directory"`
-	TargetDirectoryID string `json:"target_directory_id"`
-	ActionType        string `json:"action_type"`
-	TargetRoot        string `json:"target_root"`
-	TargetRootID      string `json:"target_root_id"`
-	MediaType         string `json:"media_type"`
-	RenameMarker      string `json:"rename_marker"`
-	UseTmdb           bool   `json:"use_tmdb"`
-	OverwriteExisting bool   `json:"overwrite_existing"`
-	Recursive         bool   `json:"recursive"`
+	TaskName             string `json:"task_name"`
+	AccountID            int64  `json:"account_id"`
+	TargetDirectory      string `json:"target_directory"`
+	TargetDirectoryID    string `json:"target_directory_id"`
+	ActionType           string `json:"action_type"`
+	TargetRoot           string `json:"target_root"`
+	TargetRootID         string `json:"target_root_id"`
+	MediaType            string `json:"media_type"`
+	RenameMarker         string `json:"rename_marker"`
+	UseTmdb              bool   `json:"use_tmdb"`
+	OverwriteExisting    bool   `json:"overwrite_existing"`
+	Recursive            bool   `json:"recursive"`
+	ScatterMoviePerFile  *bool  `json:"scatter_movie_per_file"`
 }
 
 type mediaOrganizeTaskUpdateDTO struct {
-	TaskName          *string `json:"task_name"`
-	AccountID         *int64  `json:"account_id"`
-	TargetDirectory   *string `json:"target_directory"`
-	TargetDirectoryID *string `json:"target_directory_id"`
-	ActionType        *string `json:"action_type"`
-	TargetRoot        *string `json:"target_root"`
-	TargetRootID      *string `json:"target_root_id"`
-	MediaType         *string `json:"media_type"`
-	RenameMarker      *string `json:"rename_marker"`
-	UseTmdb           *bool   `json:"use_tmdb"`
-	OverwriteExisting *bool   `json:"overwrite_existing"`
-	Recursive         *bool   `json:"recursive"`
+	TaskName             *string `json:"task_name"`
+	AccountID            *int64  `json:"account_id"`
+	TargetDirectory      *string `json:"target_directory"`
+	TargetDirectoryID    *string `json:"target_directory_id"`
+	ActionType           *string `json:"action_type"`
+	TargetRoot           *string `json:"target_root"`
+	TargetRootID         *string `json:"target_root_id"`
+	MediaType            *string `json:"media_type"`
+	RenameMarker         *string `json:"rename_marker"`
+	UseTmdb              *bool   `json:"use_tmdb"`
+	OverwriteExisting    *bool   `json:"overwrite_existing"`
+	Recursive            *bool   `json:"recursive"`
+	ScatterMoviePerFile  *bool   `json:"scatter_movie_per_file"`
 }
 
 func (h *Handler) listMediaOrganizeTasks(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +86,7 @@ func (h *Handler) createMediaOrganizeTask(w http.ResponseWriter, r *http.Request
 	if actionType == "" {
 		actionType = "move"
 	}
-	cfg := mediaorganize.NormalizeTaskConfig(map[string]any{
+	m := map[string]any{
 		"task_name":            strings.TrimSpace(in.TaskName),
 		"account_id":           strconv.FormatInt(in.AccountID, 10),
 		"target_directory":     in.TargetDirectory,
@@ -97,7 +99,11 @@ func (h *Handler) createMediaOrganizeTask(w http.ResponseWriter, r *http.Request
 		"use_tmdb":      in.UseTmdb,
 		"overwrite_existing":   in.OverwriteExisting,
 		"recursive":            in.Recursive,
-	})
+	}
+	if in.ScatterMoviePerFile != nil {
+		m["scatter_movie_per_file"] = *in.ScatterMoviePerFile
+	}
+	cfg := mediaorganize.NormalizeTaskConfig(m)
 	cfgBytes, _ := json.Marshal(cfg)
 	task, err := h.mediaOrganize.CreateTask(r.Context(), &domain.MediaOrganizeTask{
 		TaskName:  strings.TrimSpace(in.TaskName),
@@ -154,6 +160,7 @@ func (h *Handler) updateMediaOrganizeTask(w http.ResponseWriter, r *http.Request
 	applyOptionalBool(cfg, "use_tmdb", in.UseTmdb)
 	applyOptionalBool(cfg, "overwrite_existing", in.OverwriteExisting)
 	applyOptionalBool(cfg, "recursive", in.Recursive)
+	applyOptionalBool(cfg, "scatter_movie_per_file", in.ScatterMoviePerFile)
 
 	cfg = mediaorganize.NormalizeTaskConfig(cfg)
 	cfgBytes, _ := json.Marshal(cfg)

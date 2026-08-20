@@ -95,6 +95,7 @@ type TaskForm = {
   rename_marker: string;
   use_tmdb: string;
   recursive: boolean;
+  scatter_movie_per_file: string;
 };
 
 const emptyForm = (): TaskForm => ({
@@ -109,6 +110,7 @@ const emptyForm = (): TaskForm => ({
   rename_marker: "",
   use_tmdb: "true",
   recursive: true,
+  scatter_movie_per_file: "true",
 });
 
 const tasks = ref<MediaOrganizeTask[]>([]);
@@ -260,6 +262,7 @@ function openEdit(task: MediaOrganizeTask) {
     rename_marker: cfg.rename_marker || "",
     use_tmdb: cfg.use_tmdb !== false ? "true" : "false",
     recursive: cfg.recursive !== false,
+    scatter_movie_per_file: cfg.scatter_movie_per_file !== false ? "true" : "false",
   });
   dialogOpen.value = true;
 }
@@ -304,6 +307,7 @@ function buildPayload(): MediaOrganizeTaskInput {
     rename_marker: form.rename_marker,
     use_tmdb: form.use_tmdb === "true",
     recursive: form.recursive,
+    scatter_movie_per_file: form.scatter_movie_per_file === "true",
   };
 }
 
@@ -908,7 +912,11 @@ defineExpose({
           <FormField label="使用 TMDB 匹配">
             <AppSelect v-model="form.use_tmdb" :options="boolOptions" />
           </FormField>
+          <FormField label="散落电影按文件建夹">
+            <AppSelect v-model="form.scatter_movie_per_file" :options="boolOptions" />
+          </FormField>
         </div>
+        <p class="form-hint">开启后：同一目录下多部无关电影各自新建同名文件夹（STARS-182/STARS-182.mp4），避免互相干扰。</p>
 
         <div class="modal-form__footer">
           <AppButton type="button" variant="primary" :disabled="submitting" @click="submitTask">

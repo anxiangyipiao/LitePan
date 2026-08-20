@@ -15,6 +15,7 @@ func NormalizeTaskConfig(config map[string]any) map[string]any {
 		"use_tmdb":               true,
 		"overwrite_existing":     false,
 		"recursive":              true,
+		"scatter_movie_per_file": true,
 	}
 	if config == nil {
 		return defaults

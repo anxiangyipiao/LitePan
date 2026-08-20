@@ -185,7 +185,13 @@ func (p *Planner) planGroup(key groupKey, items []batchEntry, alignDefaults map[
 
 	targetWorkRef := ""
 	if p.actionType == "move" {
-		targetWorkRef = p.ensureWorkDirAction(key, newFolderName, items, promotedMoveRef)
+		if p.ScatterMoviePerFile && key.dirID == "" && key.mediaKind == "movie" && len(items) == 1 && !isTV {
+			// 散落电影按文件建夹：每个文件独立一个同名子文件夹（move 模式）
+			isoFolder := scatteredFolderNameForEntry(items[0])
+			targetWorkRef = p.ensureWorkDirActionForScatter(key, isoFolder, items[0])
+		} else {
+			targetWorkRef = p.ensureWorkDirAction(key, newFolderName, items, promotedMoveRef)
+		}
 	}
 
 	seasonDirCache := map[int]string{}
@@ -301,8 +307,16 @@ func (p *Planner) planGroup(key groupKey, items []batchEntry, alignDefaults map[
 			mode = "rename"
 			srcDirName := p.scannedDirNames[entry.sourceDirID]
 			needsTVSeasonPlacement := p.tvFileNeedsSeasonFolderPlacement(key, entry)
+			isScatteredMovieIsolation := p.ScatterMoviePerFile && key.dirID == "" && key.mediaKind == "movie" && !isTV
 			isScattered := entry.sourceDirID == p.parentID || rules.IsGenericMediaDir(srcDirName)
-			if needsTVSeasonPlacement {
+			if isScatteredMovieIsolation {
+				isoFolder := scatteredFolderNameForEntry(entry)
+				subWorkRef := p.ensureDirAction(entry.sourceDirID, isoFolder)
+				targetParent = subWorkRef
+				if strings.HasPrefix(subWorkRef, "ref:") {
+					deps = []string{subWorkRef[4:]}
+				}
+			} else if needsTVSeasonPlacement {
 				workDirRef := p.renameWorkDirRefForSeasonPlacement(key, entry, newFolderName)
 				targetParent, deps = p.resolveTargetParentForMove(workDirRef, isTV, currentSeason, seasonDirCache)
 			} else if isScattered {
@@ -535,6 +549,35 @@ func (p *Planner) planMetaFollowers(entry batchEntry, newBase, ext, dependAction
 		"action_type":   p.actionType,
 	})
 	p.diagnostics["meta_followers"] = followers
+}
+
+func scatteredFolderNameForEntry(entry batchEntry) string {
+	stem, _ := rules.SplitBasename(entry.item.Name)
+	stem = rules.StripReleaseSitePrefix(stem)
+	return rules.SanitizeFilename(strings.TrimSpace(stem))
+}
+
+func (p *Planner) ensureWorkDirActionForScatter(key groupKey, workDirName string, sample batchEntry) string {
+	if p.actionType != "move" || workDirName == "" {
+		return ""
+	}
+	categoryAncestors := p.categoryAncestors(key, []batchEntry{sample})
+	parentRef := p.buildTargetCategoryParentRef(categoryAncestors)
+	ref := p.ensureDirAction(parentRef, workDirName)
+	if strings.HasPrefix(ref, "ref:") {
+		for i := range p.actions {
+			a := &p.actions[i]
+			if a.ID == ref[4:] {
+				if a.Metadata == nil {
+					a.Metadata = map[string]any{}
+				}
+				a.Metadata["is_work_dir"] = true
+				a.Metadata["scatter_isolation"] = true
+				break
+			}
+		}
+	}
+	return ref
 }
 
 func (p *Planner) findExistingTMDBIDInGroup(items []batchEntry) string {
