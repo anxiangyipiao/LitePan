@@ -16,7 +16,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const indexSchemaVersion = "1"
+const indexSchemaVersion = "2"
 
 // TaskIndexPath 返回任务刮削索引库路径：data/strmscrape/{task_id}.sqlite
 func TaskIndexPath(dataDir string, taskID int64) string {
@@ -94,10 +94,43 @@ CREATE TABLE IF NOT EXISTS items (
   ep_tmdb INTEGER NOT NULL DEFAULT 0,
   ep_scraped INTEGER NOT NULL DEFAULT 0,
   tv_state TEXT NOT NULL DEFAULT '',
-  added_at TEXT NOT NULL DEFAULT ''
+  added_at TEXT NOT NULL DEFAULT '',
+  genres_csv TEXT NOT NULL DEFAULT '',
+  actors_csv TEXT NOT NULL DEFAULT ''
 );
 `)
-	return err
+	if err != nil {
+		return err
+	}
+	_ = migrateIndexFacets(db)
+	return nil
+}
+
+func migrateIndexFacets(db *sql.DB) error {
+	cols := map[string]bool{}
+	rows, err := db.Query(`SELECT name FROM pragma_table_info('items')`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			continue
+		}
+		cols[name] = true
+	}
+	if !cols["genres_csv"] {
+		if _, err := db.Exec(`ALTER TABLE items ADD COLUMN genres_csv TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+	if !cols["actors_csv"] {
+		if _, err := db.Exec(`ALTER TABLE items ADD COLUMN actors_csv TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 func (s *Service) indexFileExists(taskID int64) bool {
@@ -234,12 +267,14 @@ func upsertItemTx(tx *sql.Tx, it Item, posterRel string) error {
 	if it.Year != nil {
 		year = *it.Year
 	}
+	genresCSV := strings.Join(it.Genres, "\x1f")
+	actorsCSV := strings.Join(it.Actors, "\x1f")
 	_, err := tx.Exec(`
 INSERT INTO items (
   id, rel_dir, strm_name, title, year, media_type, status,
   has_nfo, has_poster, has_pending, tmdb_id, poster_rel, folder_name,
-  file_count, ep_local, ep_tmdb, ep_scraped, tv_state, added_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  file_count, ep_local, ep_tmdb, ep_scraped, tv_state, added_at, genres_csv, actors_csv
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
   rel_dir=excluded.rel_dir,
   strm_name=excluded.strm_name,
@@ -258,11 +293,13 @@ ON CONFLICT(id) DO UPDATE SET
   ep_tmdb=excluded.ep_tmdb,
   ep_scraped=excluded.ep_scraped,
   tv_state=excluded.tv_state,
-  added_at=excluded.added_at
+  added_at=excluded.added_at,
+  genres_csv=excluded.genres_csv,
+  actors_csv=excluded.actors_csv
 `, it.ID, it.RelDir, it.StrmName, it.Title, year, it.MediaType, it.Status,
 		boolToInt(it.HasNFO), boolToInt(it.HasPoster), boolToInt(it.HasPending),
 		it.TMDBID, posterRel, it.FolderName, it.FileCount, it.EpLocal, it.EpTMDB,
-		it.EpScraped, it.TVState, it.AddedAt)
+		it.EpScraped, it.TVState, it.AddedAt, genresCSV, actorsCSV)
 	return err
 }
 
@@ -303,8 +340,8 @@ func (s *Service) upsertIndexItem(ctx context.Context, strmTaskID int64, root st
 }
 
 func buildItemListWhere(query ItemListQuery) (string, []any) {
-	clauses := make([]string, 0, 4)
-	args := make([]any, 0, 8)
+	clauses := make([]string, 0, 6)
+	args := make([]any, 0, 10)
 	if query.Keyword != "" {
 		kw := "%" + strings.ToLower(query.Keyword) + "%"
 		clauses = append(clauses, `(LOWER(title) LIKE ? OR LOWER(folder_name) LIKE ? OR LOWER(strm_name) LIKE ? OR LOWER(tmdb_id) LIKE ?)`)
@@ -321,6 +358,14 @@ func buildItemListWhere(query ItemListQuery) (string, []any) {
 	if query.TVState != "" {
 		clauses = append(clauses, `tv_state = ?`)
 		args = append(args, query.TVState)
+	}
+	if strings.TrimSpace(query.Genre) != "" {
+		clauses = append(clauses, `instr(chr(31) || genres_csv || chr(31), chr(31) || ? || chr(31)) > 0`)
+		args = append(args, strings.TrimSpace(query.Genre))
+	}
+	if strings.TrimSpace(query.Actor) != "" {
+		clauses = append(clauses, `instr(chr(31) || actors_csv || chr(31), chr(31) || ? || chr(31)) > 0`)
+		args = append(args, strings.TrimSpace(query.Actor))
 	}
 	if len(clauses) == 0 {
 		return "", nil
@@ -343,6 +388,23 @@ func itemListOrderBy(sort ItemListSort) string {
 	}
 }
 
+func splitCSV(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	parts := strings.Split(s, "\x1f")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if v := strings.TrimSpace(p); v != "" {
+			out = append(out, v)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // scanIndexItems 按行扫描索引条目，海报 URL 用索引库 meta 里记录的 root 重建。
 func scanIndexItems(rows *sql.Rows, root string) ([]Item, error) {
 	out := make([]Item, 0, 128)
@@ -350,17 +412,19 @@ func scanIndexItems(rows *sql.Rows, root string) ([]Item, error) {
 		var it Item
 		var year sql.NullInt64
 		var hasNFO, hasPoster, hasPending int
-		var posterRel string
+		var posterRel, genresCSV, actorsCSV string
 		if err := rows.Scan(
 			&it.ID, &it.RelDir, &it.StrmName, &it.Title, &year, &it.MediaType, &it.Status,
 			&hasNFO, &hasPoster, &hasPending, &it.TMDBID, &posterRel, &it.FolderName,
-			&it.FileCount, &it.EpLocal, &it.EpTMDB, &it.EpScraped, &it.TVState, &it.AddedAt,
+			&it.FileCount, &it.EpLocal, &it.EpTMDB, &it.EpScraped, &it.TVState, &it.AddedAt, &genresCSV, &actorsCSV,
 		); err != nil {
 			return nil, err
 		}
 		it.HasNFO = hasNFO != 0
 		it.HasPoster = hasPoster != 0
 		it.HasPending = hasPending != 0
+		it.Genres = splitCSV(genresCSV)
+		it.Actors = splitCSV(actorsCSV)
 		if year.Valid {
 			y := int(year.Int64)
 			it.Year = &y
@@ -378,16 +442,16 @@ func getIndexItemByID(db *sql.DB, root, id string) (*Item, error) {
 	row := db.QueryRow(`
 SELECT id, rel_dir, strm_name, title, year, media_type, status,
        has_nfo, has_poster, has_pending, tmdb_id, poster_rel, folder_name,
-       file_count, ep_local, ep_tmdb, ep_scraped, tv_state, added_at
+       file_count, ep_local, ep_tmdb, ep_scraped, tv_state, added_at, genres_csv, actors_csv
 FROM items WHERE id = ?`, id)
 	var it Item
 	var year sql.NullInt64
 	var hasNFO, hasPoster, hasPending int
-	var posterRel string
+	var posterRel, genresCSV, actorsCSV string
 	if err := row.Scan(
 		&it.ID, &it.RelDir, &it.StrmName, &it.Title, &year, &it.MediaType, &it.Status,
 		&hasNFO, &hasPoster, &hasPending, &it.TMDBID, &posterRel, &it.FolderName,
-		&it.FileCount, &it.EpLocal, &it.EpTMDB, &it.EpScraped, &it.TVState, &it.AddedAt,
+		&it.FileCount, &it.EpLocal, &it.EpTMDB, &it.EpScraped, &it.TVState, &it.AddedAt, &genresCSV, &actorsCSV,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, domain.Errorf(domain.CodeNotFound, "条目不存在")
@@ -397,6 +461,8 @@ FROM items WHERE id = ?`, id)
 	it.HasNFO = hasNFO != 0
 	it.HasPoster = hasPoster != 0
 	it.HasPending = hasPending != 0
+	it.Genres = splitCSV(genresCSV)
+	it.Actors = splitCSV(actorsCSV)
 	if year.Valid {
 		y := int(year.Int64)
 		it.Year = &y
@@ -406,6 +472,7 @@ FROM items WHERE id = ?`, id)
 	}
 	return &it, nil
 }
+
 
 func readIndexStats(db *sql.DB) (ItemListStats, error) {
 	var stats ItemListStats
@@ -444,7 +511,7 @@ func (s *Service) listIndexItems(strmTaskID int64, query ItemListQuery) (ItemLis
 	querySQL := `
 SELECT id, rel_dir, strm_name, title, year, media_type, status,
        has_nfo, has_poster, has_pending, tmdb_id, poster_rel, folder_name,
-       file_count, ep_local, ep_tmdb, ep_scraped, tv_state, added_at
+       file_count, ep_local, ep_tmdb, ep_scraped, tv_state, added_at, genres_csv, actors_csv
 FROM items
 `
 	if whereSQL != "" {

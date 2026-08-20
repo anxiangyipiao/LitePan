@@ -176,6 +176,7 @@ func NewRouter(d Deps) http.Handler {
 			r.Use(h.requirePublicOrAdmin)
 			r.Get("/roots", h.mediaLibraryRoots)
 			r.Get("/items", h.mediaLibraryItems)
+			r.Get("/facets", h.mediaLibraryFacets)
 			r.Get("/detail", h.mediaLibraryDetail)
 			r.Get("/poster", h.mediaLibraryPoster)
 			r.Post("/refresh", h.mediaLibraryRefresh)

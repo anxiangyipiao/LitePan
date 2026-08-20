@@ -26,6 +26,7 @@ type movieNFO struct {
 	Plot     string   `xml:"plot,omitempty"`
 	Runtime  string   `xml:"runtime,omitempty"`
 	Genres   []string `xml:"genre,omitempty"`
+	Tags     []string `xml:"tag,omitempty"`
 	Studio   string   `xml:"studio,omitempty"`
 	Director string   `xml:"director,omitempty"`
 	Actors   []movieActorNFO `xml:"actor,omitempty"`
@@ -128,8 +129,30 @@ func workNFOCandidates(g workGroup, mediaType string) []string {
 		stem := stripCDSuffix(strings.TrimSuffix(e.absPath, filepath.Ext(e.absPath)))
 		out = append(out, stem+".nfo")
 	}
-	// 兼容上一版误写的 movie.nfo
+		// 兼容上一版误写的 movie.nfo
 	out = append(out, filepath.Join(g.absDir, "movie.nfo"))
+	// 终极兼容：目录下第一个非 tvshow 的 .nfo（如 {番号}.nfo）
+	if entries, err := os.ReadDir(g.absDir); err == nil {
+		for _, e := range entries {
+			if e.IsDir() || !strings.EqualFold(filepath.Ext(e.Name()), ".nfo") {
+				continue
+			}
+			if strings.EqualFold(e.Name(), "tvshow.nfo") {
+				continue
+			}
+			p := filepath.Join(g.absDir, e.Name())
+			found := false
+			for _, x := range out {
+				if strings.EqualFold(x, p) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				out = append(out, p)
+			}
+		}
+	}
 	return out
 }
 

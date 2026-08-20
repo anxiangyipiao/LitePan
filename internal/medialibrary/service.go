@@ -611,6 +611,73 @@ func fileExists(path string) bool {
 	return err == nil && !st.IsDir()
 }
 
+// Facets 顶端筛选项，全部库时为聚合去重后列表。
+type Facets struct {
+	Genres []string `json:"genres"`
+	Actors []string `json:"actors"`
+}
+
+// Facets 聚合去重返回 NFO 维度筛选项，支持库联动（libID="" 全部库）。
+func (s *Service) Facets(ctx context.Context, libID string) (Facets, error) {
+	roots, err := s.Roots(ctx)
+	if err != nil {
+		return Facets{}, err
+	}
+	if len(roots) == 0 || s.scrape == nil {
+		return Facets{}, nil
+	}
+	targets := roots
+	if libID != "" {
+		found := false
+		for _, r := range roots {
+			if r.ID == libID {
+				targets = []Root{r}
+				found = true
+				break
+			}
+		}
+		if !found {
+			return Facets{}, domain.Errorf(domain.CodeNotFound, "影视库不存在")
+		}
+	}
+	gSet := map[string]bool{}
+	aSet := map[string]bool{}
+	q := strmscrape.ItemListQuery{Limit: mergeCap, Offset: 0}
+	for _, root := range targets {
+		res, err := s.scrape.ListItems(ctx, 0, root.Path, q)
+		if err != nil {
+			s.log.Warn("影视库 facets 查询失败已跳过", "lib", root.ID, "err", err)
+			continue
+		}
+		for _, it := range res.Items {
+			for _, g := range it.Genres {
+				if v := strings.TrimSpace(g); v != "" {
+					gSet[v] = true
+				}
+			}
+			for _, a := range it.Actors {
+				if v := strings.TrimSpace(a); v != "" {
+					aSet[v] = true
+				}
+			}
+		}
+	}
+	out := Facets{Genres: setToSorted(gSet), Actors: setToSorted(aSet)}
+	return out, nil
+}
+
+func setToSorted(m map[string]bool) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func containsString(list []string, s string) bool {
 	for _, v := range list {
 		if v == s {

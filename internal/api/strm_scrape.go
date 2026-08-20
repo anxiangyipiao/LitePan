@@ -21,6 +21,8 @@ func parseStrmScrapeListQuery(r *http.Request) strmscrape.ItemListQuery {
 		MediaType: strings.TrimSpace(q.Get("media_type")),
 		TVState:   strings.TrimSpace(q.Get("tv_state")),
 		Sort:      strmscrape.ItemListSort(strings.TrimSpace(q.Get("sort"))),
+		Genre:     strings.TrimSpace(q.Get("genre")),
+		Actor:     strings.TrimSpace(q.Get("actor")),
 	}
 }
 

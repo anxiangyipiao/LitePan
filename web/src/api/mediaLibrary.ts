@@ -78,10 +78,22 @@ export interface MediaLibraryQuery {
   keyword?: string;
   limit?: number;
   offset?: number;
+  genre?: string;
+  actor?: string;
+}
+
+export interface MediaLibraryFacets {
+  genres: string[];
+  actors: string[];
 }
 
 export const mediaLibraryApi = {
   roots: () => http.get<MediaLibraryRoot[]>("/media-library/roots"),
+
+  facets: (lib?: string) =>
+    http.get<MediaLibraryFacets>("/media-library/facets", {
+      ...(lib ? { lib } : {}),
+    }),
 
   detail: (lib: string, id: string) =>
     http.get<MediaLibraryDetail>("/media-library/detail", { lib, id }),
@@ -92,6 +104,8 @@ export const mediaLibraryApi = {
       ...(q.type ? { media_type: q.type } : {}),
       ...(q.sort ? { sort: q.sort } : {}),
       ...(q.keyword ? { keyword: q.keyword } : {}),
+      ...(q.genre ? { genre: q.genre } : {}),
+      ...(q.actor ? { actor: q.actor } : {}),
       ...(q.limit != null ? { limit: String(q.limit) } : {}),
       ...(q.offset != null ? { offset: String(q.offset) } : {}),
     }),
@@ -102,6 +116,8 @@ export const mediaLibraryApi = {
       ...(q.type ? { media_type: q.type } : {}),
       ...(q.sort ? { sort: q.sort } : {}),
       ...(q.keyword ? { keyword: q.keyword } : {}),
+      ...(q.genre ? { genre: q.genre } : {}),
+      ...(q.actor ? { actor: q.actor } : {}),
     }),
 
   saveRoots: (roots: MediaLibraryRoot[]) => http.put<MediaLibraryRoot[]>("/admin/media-library/roots", roots),

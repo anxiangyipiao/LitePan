@@ -43,6 +43,21 @@ func (h *Handler) mediaLibraryItems(w http.ResponseWriter, r *http.Request) {
 	writeOK(w, items)
 }
 
+// mediaLibraryFacets 返回顶端筛选项（NFO genre + actor），支持库联动。
+func (h *Handler) mediaLibraryFacets(w http.ResponseWriter, r *http.Request) {
+	svc := h.ensureMediaLibrary()
+	if !ensureServiceReady(w, svc != nil) {
+		return
+	}
+	lib := strings.TrimSpace(r.URL.Query().Get("lib"))
+	facets, err := svc.Facets(r.Context(), lib)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeOK(w, facets)
+}
+
 // mediaLibraryDetail 返回影视条目详情（公开/管理员）。
 func (h *Handler) mediaLibraryDetail(w http.ResponseWriter, r *http.Request) {
 	svc := h.ensureMediaLibrary()

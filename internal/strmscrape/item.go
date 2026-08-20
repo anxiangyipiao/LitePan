@@ -16,6 +16,7 @@ func buildItem(root string, g workGroup) Item {
 	mediaType := resolveWorkMediaType(g)
 	hasNFO := workHasNFO(g, mediaType)
 	hasPoster := workHasPoster(g, mediaType)
+	facets := extractWorkFacets(g, mediaType)
 	pending, hasPending := readPendingState(g)
 
 	// 根元数据齐全即视为已刮削，追更和存疑由 pending 区分。
@@ -113,6 +114,8 @@ func buildItem(root string, g workGroup) Item {
 		EpScraped:  epScraped,
 		TVState:    tvState,
 		AddedAt:    workAddedAt(g),
+		Genres:     facets.Genres,
+		Actors:     facets.Actors,
 	}
 	if g.flatFile != "" {
 		item.StrmName = filepath.Base(g.flatFile)
@@ -257,6 +260,65 @@ func readWorkNFOMeta(g workGroup, mediaType string) (workNFOMeta, bool) {
 		return meta, meta.Title != "" || meta.TMDBID != ""
 	}
 	return workNFOMeta{}, false
+}
+
+type workFacets struct {
+	Genres []string
+	Actors []string
+}
+
+func extractWorkFacets(g workGroup, mediaType string) workFacets {
+	if mediaType == MediaTypeTV || g.flatFile != "" {
+		return workFacets{}
+	}
+	var genres []string
+	var actors []string
+	for _, p := range workNFOCandidates(g, mediaType) {
+		if !fileExists(p) {
+			continue
+		}
+		data, err := os.ReadFile(p)
+		if err != nil || len(data) == 0 {
+			continue
+		}
+		var nfo movieNFO
+		if xml.Unmarshal(data, &nfo) != nil {
+			continue
+		}
+		genres = append(genres, nfo.Genres...)
+		genres = append(genres, nfo.Tags...)
+		for _, a := range nfo.Actors {
+			if v := strings.TrimSpace(a.Name); v != "" {
+				actors = append(actors, v)
+			}
+		}
+		if len(genres) > 0 || len(actors) > 0 {
+			break
+		}
+	}
+	if len(genres) > 0 {
+		seen := map[string]bool{}
+		out := make([]string, 0, len(genres))
+		for _, g := range genres {
+			if v := strings.TrimSpace(g); v != "" && !seen[v] {
+				seen[v] = true
+				out = append(out, v)
+			}
+		}
+		genres = out
+	}
+	if len(actors) > 0 {
+		seen := map[string]bool{}
+		out := make([]string, 0, len(actors))
+		for _, a := range actors {
+			if v := strings.TrimSpace(a); v != "" && !seen[v] {
+				seen[v] = true
+				out = append(out, v)
+			}
+		}
+		actors = out
+	}
+	return workFacets{Genres: genres, Actors: actors}
 }
 
 func workAddedAt(g workGroup) string {

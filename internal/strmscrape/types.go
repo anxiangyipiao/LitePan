@@ -36,6 +36,8 @@ type Item struct {
 	EpScraped  int    `json:"ep_scraped,omitempty"`
 	TVState    string `json:"tv_state,omitempty"` // ended|updating
 	AddedAt    string `json:"added_at,omitempty"`
+	Genres     []string `json:"genres,omitempty"` // NFO <genre> + <tag> 合并
+	Actors     []string `json:"actors,omitempty"` // NFO <actor><name>
 }
 
 type ItemListSort string
@@ -56,6 +58,8 @@ type ItemListQuery struct {
 	MediaType string       `json:"media_type,omitempty"`
 	TVState   string       `json:"tv_state,omitempty"`
 	Sort      ItemListSort `json:"sort,omitempty"`
+	Genre     string       `json:"genre,omitempty"` // 顶端单选：NFO <genre> + <tag>
+	Actor     string       `json:"actor,omitempty"` // 顶端单选：NFO <actor><name>
 }
 
 type ItemListStats struct {

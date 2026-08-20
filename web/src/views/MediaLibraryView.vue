@@ -24,6 +24,10 @@ const typeFilter = ref<"" | "movie" | "tv">("");
 const sort = ref<MediaLibrarySort>("title_asc");
 const keyword = ref("");
 const searchDraft = ref("");
+const genreFilter = ref("");
+const actorFilter = ref("");
+const facetGenres = ref<string[]>([]);
+const facetActors = ref<string[]>([]);
 const items = ref<MediaLibraryItem[]>([]);
 const total = ref(0);
 const loading = ref(false);
@@ -94,6 +98,24 @@ async function saveRoots() {
 }
 
 // ---- 数据 ----
+async function loadFacets() {
+  try {
+    const r = await mediaLibraryApi.facets(libId.value || undefined);
+    const incomingGenres = r.genres ?? [];
+    const incomingActors = r.actors ?? [];
+    // 保留已选值，即使当前筛选项让它暂时不出现在 facets 里
+    facetGenres.value = incomingGenres.includes(genreFilter.value) || !genreFilter.value
+      ? incomingGenres
+      : [...incomingGenres, genreFilter.value];
+    facetActors.value = incomingActors.includes(actorFilter.value) || !actorFilter.value
+      ? incomingActors
+      : [...incomingActors, actorFilter.value];
+  } catch {
+    facetGenres.value = [];
+    facetActors.value = [];
+  }
+}
+
 async function loadRoots() {
   try {
     roots.value = await mediaLibraryApi.roots();
@@ -115,6 +137,8 @@ async function fetchItems(reset: boolean) {
       type: typeFilter.value || undefined,
       sort: sort.value,
       keyword: keyword.value.trim() || undefined,
+      genre: genreFilter.value || undefined,
+      actor: actorFilter.value || undefined,
       limit: PAGE,
       offset: reset ? 0 : items.value.length,
     });
@@ -137,6 +161,8 @@ async function refresh() {
       type: typeFilter.value || undefined,
       sort: sort.value,
       keyword: keyword.value.trim() || undefined,
+      genre: genreFilter.value || undefined,
+      actor: actorFilter.value || undefined,
     });
     await fetchItems(true);
   } catch (e) {
@@ -174,7 +200,8 @@ async function updateLoadMoreObserver() {
 }
 
 // ---- 过滤联动 ----
-watch([libId, typeFilter, sort], () => void fetchItems(true));
+watch([libId, typeFilter, sort, genreFilter, actorFilter], () => void fetchItems(true));
+watch(libId, () => void loadFacets());
 
 function submitSearch() {
   keyword.value = searchDraft.value.trim();
@@ -182,7 +209,10 @@ function submitSearch() {
 }
 
 onMounted(() => {
-  void loadRoots().then(() => fetchItems(true));
+  void loadRoots().then(() => {
+    void loadFacets();
+    void fetchItems(true);
+  });
 });
 
 onUnmounted(() => {
@@ -240,6 +270,16 @@ const subtitle = (item: MediaLibraryItem) => {
         <option value="title_asc">名称</option>
         <option value="year_desc">年份 ↓</option>
         <option value="year_asc">年份 ↑</option>
+      </select>
+
+      <select v-model="genreFilter" class="ml-control" aria-label="按分类筛选">
+        <option value="">全部分类</option>
+        <option v-for="g in facetGenres" :key="g" :value="g">{{ g }}</option>
+      </select>
+
+      <select v-model="actorFilter" class="ml-control" aria-label="按演员筛选">
+        <option value="">全部演员</option>
+        <option v-for="a in facetActors" :key="a" :value="a">{{ a }}</option>
       </select>
 
       <form class="ml-search" @submit.prevent="submitSearch">
