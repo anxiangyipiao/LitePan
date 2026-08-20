@@ -4,8 +4,7 @@ import "@fortawesome/fontawesome-free/css/all.min.css";
 import { fileExtension } from "@/utils/format";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
 
-// 影视模式通用播放器：内嵌视频 + 外部播放器（VLC/PotPlayer/IINA/mpv/Skybox）。
-// 支持 hls.js / mpegts.js 流；外部播放器走 URL scheme（Skybox 走 WebDAV 指引）。
+// 影视模式通用播放器：内嵌视频，支持 hls.js / mpegts.js 流。
 
 const props = withDefaults(
   defineProps<{
@@ -22,8 +21,6 @@ const emit = defineEmits<{ close: [] }>();
 const videoRef = ref<HTMLVideoElement | null>(null);
 const wrapRef = ref<HTMLDivElement | null>(null);
 const playerError = ref(false);
-const playerMenuOpen = ref(false);
-const skyboxGuideOpen = ref(false);
 
 type HlsLike = import("hls.js").default;
 interface MpegtsLike {
@@ -59,13 +56,6 @@ function exitFullscreenIfNeeded() {
   void document.exitFullscreen?.().catch(() => {});
 }
 
-const externalPlayers = [
-  { name: "VLC", icon: "fa-brands fa-vlc", buildUrl: (url: string) => `vlc://${url}` },
-  { name: "PotPlayer", icon: "fa-solid fa-play", buildUrl: (url: string) => `potplayer://${url}` },
-  { name: "IINA", icon: "fa-solid fa-play", buildUrl: (url: string) => `iina://weblink?url=${encodeURIComponent(url)}` },
-  { name: "mpv", icon: "fa-solid fa-play", buildUrl: (url: string) => `mpv://${url}` },
-];
-const webdavUrl = computed(() => `http://${window.location.host}/dav`);
 
 function closePlayer() {
   exitFullscreenIfNeeded();
@@ -83,8 +73,6 @@ function closePlayer() {
     v.removeAttribute("src");
     v.load();
   }
-  playerMenuOpen.value = false;
-  skyboxGuideOpen.value = false;
   emit("close");
 }
 
@@ -135,11 +123,6 @@ watch(
     });
   },
 );
-
-function openExternalPlayer(url: string) {
-  window.location.href = url;
-  playerMenuOpen.value = false;
-}
 </script>
 
 <template>
@@ -158,31 +141,7 @@ function openExternalPlayer(url: string) {
       </header>
 
       <video ref="videoRef" class="mp-video" controls playsinline />
-      <p v-if="playerError" class="mp-error">播放失败，可尝试外部播放器</p>
-
-      <div class="mp-foot">
-        <div class="mp-ext">
-          <button
-            v-for="p in externalPlayers"
-            :key="p.name"
-            type="button"
-            class="mp-ext-btn"
-            :disabled="!src"
-            @click="openExternalPlayer(p.buildUrl(src))"
-          >
-            <i :class="p.icon" aria-hidden="true"></i>
-            <span>{{ p.name }}</span>
-          </button>
-          <button type="button" class="mp-ext-btn" @click="skyboxGuideOpen = !skyboxGuideOpen">
-            <i class="fa-solid fa-vr-cardboard" aria-hidden="true"></i>
-            <span>Skybox</span>
-          </button>
-        </div>
-        <p v-if="skyboxGuideOpen" class="mp-skybox-guide">
-          Quest 端 Skybox 不支持 URL 调用。请在 Skybox → 设置 → 网络 → WebDAV 添加：地址
-          <code>{{ webdavUrl }}</code>，账号为管理员账号密码，即可浏览并播放网盘内 VR 视频。
-        </p>
-      </div>
+      <p v-if="playerError" class="mp-error">播放失败，请稍后重试</p>
     </div>
   </div>
 </template>
@@ -276,47 +235,5 @@ function openExternalPlayer(url: string) {
   padding: 8px 14px;
   color: #fca5a5;
   font-size: 13px;
-}
-
-.mp-foot {
-  padding: 12px 14px;
-}
-
-.mp-ext {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.mp-ext-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid #334155;
-  background: #1e293b;
-  color: #e2e8f0;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.mp-ext-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.mp-skybox-guide {
-  margin: 12px 0 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: #94a3b8;
-}
-
-.mp-skybox-guide code {
-  color: #e2e8f0;
-  background: #1e293b;
-  padding: 1px 6px;
-  border-radius: 4px;
 }
 </style>
