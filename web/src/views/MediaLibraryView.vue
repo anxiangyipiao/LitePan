@@ -209,6 +209,17 @@ function submitSearch() {
   void fetchItems(true);
 }
 
+function clearFacetFilters() {
+  keyword.value = "";
+  searchDraft.value = "";
+  genreFilter.value = "";
+  actorFilter.value = "";
+  typeFilter.value = "";
+  // 清掉 URL 上的 ?genre/?actor/?keyword，避免刷新后又带回
+  void router.replace({ path: "/movies", query: {} });
+  void fetchItems(true);
+}
+
 function applyQueryFiltersFromRoute() {
   genreFilter.value = String(route.query.genre ?? "");
   actorFilter.value = String(route.query.actor ?? "");
@@ -338,8 +349,20 @@ const subtitle = (item: MediaLibraryItem) => {
     </div>
 
     <div v-else-if="items.length === 0 && !loading" class="ml-empty">
-      <p class="ml-empty-title">{{ keyword ? "没有匹配的影视" : "影视库为空" }}</p>
-      <p v-if="!keyword" class="ml-empty-sub">该库还没有可展示的条目。</p>
+      <p class="ml-empty-title">
+        {{
+          keyword || genreFilter || actorFilter || typeFilter
+            ? "没有匹配的影视"
+            : "影视库为空"
+        }}
+      </p>
+      <p v-if="!keyword && !genreFilter && !actorFilter && !typeFilter" class="ml-empty-sub">该库还没有可展示的条目。</p>
+      <p v-else class="ml-empty-sub">
+        当前筛选（分类/演员/类型/关键词）无匹配，试试
+        <button type="button" class="ml-empty-link" @click="clearFacetFilters">清除筛选</button>
+        或
+        <button type="button" class="ml-empty-link" @click="refresh">刷新索引</button>。
+      </p>
     </div>
 
     <div v-else :ref="wall.rootEl" class="ml-wall-root">
@@ -1077,6 +1100,17 @@ const subtitle = (item: MediaLibraryItem) => {
 
 .ml-detail-ep-num {
   font-weight: 600;
+}
+
+.ml-empty-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--brand, #4f8ef7);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 @media (max-width: 640px) {
