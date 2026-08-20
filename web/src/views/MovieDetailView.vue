@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onActivated, ref, watch } from "vue";
 import { useRoute, onBeforeRouteLeave } from "vue-router";
-import { mediaLibraryApi, type MediaLibraryDetail, type MediaLibraryEpisode } from "@/api/mediaLibrary";
+import { mediaLibraryApi, type MediaLibraryDetail, type MediaLibraryDisc, type MediaLibraryEpisode } from "@/api/mediaLibrary";
 import { getApiErrorMessage } from "@/api/client";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
@@ -71,6 +71,13 @@ function playEpisode(ep: MediaLibraryEpisode) {
   const label = `${detail.value?.title ?? ""} · S${String(ep.season ?? 1).padStart(2, "0")}E${String(ep.episode).padStart(2, "0")}`;
   playerTitle.value = label.trim();
   playerUrl.value = ep.play_url;
+  playerOpen.value = true;
+}
+
+function playDisc(disc: MediaLibraryDisc) {
+  if (!disc.play_url) return;
+  playerTitle.value = `${detail.value?.title ?? ""} · ${disc.label}`.trim();
+  playerUrl.value = disc.play_url;
   playerOpen.value = true;
 }
 </script>
@@ -143,7 +150,22 @@ function playEpisode(ep: MediaLibraryEpisode) {
                 <SvgIcon name="play" :size="16" />
                 <span>播放</span>
               </button>
-              <span v-else class="detail-nosource">该影视无可用播放源</span>
+              <span v-else-if="!detail.discs?.length" class="detail-nosource">该影视无可用播放源</span>
+            </div>
+
+            <div v-if="!isTV && detail.discs?.length" class="detail-discs">
+              <span class="detail-discs__label">碟片</span>
+              <button
+                v-for="(d, i) in detail.discs"
+                :key="i"
+                type="button"
+                class="detail-disc"
+                :disabled="!d.play_url"
+                :title="d.play_url ? '播放' : '无播放源'"
+                @click="playDisc(d)"
+              >
+                {{ d.label }}
+              </button>
             </div>
           </div>
         </div>
@@ -228,22 +250,26 @@ function playEpisode(ep: MediaLibraryEpisode) {
 
 .detail-hero {
   position: relative;
-  height: 280px;
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
+  height: 320px;
+  background-size: cover;
+  background-position: center 30%;
 }
 
 .detail-hero__shade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, transparent 20%, var(--bg) 100%);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--bg) 8%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 45%, transparent) 70%,
+    var(--bg) 100%
+  );
 }
 
 .detail-body {
-  max-width: 900px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding: 16px 20px 32px;
+  padding: 12px 24px 40px;
 }
 
 .detail-main {
@@ -254,11 +280,11 @@ function playEpisode(ep: MediaLibraryEpisode) {
 
 .detail-poster {
   flex: 0 0 auto;
-  width: 180px;
+  width: 190px;
   aspect-ratio: 2 / 3;
   border-radius: 12px;
   object-fit: contain;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
   background: var(--surface-sunken);
   display: flex;
   align-items: center;
@@ -270,7 +296,7 @@ function playEpisode(ep: MediaLibraryEpisode) {
 
 /* 仅当存在背景图时让海报上移叠在背景图底部（无背景图时保持原位，避免盖住返回栏） */
 .detail-poster--lift {
-  margin-top: -72px;
+  margin-top: -96px;
 }
 
 .detail-info {
@@ -336,6 +362,7 @@ function playEpisode(ep: MediaLibraryEpisode) {
 
 .detail-fanart-scroll {
   display: flex;
+  align-items: center;
   gap: 10px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
@@ -346,10 +373,10 @@ function playEpisode(ep: MediaLibraryEpisode) {
 
 .detail-fanart-img {
   flex: 0 0 auto;
-  width: 280px;
-  aspect-ratio: 16 / 9;
+  width: 320px;
+  max-height: 220px;
   border-radius: 10px;
-  object-fit: cover;
+  object-fit: contain;
   cursor: pointer;
   scroll-snap-align: start;
   background: var(--surface-sunken);
@@ -443,6 +470,44 @@ function playEpisode(ep: MediaLibraryEpisode) {
   color: var(--text-muted);
 }
 
+.detail-discs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.detail-discs__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.detail-disc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  color: var(--text-regular);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.detail-disc:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--border-soft));
+  color: var(--brand-strong, var(--brand));
+}
+
+.detail-disc:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .detail-episodes {
   margin-top: 26px;
 }
@@ -488,16 +553,21 @@ function playEpisode(ep: MediaLibraryEpisode) {
   }
 
   .detail-poster {
-    width: 120px;
-    margin-top: -48px;
+    width: 130px;
+    margin-top: -56px;
   }
 
   .detail-hero {
-    height: 180px;
+    height: 200px;
+  }
+
+  .detail-body {
+    padding: 8px 14px 32px;
   }
 
   .detail-fanart-img {
-    width: 220px;
+    width: 240px;
+    max-height: 170px;
   }
 }
 </style>

@@ -134,6 +134,11 @@ type workNFOMeta struct {
 }
 
 func resolveWorkMediaType(g workGroup) string {
+	// JAV 番号或多碟电影（CD1/CD2/Part1/Part2）优先判为电影，
+	// 即使目录里误写了 tvshow.nfo 也按电影处理。
+	if g.flatFile == "" && (workJAVNumber(g) != "" || isMultiDiscDir(g.absDir)) {
+		return MediaTypeMovie
+	}
 	if g.flatFile == "" && fileExists(filepath.Join(g.absDir, "tvshow.nfo")) {
 		return MediaTypeTV
 	}

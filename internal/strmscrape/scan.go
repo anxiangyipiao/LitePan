@@ -14,6 +14,14 @@ import (
 
 var explicitSeasonEpisodeFileRe = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])s\d{1,3}e\d{1,4}(?:[^a-z0-9]|$)`)
 
+// discSuffixRe 匹配多碟后缀：-CD1 / .CD2 / -Part1 / -Disc2 / -DVD1 等，
+// 允许后缀后跟容器扩展名（COSVR-018-CD1.mkv.strm → COSVR-018-CD1.mkv）。
+var discSuffixRe = regexp.MustCompile(`(?i)[._\-\s]*(?:cd|disc|dvd|part)\s*\d{1,3}(?:\.[a-z0-9]+)?$`)
+
+func stripDiscSuffix(name string) string {
+	return discSuffixRe.ReplaceAllString(name, "")
+}
+
 type strmEntry struct {
 	absPath string
 	relPath string
@@ -149,6 +157,10 @@ func inferMediaType(g workGroup) string {
 	if workJAVNumber(g) != "" {
 		return MediaTypeMovie
 	}
+	// 多碟电影（CD1/CD2/Part1/Part2 共享主名）一定是电影，避免被当成分集
+	if g.flatFile == "" && isMultiDiscDir(g.absDir) {
+		return MediaTypeMovie
+	}
 	// 目录结构优先：存在 Season / 特别篇子目录，或文件位于此类目录下 → 剧集
 	if g.flatFile == "" {
 		if entries, err := os.ReadDir(g.absDir); err == nil {
@@ -229,7 +241,8 @@ func isStructuralWorkSubdir(dir string) bool {
 	return hasTVParentEvidence(filepath.Dir(dir), dir)
 }
 
-// isFlatTVShowDir 检测一个目录是否应保持分组：剧集目录（tvshow.nfo / Season 子目录 / 多文件含 SxxExx）或 JAV 番号目录。
+// isFlatTVShowDir 检测一个目录是否应保持分组：剧集目录（tvshow.nfo / Season 子目录 / 多文件含 SxxExx）、
+// JAV 番号目录、或多碟电影目录（CD1/CD2/Part1/Part2 共享主名）。
 func isFlatTVShowDir(dir string) bool {
 	if fileExists(filepath.Join(dir, "tvshow.nfo")) {
 		return true
@@ -256,7 +269,37 @@ func isFlatTVShowDir(dir string) bool {
 			}
 		}
 	}
-	return sxxCount >= 2 || hasJAV
+	return sxxCount >= 2 || hasJAV || isMultiDiscDir(dir)
+}
+
+// isMultiDiscDir 检测目录是否为多碟电影：≥2 个 .strm 都带碟后缀且去后缀后主名相同。
+func isMultiDiscDir(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	base := ""
+	count := 0
+	for _, e := range entries {
+		if e.IsDir() || !strings.EqualFold(filepath.Ext(e.Name()), ".strm") {
+			continue
+		}
+		stem := strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))
+		if !discSuffixRe.MatchString(stem) {
+			return false
+		}
+		main := stripDiscSuffix(stem)
+		if main == "" {
+			return false
+		}
+		if base == "" {
+			base = main
+		} else if !strings.EqualFold(base, main) {
+			return false
+		}
+		count++
+	}
+	return count >= 2
 }
 
 func hasTVParentEvidence(parentDir, currentDir string) bool {

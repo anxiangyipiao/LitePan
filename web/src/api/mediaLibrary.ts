@@ -37,6 +37,11 @@ export interface MediaLibraryEpisode {
   play_url: string;
 }
 
+export interface MediaLibraryDisc {
+  label: string;
+  play_url: string;
+}
+
 export interface MediaLibraryDetail {
   id: string;
   title: string;
@@ -61,6 +66,7 @@ export interface MediaLibraryDetail {
   extra_fanart_urls?: string[];
   play_url?: string;
   episodes?: MediaLibraryEpisode[];
+  discs?: MediaLibraryDisc[];
 }
 
 export type MediaLibrarySort = "title_asc" | "year_desc" | "year_asc" | "added_desc" | "added_asc";

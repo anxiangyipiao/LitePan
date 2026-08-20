@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -62,6 +63,12 @@ type Episode struct {
 	PlayURL string `json:"play_url"`
 }
 
+// Disc 多碟电影的单碟播放信息（CD1/CD2/Part1/Part2）。
+type Disc struct {
+	Label   string `json:"label"`
+	PlayURL string `json:"play_url"`
+}
+
 // Detail 影视条目详情：元数据 + 简介 + 背景图 + 播放地址（剧集含选集列表）。
 type Detail struct {
 	ID              string    `json:"id"`
@@ -87,6 +94,7 @@ type Detail struct {
 	ExtraFanartURLs []string  `json:"extra_fanart_urls,omitempty"` // extrafanart/ 轮播背景图
 	PlayURL         string    `json:"play_url,omitempty"`        // 电影直播；剧集为首集
 	Episodes        []Episode `json:"episodes,omitempty"`        // 剧集选集列表
+	Discs           []Disc    `json:"discs,omitempty"`           // 多碟电影的单碟列表（CD1/CD2…）
 }
 
 // mergeCap 跨库合并时单库最多拉取的条目数（首几页分页正确即可，超限截断）。
@@ -349,6 +357,10 @@ func (s *Service) Detail(ctx context.Context, libID, id string) (*Detail, error)
 		}
 	} else {
 		d.PlayURL = s.resolvePlayPath(root.Path, *it)
+		d.Discs = s.listMovieDiscs(root.Path, *it)
+		if len(d.Discs) > 1 && d.PlayURL == "" {
+			d.PlayURL = d.Discs[0].PlayURL
+		}
 	}
 	return d, nil
 }
@@ -398,6 +410,52 @@ func (s *Service) resolveExtraFanartURLs(libID, rootPath, relDir string) []strin
 func mediaStem(strmName string) string {
 	name := strings.TrimSuffix(strings.TrimSpace(strmName), ".strm")
 	return strings.TrimSuffix(name, filepath.Ext(name))
+}
+
+// listMovieDiscs 扫描电影目录下所有 .strm，提取碟片标签（CD1/CD2/Part1…）并排序。
+// 单碟作品返回空，由详情页走主播放按钮。
+func (s *Service) listMovieDiscs(rootPath string, it strmscrape.Item) []Disc {
+	dir := filepath.Join(rootPath, strings.TrimSpace(it.RelDir))
+	matches, err := filepath.Glob(filepath.Join(dir, "*.strm"))
+	if err != nil {
+		return nil
+	}
+	if len(matches) < 2 {
+		return nil
+	}
+	discs := make([]Disc, 0, len(matches))
+	for _, m := range matches {
+		data, rerr := os.ReadFile(m)
+		if rerr != nil {
+			continue
+		}
+		stem := strings.TrimSuffix(filepath.Base(m), filepath.Ext(m))
+		discs = append(discs, Disc{
+			Label:   discLabel(stem),
+			PlayURL: strm.ExtractPlayPath(string(data)),
+		})
+	}
+	sort.SliceStable(discs, func(i, j int) bool {
+		return discs[i].Label < discs[j].Label
+	})
+	return discs
+}
+
+// discSuffixLocalRe 匹配多碟后缀：-CD1 / .CD2 / -Part1 / -Disc2 / -DVD1 等，
+// 允许后缀后跟容器扩展名（COSVR-018-CD2.mkv.strm → COSVR-018-CD2.mkv）。
+var discSuffixLocalRe = regexp.MustCompile(`(?i)[._\-\s]*(?:cd|disc|dvd|part)\s*\d{1,3}(?:\.[a-z0-9]+)?$`)
+
+// discLabel 从文件名提取碟片标签（COSVR-018-CD2.mkv → CD2；Movie - Part 1 → Part 1）。
+func discLabel(stem string) string {
+	m := discSuffixLocalRe.FindString(stem)
+	if m == "" {
+		return stem
+	}
+	m = strings.TrimSpace(strings.TrimLeft(m, "._- "))
+	if i := strings.IndexAny(m, "."); i >= 0 {
+		m = m[:i]
+	}
+	return strings.TrimSpace(m)
 }
 
 // listEpisodes 扫描剧集目录下所有 .strm，解析季/集号并排序。
