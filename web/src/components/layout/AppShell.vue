@@ -3,7 +3,6 @@ import { computed } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
-import AppFooter from "@/components/layout/AppFooter.vue";
 import AdminNotificationBell from "@/components/admin/AdminNotificationBell.vue";
 import { useAuthStore } from "@/stores/auth";
 import { logout } from "@/api/auth";
@@ -194,7 +193,6 @@ async function handleLogout() {
           </Transition>
         </RouterView>
       </main>
-      <AppFooter />
     </div>
   </div>
 </template>
