@@ -372,7 +372,7 @@ func (s *Service) resolveBackdropURL(libID, rootPath, relDir string, it *strmscr
 	return ""
 }
 
-// resolveExtraFanartURLs 扫描 extrafanart/ 目录下的 fanart1..N.jpg，返回可用的背景图 URL 列表。
+// resolveExtraFanartURLs 扫描 extrafanart/ 目录下的所有图片文件，返回可用的背景图 URL 列表。
 func (s *Service) resolveExtraFanartURLs(libID, rootPath, relDir string) []string {
 	dir := filepath.Join(rootPath, relDir, "extrafanart")
 	entries, err := os.ReadDir(dir)
@@ -380,15 +380,16 @@ func (s *Service) resolveExtraFanartURLs(libID, rootPath, relDir string) []strin
 		return nil
 	}
 	var urls []string
-	for i := 1; i <= 5; i++ {
-		name := fmt.Sprintf("fanart%d.jpg", i)
-		rel := filepath.ToSlash(filepath.Join(relDir, "extrafanart", name))
-		for _, e := range entries {
-			if e.Name() == name && !e.IsDir() {
-				urls = append(urls, "/api/media-library/poster?lib="+url.QueryEscape(libID)+"&rel="+url.QueryEscape(rel))
-				break
-			}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
 		}
+		ext := strings.ToLower(filepath.Ext(e.Name()))
+		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".webp" {
+			continue
+		}
+		rel := filepath.ToSlash(filepath.Join(relDir, "extrafanart", e.Name()))
+		urls = append(urls, "/api/media-library/poster?lib="+url.QueryEscape(libID)+"&rel="+url.QueryEscape(rel))
 	}
 	return urls
 }
