@@ -3,7 +3,6 @@ import type { Account } from "./types";
 
 export interface PublicSystemConfig {
   index_account_switch_mode: "dropdown" | "floating";
-  header_effects_enabled?: boolean;
   index_strm_auto_detect_enabled?: boolean;
 }
 

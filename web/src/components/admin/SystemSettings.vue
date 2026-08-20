@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { getApiErrorMessage } from "@/api/client";
 import {
   fetchSystemConfig,
@@ -20,7 +20,6 @@ import { useAuthStore } from "@/stores/auth";
 import AppButton from "@/components/base/AppButton.vue";
 import AppInput from "@/components/base/AppInput.vue";
 import AppSelect from "@/components/base/AppSelect.vue";
-import SettingsSegment from "@/components/admin/SettingsSegment.vue";
 import SettingsBoolSegment from "@/components/admin/SettingsBoolSegment.vue";
 import SectionTabBar from "@/components/admin/SectionTabBar.vue";
 import SettingsCard from "@/components/admin/SettingsCard.vue";
@@ -28,7 +27,6 @@ import SettingsRow from "@/components/admin/SettingsRow.vue";
 import SettingsHelpTooltip from "@/components/admin/SettingsHelpTooltip.vue";
 import ApiKeySettings from "@/components/admin/ApiKeySettings.vue";
 import { isCacheSettingKey } from "@/constants/cacheSettings";
-import { getSkinPref, previewSkin, restoreSavedSkin, setSkinPref, type SkinPref } from "@/utils/theme";
 import "@/styles/admin-shared.css";
 
 const props = withDefaults(
@@ -45,30 +43,6 @@ const SECURITY_TAB = "security";
 const HOMEPAGE_TAB = "homepage";
 const SERVICE_TAB = "services";
 const API_KEYS_TAB = "apiKeys";
-
-const SKIN_OPTIONS: { id: SkinPref; label: string; desc: string }[] = [
-  { id: "default", label: "经典主题", desc: "现行品牌风格，支持深色模式与顶栏光效。" },
-  { id: "brutal", label: "野兽风格", desc: "粗黑边 + 硬阴影 + 直角的高对比风格，不随深色模式变化。" },
-];
-const skinDraft = ref<SkinPref>(getSkinPref());
-const skinSaved = ref<SkinPref>(getSkinPref());
-
-function changeSkin(id: SkinPref) {
-  skinDraft.value = id;
-  previewSkin(id);
-}
-
-function commitSkinDraft() {
-  if (skinDraft.value === skinSaved.value) return;
-  setSkinPref(skinDraft.value);
-  skinSaved.value = skinDraft.value;
-}
-
-function revertSkinDraft() {
-  if (skinDraft.value === skinSaved.value) return;
-  skinDraft.value = skinSaved.value;
-  restoreSavedSkin();
-}
 
 const ACCENTS = ["var(--brand)", "#f59e0b", "#10b981", "#6366f1", "#ec4899"];
 
@@ -95,14 +69,10 @@ const securityOriginal = reactive({
 });
 const homepageForm = reactive({
   public_index_enabled: true,
-  admin_home_return_mode: "top_icon" as "sidebar" | "top_icon",
-  header_effects_enabled: true,
   index_strm_auto_detect_enabled: true,
 });
 const homepageOriginal = reactive({
   public_index_enabled: true,
-  admin_home_return_mode: "top_icon" as "sidebar" | "top_icon",
-  header_effects_enabled: true,
   index_strm_auto_detect_enabled: true,
 });
 const apiKeySettingsRef = ref<InstanceType<typeof ApiKeySettings> | null>(null);
@@ -139,10 +109,7 @@ const securityDirty = computed(
 const homepageDirty = computed(
   () =>
     homepageForm.public_index_enabled !== homepageOriginal.public_index_enabled ||
-    homepageForm.admin_home_return_mode !== homepageOriginal.admin_home_return_mode ||
-    homepageForm.header_effects_enabled !== homepageOriginal.header_effects_enabled ||
-    homepageForm.index_strm_auto_detect_enabled !== homepageOriginal.index_strm_auto_detect_enabled ||
-    skinDraft.value !== skinSaved.value,
+    homepageForm.index_strm_auto_detect_enabled !== homepageOriginal.index_strm_auto_detect_enabled,
 );
 
 const servicesDirty = computed(() => systemChangedCount.value > 0);
@@ -156,7 +123,6 @@ function revertSecurityDraft() {
 
 function revertHomepageDraft() {
   Object.assign(homepageForm, homepageOriginal);
-  revertSkinDraft();
 }
 
 function revertServicesDraft() {
@@ -247,8 +213,6 @@ function applySystemConfig(config: {
   admin_username: string;
   session_timeout: number;
   public_index_enabled: boolean;
-  admin_home_return_mode?: string;
-  header_effects_enabled?: boolean;
   index_strm_auto_detect_enabled?: boolean;
 }) {
   securityForm.admin_username = config.admin_username || "admin";
@@ -257,11 +221,6 @@ function applySystemConfig(config: {
   securityOriginal.session_timeout = securityForm.session_timeout;
   homepageForm.public_index_enabled = config.public_index_enabled ?? true;
   homepageOriginal.public_index_enabled = homepageForm.public_index_enabled;
-  const homeReturn = config.admin_home_return_mode === "sidebar" ? "sidebar" : "top_icon";
-  homepageForm.admin_home_return_mode = homeReturn;
-  homepageOriginal.admin_home_return_mode = homeReturn;
-  homepageForm.header_effects_enabled = config.header_effects_enabled ?? true;
-  homepageOriginal.header_effects_enabled = homepageForm.header_effects_enabled;
   homepageForm.index_strm_auto_detect_enabled = config.index_strm_auto_detect_enabled ?? true;
   homepageOriginal.index_strm_auto_detect_enabled = homepageForm.index_strm_auto_detect_enabled;
 }
@@ -304,9 +263,6 @@ watch(
     }
   },
 );
-onBeforeUnmount(() => {
-  revertSkinDraft();
-});
 
 async function saveSecurity() {
   if (props.forcePasswordChange && !newPassword.value) {
@@ -353,11 +309,8 @@ async function saveHomepage() {
     await updateCredentials({
       admin_username: securityForm.admin_username.trim(),
       public_index_enabled: homepageForm.public_index_enabled,
-      admin_home_return_mode: homepageForm.admin_home_return_mode,
-      header_effects_enabled: homepageForm.header_effects_enabled,
       index_strm_auto_detect_enabled: homepageForm.index_strm_auto_detect_enabled,
     });
-    commitSkinDraft();
     toast.success("首页设置已保存");
     await loadSystemConfig();
     await auth.load();
@@ -554,77 +507,6 @@ async function submit() {
         </SettingsRow>
       </SettingsCard>
 
-      <SettingsCard v-if="isHomepageTab" title="界面显示" :accent="accentColor">
-        <SettingsRow :show-changed-badge="true" :changed="skinDraft !== skinSaved">
-          <template #info>
-            <div class="settings-row__label">
-              <span>主题风格</span>
-              <SettingsHelpTooltip title="主题风格说明">
-                <p>切换整站视觉风格，保存后生效并记忆在本机。</p>
-                <p><strong>经典主题</strong>：现行品牌风格，支持深色模式与顶栏光效。</p>
-                <p><strong>野兽风格</strong>：粗黑边 + 硬阴影 + 直角的高对比风格，不随深色模式变化。</p>
-              </SettingsHelpTooltip>
-            </div>
-          </template>
-          <template #control>
-            <SettingsSegment
-              :model-value="skinDraft"
-              label="主题风格"
-              :options="SKIN_OPTIONS.map((opt) => ({ value: opt.id, label: opt.label }))"
-              @update:model-value="changeSkin($event as SkinPref)"
-            />
-          </template>
-        </SettingsRow>
-
-        <SettingsRow
-          :show-changed-badge="true"
-          :changed="homepageForm.header_effects_enabled !== homepageOriginal.header_effects_enabled"
-        >
-          <template #info>
-            <div class="settings-row__label">
-              <span>顶栏动效</span>
-              <SettingsHelpTooltip title="顶栏动效说明">
-                <p>开启后，前台首页顶栏会根据主题显示日光、飞机、粒子或星空流星效果。</p>
-                <p>关闭后，顶栏只保留静态渐变背景，不渲染任何装饰动效。</p>
-              </SettingsHelpTooltip>
-            </div>
-          </template>
-          <template #control>
-            <SettingsBoolSegment
-              v-model="homepageForm.header_effects_enabled"
-              label="顶栏动效"
-              off-label="关闭"
-              on-label="开启"
-            />
-          </template>
-        </SettingsRow>
-
-        <SettingsRow
-          :show-changed-badge="true"
-          :changed="homepageForm.admin_home_return_mode !== homepageOriginal.admin_home_return_mode"
-        >
-          <template #info>
-            <div class="settings-row__label">
-              <span>首页返回方式</span>
-              <SettingsHelpTooltip title="首页返回方式说明">
-                <p>控制从后台返回前台首页的入口位置。</p>
-                <p><strong>左侧菜单</strong>：在侧栏导航底部显示「返回首页」。</p>
-                <p><strong>顶栏图标</strong>：在顶栏右侧显示房子图标。</p>
-              </SettingsHelpTooltip>
-            </div>
-          </template>
-          <template #control>
-            <SettingsSegment
-              v-model="homepageForm.admin_home_return_mode"
-              label="首页返回方式"
-              :options="[
-                { value: 'top_icon', label: '顶栏图标' },
-                { value: 'sidebar', label: '左侧菜单' },
-              ]"
-            />
-          </template>
-        </SettingsRow>
-      </SettingsCard>
 
       <template v-else-if="isServicesTab">
         <SettingsCard v-if="systemItems.length" title="授权与日志" :accent="accentColor">

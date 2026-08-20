@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
-import { publicApi } from "@/api/public";
 import { logout } from "@/api/auth";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/composables/useToast";
@@ -169,7 +168,6 @@ function createBrightStars(count = 12): BrightStar[] {
 const backgroundStars = ref<BackgroundStar[]>(createBackgroundStars());
 const brightStars = ref<BrightStar[]>(createBrightStars());
 
-const headerEffectsEnabled = ref(true);
 const auth = useAuthStore();
 const loggedIn = computed(() => auth.sessionAdmin);
 const loggingOut = ref(false);
@@ -206,18 +204,12 @@ onMounted(async () => {
   if (!auth.loaded) {
     await auth.load();
   }
-  try {
-    const cfg = await publicApi.systemConfig();
-    headerEffectsEnabled.value = cfg.header_effects_enabled ?? true;
-  } catch {
-    headerEffectsEnabled.value = true;
-  }
 });
 </script>
 
 <template>
   <header class="header">
-    <div v-if="headerEffectsEnabled" class="header__sky" aria-hidden="true">
+    <div class="header__sky" aria-hidden="true">
       <div class="theme-light-only sunlight-container">
         <div class="sun"></div>
         <div class="cloud-layer">
