@@ -3,7 +3,6 @@ import { computed } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
-import AdminNotificationBell from "@/components/admin/AdminNotificationBell.vue";
 import { useAuthStore } from "@/stores/auth";
 import { logout } from "@/api/auth";
 import { toast } from "@/composables/useToast";
@@ -167,7 +166,6 @@ async function handleLogout() {
             <path d="M8 21h8" /><path d="M12 17v4" />
           </svg>
         </button>
-        <AdminNotificationBell variant="main" />
         <button
           type="button"
           class="app-nav__iconbtn"
