@@ -576,9 +576,9 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
           </td>
         </tr>
 
+        <template v-if="!showEmptyRow">
         <tr
           v-for="(f, index) in visibleFiles"
-          v-if="!showEmptyRow"
           :key="fileKey(f)"
           class="file-row"
           :class="{ processing: isInlineProcessing(f), 'drag-target': isActiveDropTarget(f) }"
@@ -687,6 +687,7 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
             </div>
           </td>
         </tr>
+        </template>
         <tr
           v-if="hasMoreFiles && !showEmptyRow"
           :ref="bindLoadMoreSentinel"
