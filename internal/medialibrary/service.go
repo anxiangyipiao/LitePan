@@ -317,7 +317,7 @@ func (s *Service) Detail(ctx context.Context, libID, id string) (*Detail, error)
 		return nil, err
 	}
 	relDir := strings.TrimSpace(it.RelDir)
-	info := readNFOInfo(root.Path, relDir, it.MediaType)
+	info := readNFOInfo(root.Path, relDir, it.MediaType, it.StrmName)
 
 	d := &Detail{
 		ID:              it.ID,
@@ -463,22 +463,32 @@ type nfoInfo struct {
 	Actors   []string
 }
 
-// readNFOInfo 读取条目目录下 movie.nfo / tvshow.nfo 的详情字段。
-func readNFOInfo(rootPath, relDir, mediaType string) nfoInfo {
-	name := "tvshow.nfo"
-	if mediaType == strmscrape.MediaTypeMovie {
-		name = "movie.nfo"
-	}
-	data, err := os.ReadFile(filepath.Join(rootPath, relDir, name))
-	if err != nil {
-		return nfoInfo{}
-	}
+// readNFOInfo 读取条目目录下 movie.nfo / {stem}.nfo / tvshow.nfo 的详情字段。
+// 兼容两种命名：Kodi 标准 movie.nfo 和刮削器按 stem 生成的 {stem}.nfo。
+func readNFOInfo(rootPath, relDir, mediaType, strmName string) nfoInfo {
 	if mediaType == strmscrape.MediaTypeTV {
+		data, err := os.ReadFile(filepath.Join(rootPath, relDir, "tvshow.nfo"))
+		if err != nil {
+			return nfoInfo{}
+		}
 		var nf tvshowNFO
 		if err := xml.Unmarshal(data, &nf); err != nil {
 			return nfoInfo{}
 		}
 		return nfoInfo{Plot: strings.TrimSpace(nf.Plot)}
+	}
+	// 电影：先尝试 {stem}.nfo（刮削器命名），再回落 movie.nfo（Kodi 标准）
+	dir := filepath.Join(rootPath, relDir)
+	var data []byte
+	if stem := mediaStem(strmName); stem != "" {
+		data, _ = os.ReadFile(filepath.Join(dir, stem+".nfo"))
+	}
+	if len(data) == 0 {
+		var err error
+		data, err = os.ReadFile(filepath.Join(dir, "movie.nfo"))
+		if err != nil {
+			return nfoInfo{}
+		}
 	}
 	var nf movieNFO
 	if err := xml.Unmarshal(data, &nf); err != nil {

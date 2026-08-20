@@ -904,7 +904,7 @@ onUnmounted(() => {
           </svg>
         </button>
         <button
-          v-if="isAdmin"
+          v-if="auth.sessionAdmin"
           type="button"
           class="browser__mobile-logout"
           aria-label="退出登录"
