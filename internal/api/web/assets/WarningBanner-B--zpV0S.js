@@ -1,1 +1,0 @@
-import{K as e,S as t,U as n,k as r}from"./vue-vendor-DBT-cNUj.js";/* empty css                     */var i={class:`warning-banner`},a=r({__name:`WarningBanner`,setup(r){return(r,a)=>(n(),t(`div`,i,[e(r.$slots,`default`)]))}});export{a as t};

@@ -90,15 +90,34 @@ function applyManualConfig(fieldOfView: 180 | 360, stereo: "sbs" | "mono") {
 // 外部播放器
 const playerMenuOpen = ref(false);
 const playerMenuRef = ref<HTMLElement | null>(null);
+// true 时播放器弹窗切换为「Skybox 连接指引」（Skybox 走 WebDAV 网络源，不走 URL scheme）
+const skyboxGuideOpen = ref(false);
 const externalPlayers = [
   { name: "VLC", icon: "fa-brands fa-vlc", buildUrl: (url: string) => `vlc://${url}` },
   { name: "PotPlayer", icon: "fa-solid fa-play", buildUrl: (url: string) => `potplayer://${url}` },
   { name: "IINA", icon: "fa-solid fa-play", buildUrl: (url: string) => `iina://weblink?url=${encodeURIComponent(url)}` },
   { name: "mpv", icon: "fa-solid fa-play", buildUrl: (url: string) => `mpv://${url}` },
 ];
+const webdavUrl = computed(() => `http://${window.location.host}/dav`);
 function openExternalPlayer(url: string) {
   window.location.href = url;
   playerMenuOpen.value = false;
+  skyboxGuideOpen.value = false;
+}
+function togglePlayerMenu() {
+  if (playerMenuOpen.value) skyboxGuideOpen.value = false;
+  playerMenuOpen.value = !playerMenuOpen.value;
+}
+function openSkyboxGuide() {
+  skyboxGuideOpen.value = true;
+}
+async function copyWebdavUrl() {
+  try {
+    await navigator.clipboard.writeText(webdavUrl.value);
+    showNotice("WebDAV 地址已复制");
+  } catch {
+    showNotice("复制失败，请手动复制");
+  }
 }
 
 const selectedSubtitleId = ref("");
@@ -164,6 +183,7 @@ function handleDocumentPointerDown(event: PointerEvent) {
   }
   if (playerMenuOpen.value && target && !playerMenuRef.value?.contains(target)) {
     playerMenuOpen.value = false;
+    skyboxGuideOpen.value = false;
   }
 }
 
@@ -425,6 +445,7 @@ function handleKeydown(event: KeyboardEvent) {
     subtitleMenuOpen.value = false;
     vrMenuOpen.value = false;
     playerMenuOpen.value = false;
+    skyboxGuideOpen.value = false;
     return;
   }
   if (isEditableTarget(event.target)) return;
@@ -728,12 +749,12 @@ onUnmounted(() => {
                   :class="{ 'is-active': playerMenuOpen }"
                   aria-label="外部播放器"
                   title="用外部播放器打开"
-                  @click.stop="playerMenuOpen = !playerMenuOpen"
+                  @click.stop="togglePlayerMenu"
                 >
                   <i class="fa-solid fa-display" aria-hidden="true"></i>
                 </button>
                 <Transition name="subtitle-menu">
-                  <div v-if="playerMenuOpen" class="video-preview__player-popover" role="menu" aria-label="选择播放器">
+                  <div v-if="playerMenuOpen && !skyboxGuideOpen" class="video-preview__player-popover" role="menu" aria-label="选择播放器">
                     <div class="video-preview__player-heading">选择播放器</div>
                     <button
                       v-for="player in externalPlayers"
@@ -746,6 +767,49 @@ onUnmounted(() => {
                       <i :class="player.icon" aria-hidden="true"></i>
                       <span>{{ player.name }}</span>
                     </button>
+                    <div class="video-preview__player-sep" role="separator" />
+                    <button
+                      type="button"
+                      class="video-preview__player-option"
+                      role="menuitem"
+                      @click="openSkyboxGuide"
+                    >
+                      <i class="fa-solid fa-vr-cardboard" aria-hidden="true"></i>
+                      <span>Skybox（Quest）</span>
+                      <i class="fa-solid fa-chevron-right video-preview__player-chevron" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                  <div v-else-if="playerMenuOpen && skyboxGuideOpen" class="video-preview__player-popover video-preview__skybox-guide" role="dialog" aria-label="Skybox 连接指引">
+                    <button
+                      type="button"
+                      class="video-preview__player-back"
+                      @click="skyboxGuideOpen = false"
+                    >
+                      <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                      返回
+                    </button>
+                    <div class="video-preview__skybox-title">用 Skybox 播放网盘 VR 视频</div>
+                    <ol class="video-preview__skybox-steps">
+                      <li>
+                        管理后台 <b>系统设置 → WebDAV</b> 开启 WebDAV 并设置账号密码（若已开启可跳过）。
+                      </li>
+                      <li>
+                        Skybox（Quest）→ <b>本地网络 / Network</b> → 添加 WebDAV 服务器。
+                      </li>
+                      <li>地址填下方 URL，账号密码填第 1 步设置的，然后浏览到视频并播放。</li>
+                    </ol>
+                    <div class="video-preview__skybox-url-row">
+                      <code class="video-preview__skybox-url">{{ webdavUrl }}</code>
+                      <button
+                        type="button"
+                        class="video-preview__skybox-copy"
+                        @click="copyWebdavUrl"
+                      >
+                        <i class="fa-regular fa-copy" aria-hidden="true"></i>
+                        复制
+                      </button>
+                    </div>
+                    <p class="video-preview__skybox-hint">Skybox 会自动识别 180°/360°/左右立体，或播放时在视角菜单手动切换。</p>
                   </div>
                 </Transition>
               </div>
@@ -1283,6 +1347,74 @@ onUnmounted(() => {
 .video-preview__player-option:hover { color: #edf7ff; background: rgb(255 255 255 / 7%); }
 .video-preview__player-option:focus-visible { box-shadow: inset 0 0 0 1px #2698ff; }
 .video-preview__player-option i { width: 16px; text-align: center; font-size: 13px; }
+.video-preview__player-chevron { margin-left: auto; font-size: 11px !important; opacity: 0.6; }
+.video-preview__player-sep { height: 1px; margin: 5px 4px; background: rgb(255 255 255 / 9%); }
+
+.video-preview__skybox-guide {
+  width: 300px;
+  max-width: 86vw;
+  padding: 10px 12px 12px;
+}
+.video-preview__player-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  margin-bottom: 6px;
+  border: none;
+  border-radius: 7px;
+  color: #9fb0c6;
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+}
+.video-preview__player-back:hover { color: #edf7ff; background: rgb(255 255 255 / 7%); }
+.video-preview__skybox-title { color: #f5f9ff; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.video-preview__skybox-steps {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #b6c6da;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.video-preview__skybox-steps b { color: #eaf3ff; font-weight: 650; }
+.video-preview__skybox-url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid rgb(89 151 224 / 26%);
+  border-radius: 9px;
+  background: rgb(0 0 0 / 22%);
+}
+.video-preview__skybox-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #8fd0ff;
+  font-size: 12px;
+}
+.video-preview__skybox-copy {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: none;
+  border-radius: 7px;
+  color: #eaf3ff;
+  background: rgb(22 135 255 / 85%);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.video-preview__skybox-copy:hover { background: rgb(22 135 255 / 1); }
+.video-preview__skybox-hint { margin: 9px 0 0; color: #7d8ca3; font-size: 11px; line-height: 1.5; }
 
 .video-preview__shortcuts {
   min-height: 25px;
