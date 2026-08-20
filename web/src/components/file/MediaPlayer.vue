@@ -7,15 +7,20 @@ import SvgIcon from "@/components/icons/SvgIcon.vue";
 // 影视模式通用播放器：内嵌视频 + 外部播放器（VLC/PotPlayer/IINA/mpv/Skybox）。
 // 支持 hls.js / mpegts.js 流；外部播放器走 URL scheme（Skybox 走 WebDAV 指引）。
 
-const props = defineProps<{
-  open: boolean;
-  title: string;
-  playUrl: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    open: boolean;
+    title: string;
+    playUrl: string;
+    fullscreenOnOpen?: boolean;
+  }>(),
+  { fullscreenOnOpen: true },
+);
 
 const emit = defineEmits<{ close: [] }>();
 
 const videoRef = ref<HTMLVideoElement | null>(null);
+const wrapRef = ref<HTMLDivElement | null>(null);
 const playerError = ref(false);
 const playerMenuOpen = ref(false);
 const skyboxGuideOpen = ref(false);
@@ -35,6 +40,25 @@ const src = computed(() =>
   props.playUrl ? `${window.location.origin}${props.playUrl}` : "",
 );
 
+function isFullscreen() {
+  return Boolean(document.fullscreenElement);
+}
+
+async function enterFullscreen() {
+  const el = wrapRef.value as unknown as HTMLElement | null;
+  if (!el || isFullscreen()) return;
+  try {
+    await el.requestFullscreen?.();
+  } catch {
+    // 忽略用户手势/策略限制导致的失败，保留弹窗可播放
+  }
+}
+
+function exitFullscreenIfNeeded() {
+  if (!isFullscreen()) return;
+  void document.exitFullscreen?.().catch(() => {});
+}
+
 const externalPlayers = [
   { name: "VLC", icon: "fa-brands fa-vlc", buildUrl: (url: string) => `vlc://${url}` },
   { name: "PotPlayer", icon: "fa-solid fa-play", buildUrl: (url: string) => `potplayer://${url}` },
@@ -44,6 +68,7 @@ const externalPlayers = [
 const webdavUrl = computed(() => `http://${window.location.host}/dav`);
 
 function closePlayer() {
+  exitFullscreenIfNeeded();
   playerSession += 1;
   playerHls?.destroy();
   playerHls = null;
@@ -103,7 +128,11 @@ async function setupPlayer() {
 watch(
   () => props.open,
   (open) => {
-    if (open) void nextTick(setupPlayer);
+    if (!open) return;
+    void nextTick(async () => {
+      await setupPlayer();
+      if (props.fullscreenOnOpen) void enterFullscreen();
+    });
   },
 );
 
@@ -115,11 +144,14 @@ function openExternalPlayer(url: string) {
 
 <template>
   <div v-if="open" class="mp-mask" @click.self="closePlayer">
-    <div class="mp">
+    <div ref="wrapRef" class="mp">
       <header class="mp-head">
         <span class="mp-title" :title="title">{{ title }}</span>
         <span class="mp-meta">播放中</span>
         <span class="mp-spacer" />
+        <button type="button" class="mp-close" title="全屏" @click="enterFullscreen">
+          <i class="fa-solid fa-expand" aria-hidden="true"></i>
+        </button>
         <button type="button" class="mp-close" title="关闭" @click="closePlayer">
           <SvgIcon name="sign-out" :size="14" />
         </button>
@@ -175,6 +207,20 @@ function openExternalPlayer(url: string) {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.mp:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  max-height: none;
+  border-radius: 0;
+  background: #000;
+}
+
+.mp:fullscreen .mp-video {
+  flex: 1 1 auto;
+  aspect-ratio: auto;
+  min-height: 0;
 }
 
 .mp-head {
