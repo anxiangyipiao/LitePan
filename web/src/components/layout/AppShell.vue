@@ -181,10 +181,13 @@ async function handleLogout() {
     <div class="app-body">
       <main class="app-main">
         <RouterView v-slot="{ Component }">
-          <!-- :key 放 Transition 上：每次路由变化重建整个 Transition，旧组件立即卸载，
-               避免异步路由 + 过渡的离场竞态导致页面卡住；进场淡入保证动画 -->
-          <Transition name="page" :key="$route.path" appear>
-            <component :is="Component" />
+          <!-- Transition 外层 + KeepAlive 内层 + key 放组件上：
+               KeepAlive 按 (组件,key) 缓存页面，返回时保留库选择/筛选/滚动等状态。
+               无 mode + 离场 transition:none，避免异步路由离场竞态卡住 -->
+          <Transition name="page">
+            <KeepAlive>
+              <component :is="Component" :key="$route.path" />
+            </KeepAlive>
           </Transition>
         </RouterView>
       </main>
