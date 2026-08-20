@@ -444,6 +444,7 @@ type movieNFO struct {
 	Plot     string     `xml:"plot"`
 	Runtime  string     `xml:"runtime"`
 	Genres   []string   `xml:"genre"`
+	Tags     []string   `xml:"tag"`
 	Studio   string     `xml:"studio"`
 	Director string     `xml:"director"`
 	Actors   []nfoActor `xml:"actor"`
@@ -467,8 +468,9 @@ type nfoInfo struct {
 // readNFOInfo 读取条目目录下 movie.nfo / {stem}.nfo / tvshow.nfo 的详情字段。
 // 兼容两种命名：Kodi 标准 movie.nfo 和刮削器按 stem 生成的 {stem}.nfo。
 func readNFOInfo(rootPath, relDir, mediaType, strmName string) nfoInfo {
+	dir := filepath.Join(rootPath, relDir)
 	if mediaType == strmscrape.MediaTypeTV {
-		data, err := os.ReadFile(filepath.Join(rootPath, relDir, "tvshow.nfo"))
+		data, err := os.ReadFile(filepath.Join(dir, "tvshow.nfo"))
 		if err != nil {
 			return nfoInfo{}
 		}
@@ -478,27 +480,25 @@ func readNFOInfo(rootPath, relDir, mediaType, strmName string) nfoInfo {
 		}
 		return nfoInfo{Plot: strings.TrimSpace(nf.Plot)}
 	}
-	// 电影：先尝试 {stem}.nfo（刮削器命名），再回落 movie.nfo（Kodi 标准）
-	dir := filepath.Join(rootPath, relDir)
-	var data []byte
-	if stem := mediaStem(strmName); stem != "" {
-		data, _ = os.ReadFile(filepath.Join(dir, stem+".nfo"))
-	}
+	// 电影：先尝试 {stem}.nfo（刮削器命名），再回落 movie.nfo（Kodi 标准），
+	// 最后扫描目录下任意 .nfo（兼容手动命名的 {番号}.nfo）。
+	data := readFirstMovieNFO(dir, strmName)
 	if len(data) == 0 {
-		var err error
-		data, err = os.ReadFile(filepath.Join(dir, "movie.nfo"))
-		if err != nil {
-			return nfoInfo{}
-		}
+		return nfoInfo{}
 	}
 	var nf movieNFO
 	if err := xml.Unmarshal(data, &nf); err != nil {
 		return nfoInfo{}
 	}
-	genres := make([]string, 0, len(nf.Genres))
+	genres := make([]string, 0, len(nf.Genres)+len(nf.Tags))
 	for _, g := range nf.Genres {
 		if t := strings.TrimSpace(g); t != "" {
 			genres = append(genres, t)
+		}
+	}
+	for _, t := range nf.Tags {
+		if v := strings.TrimSpace(t); v != "" && !containsString(genres, v) {
+			genres = append(genres, v)
 		}
 	}
 	actors := make([]string, 0, len(nf.Actors))
@@ -517,9 +517,49 @@ func readNFOInfo(rootPath, relDir, mediaType, strmName string) nfoInfo {
 	}
 }
 
+// readFirstMovieNFO 按优先级读取电影 nfo 内容：
+// 1) {stem}.nfo（StrmName 非空时，刮削器命名）
+// 2) movie.nfo（Kodi 标准）
+// 3) 目录下第一个非 tvshow 的 .nfo（兼容 {番号}.nfo 等手动命名）
+func readFirstMovieNFO(dir, strmName string) []byte {
+	if stem := mediaStem(strmName); stem != "" {
+		if data, err := os.ReadFile(filepath.Join(dir, stem+".nfo")); err == nil && len(data) > 0 {
+			return data
+		}
+	}
+	if data, err := os.ReadFile(filepath.Join(dir, "movie.nfo")); err == nil && len(data) > 0 {
+		return data
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.EqualFold(filepath.Ext(e.Name()), ".nfo") {
+			continue
+		}
+		if strings.EqualFold(e.Name(), "tvshow.nfo") {
+			continue
+		}
+		if data, err := os.ReadFile(filepath.Join(dir, e.Name())); err == nil && len(data) > 0 {
+			return data
+		}
+	}
+	return nil
+}
+
 func fileExists(path string) bool {
 	st, err := os.Stat(path)
 	return err == nil && !st.IsDir()
+}
+
+func containsString(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 // Poster 返回某库某海报文件的本地路径（委托 strmscrape 校验）。
