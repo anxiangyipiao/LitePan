@@ -1,1 +1,0 @@
-var e=`/static/img/logo.png`;export{e as t};

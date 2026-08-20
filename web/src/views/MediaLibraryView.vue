@@ -13,8 +13,6 @@ import { getApiErrorMessage } from "@/api/client";
 import { useVirtualPosterWall } from "@/composables/useVirtualPosterWall";
 import { useAuthStore } from "@/stores/auth";
 import { fileExtension } from "@/utils/format";
-import AppHeader from "@/components/layout/AppHeader.vue";
-import AppFooter from "@/components/layout/AppFooter.vue";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
 
@@ -317,11 +315,8 @@ const subtitle = (item: MediaLibraryItem) => {
 </script>
 
 <template>
-  <div class="page">
-    <AppHeader />
-    <main class="page__main">
-      <div class="ml-page">
-        <header class="ml-topbar">
+  <div class="ml-page">
+    <header class="ml-topbar">
       <h1 class="ml-title">影视</h1>
 
       <select v-model="libId" class="ml-control" aria-label="选择影视库">
@@ -592,15 +587,12 @@ const subtitle = (item: MediaLibraryItem) => {
         </div>
       </div>
     </div>
-      </div>
-    </main>
-    <AppFooter />
   </div>
 </template>
 
 <style scoped>
 .ml-page {
-  min-height: calc(100vh - var(--header-height, 60px));
+  min-height: 100vh;
   padding: 16px;
   max-width: 1280px;
   margin: 0 auto;
@@ -1060,18 +1052,6 @@ const subtitle = (item: MediaLibraryItem) => {
   border: 1px solid var(--border-soft, #e2e8f0);
   background: var(--surface, #fff);
   color: var(--text-regular, #334155);
-}
-
-/* 页面外壳（与 IndexView 一致） */
-.page {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
-
-.page__main {
-  flex: 1;
-  background: var(--bg);
 }
 
 /* ---- 详情页 ---- */

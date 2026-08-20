@@ -1,31 +1,39 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
 import { fetchAuthStatus } from "@/api/auth";
 import { useAuthStore } from "@/stores/auth";
+import AppShell from "@/components/layout/AppShell.vue";
 
+// 主框架：左侧导航（网盘/影视/管理）包裹三个页面；登录页独立无导航。
 const routes: RouteRecordRaw[] = [
   {
     path: "/",
-    name: "home",
-    component: () => import("@/views/IndexView.vue"),
-    meta: { title: "文件浏览" },
-  },
-  {
-    path: "/movies",
-    name: "movies",
-    component: () => import("@/views/MediaLibraryView.vue"),
-    meta: { title: "影视" },
+    component: AppShell,
+    children: [
+      {
+        path: "",
+        name: "home",
+        component: () => import("@/views/IndexView.vue"),
+        meta: { title: "文件浏览" },
+      },
+      {
+        path: "movies",
+        name: "movies",
+        component: () => import("@/views/MediaLibraryView.vue"),
+        meta: { title: "影视" },
+      },
+      {
+        path: "admin",
+        name: "admin",
+        component: () => import("@/views/AdminView.vue"),
+        meta: { title: "管理后台", requiresAuth: true },
+      },
+    ],
   },
   {
     path: "/login",
     name: "login",
     component: () => import("@/views/LoginView.vue"),
     meta: { title: "管理员登录", guestOnly: true },
-  },
-  {
-    path: "/admin",
-    name: "admin",
-    component: () => import("@/views/AdminView.vue"),
-    meta: { title: "管理后台", requiresAuth: true },
   },
   { path: "/:pathMatch(.*)*", redirect: "/" },
 ];
