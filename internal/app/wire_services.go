@@ -10,12 +10,13 @@ import (
 	"litepan/internal/crosstransfer"
 	"litepan/internal/domain"
 	"litepan/internal/embyproxy"
-	"litepan/internal/fnosproxy"
 	"litepan/internal/favorites"
 	"litepan/internal/file"
+	"litepan/internal/fnosproxy"
 	"litepan/internal/fusemount"
 	"litepan/internal/fusereadcache"
 	"litepan/internal/logx"
+	"litepan/internal/medialibrary"
 	"litepan/internal/mediaorganize"
 	"litepan/internal/offlinedownload"
 	"litepan/internal/playback"
@@ -34,6 +35,7 @@ type servicesBundle struct {
 	strm             *strm.Service
 	mediaOrganize    *mediaorganize.Service
 	strmScrape       *strmscrape.Service
+	mediaLibrary     *medialibrary.Service
 	automation       *automation.Service
 	fuse             *fusemount.Service
 	fuseReadCache    *fusereadcache.Service
@@ -61,6 +63,7 @@ func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *
 		StrmDir:  cfg.StrmDir,
 		Log:      logs.For(logx.ModuleSystem),
 	})
+	mediaLibrarySvc := medialibrary.New(st.settings, strmScrapeSvc, logs.For(logx.ModuleSystem))
 	strmSvc.SetOrganizeBusyChecker(mediaOrganizeSvc)
 	strmSvc.SetRetentionBusyChecker(retentionSvc)
 	retentionSvc.SetStrmBusyChecker(strmSvc)
@@ -158,6 +161,7 @@ func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *
 		strm:             strmSvc,
 		mediaOrganize:    mediaOrganizeSvc,
 		strmScrape:       strmScrapeSvc,
+		mediaLibrary:     mediaLibrarySvc,
 		automation:       automationSvc,
 		fuse:             fuseSvc,
 		fuseReadCache:    fuseReadCache,

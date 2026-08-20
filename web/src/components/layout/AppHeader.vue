@@ -423,6 +423,11 @@ onMounted(async () => {
           </svg>
         </button>
 
+        <RouterLink to="/movies" class="header-nav-link" aria-label="影视模式">
+          <SvgIcon name="video" :size="15" />
+          <span>影视</span>
+        </RouterLink>
+
         <RouterLink v-if="!loggedIn" to="/login" class="header-auth" title="登录后台">
           <span class="header-auth__icon" aria-hidden="true">
             <SvgIcon name="sign-in" :size="15" />
@@ -1198,6 +1203,22 @@ onMounted(async () => {
   text-decoration: none;
   white-space: nowrap;
   letter-spacing: 0.01em;
+}
+
+/* 顶栏「影视」入口：独立于登录态，公开可点 */
+.header-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  text-decoration: none;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  margin-right: 14px;
+}
+.header-nav-link:hover {
+  color: #fff;
 }
 
 /* 顶栏图标按钮（传输任务 / 暗色开关） */

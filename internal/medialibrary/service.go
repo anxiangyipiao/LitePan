@@ -1,0 +1,326 @@
+// Package medialibrary 提供「影视模式」：读取 STRM 刮削输出的电影/剧集库，
+// 从可配置的服务器本地根目录聚合为海报墙数据，并解析出可播放地址。
+package medialibrary
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"net/url"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"litepan/internal/domain"
+	"litepan/internal/settings"
+	"litepan/internal/strm"
+	"litepan/internal/strmscrape"
+)
+
+// Root 一个影视库根目录配置（服务器本地刮削输出目录）。
+type Root struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+// Item 影视模式展示条目：strmscrape.Item 的公开子集 + 库 id 与播放地址。
+type Item struct {
+	Title      string `json:"title"`
+	Year       *int   `json:"year,omitempty"`
+	MediaType  string `json:"media_type"`
+	Status     string `json:"status"`
+	TMDBID     string `json:"tmdb_id,omitempty"`
+	PosterURL  string `json:"poster_url,omitempty"`
+	FolderName string `json:"folder_name,omitempty"`
+	FileCount  int    `json:"file_count"`
+	EpLocal    int    `json:"ep_local,omitempty"`
+	EpTMDB     int    `json:"ep_tmdb,omitempty"`
+	EpScraped  int    `json:"ep_scraped,omitempty"`
+	TVState    string `json:"tv_state,omitempty"`
+	LibID      string `json:"lib_id"`
+	PlayURL    string `json:"play_url,omitempty"`
+}
+
+// ItemListResult 聚合后的条目列表。
+type ItemListResult struct {
+	Items   []Item `json:"items"`
+	Total   int    `json:"total"`
+	HasMore bool   `json:"has_more"`
+}
+
+// mergeCap 跨库合并时单库最多拉取的条目数（首几页分页正确即可，超限截断）。
+const mergeCap = 2000
+
+// Service 影视模式服务。依赖 settings（根目录配置）与 strmscrape（索引/海报）。
+type Service struct {
+	settings *settings.Service
+	scrape   *strmscrape.Service
+	log      *slog.Logger
+}
+
+func New(set *settings.Service, scrape *strmscrape.Service, log *slog.Logger) *Service {
+	if log == nil {
+		log = slog.Default()
+	}
+	return &Service{settings: set, scrape: scrape, log: log}
+}
+
+// Roots 读取配置的影视库根目录。
+func (s *Service) Roots(ctx context.Context) ([]Root, error) {
+	raw := ""
+	if s.settings != nil {
+		raw = s.settings.String(settings.KeyMediaLibraryRoots)
+	}
+	roots := []Root{}
+	raw = strings.TrimSpace(raw)
+	if raw != "" && raw != "[]" {
+		if err := json.Unmarshal([]byte(raw), &roots); err != nil {
+			return nil, domain.Errorf(domain.CodeValidation, "影视库根目录配置格式错误")
+		}
+	}
+	return roots, nil
+}
+
+// SaveRoots 保存影视库根目录配置（校验路径非空、去空项）。
+func (s *Service) SaveRoots(ctx context.Context, roots []Root) error {
+	if s.settings == nil {
+		return domain.Errorf(domain.CodeInternal, "设置未就绪")
+	}
+	out := make([]Root, 0, len(roots))
+	seen := map[string]struct{}{}
+	for _, r := range roots {
+		r.Name = strings.TrimSpace(r.Name)
+		r.Path = strings.TrimSpace(r.Path)
+		r.ID = strings.TrimSpace(r.ID)
+		if r.Name == "" {
+			r.Name = r.Path
+		}
+		if r.Path == "" {
+			return domain.Errorf(domain.CodeValidation, "根目录路径不能为空")
+		}
+		if r.ID == "" {
+			r.ID = fmt.Sprintf("lib%d", len(out)+1)
+		}
+		if _, dup := seen[r.ID]; dup {
+			continue
+		}
+		seen[r.ID] = struct{}{}
+		out = append(out, r)
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return domain.Wrap(domain.CodeInternal, err)
+	}
+	return s.settings.Update(ctx, map[string]string{settings.KeyMediaLibraryRoots: string(b)})
+}
+
+// RootByID 按 id 查根目录。
+func (s *Service) RootByID(ctx context.Context, id string) (*Root, error) {
+	roots, err := s.Roots(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range roots {
+		if roots[i].ID == id {
+			return &roots[i], nil
+		}
+	}
+	return nil, domain.Errorf(domain.CodeNotFound, "影视库不存在")
+}
+
+// Items 聚合查询影视条目。libID 为空时合并全部库；非空时只查该库。
+func (s *Service) Items(ctx context.Context, libID string, query strmscrape.ItemListQuery) (ItemListResult, error) {
+	roots, err := s.Roots(ctx)
+	if err != nil {
+		return ItemListResult{}, err
+	}
+	if len(roots) == 0 {
+		return ItemListResult{}, nil
+	}
+
+	// 指定单库：透传查询（分页正确、索引直查）。
+	if libID != "" {
+		var root *Root
+		for i := range roots {
+			if roots[i].ID == libID {
+				root = &roots[i]
+				break
+			}
+		}
+		if root == nil {
+			return ItemListResult{}, domain.Errorf(domain.CodeNotFound, "影视库不存在")
+		}
+		return s.queryRoot(ctx, *root, query)
+	}
+
+	// 跨库合并：每库取前 (offset+limit) 条，合并排序后全局分页（best-effort）。
+	fetch := query.Limit + query.Offset
+	if fetch > mergeCap {
+		fetch = mergeCap
+	}
+	q := query
+	q.Offset = 0
+	q.Limit = fetch
+
+	merged := make([]Item, 0)
+	total := 0
+	for _, root := range roots {
+		res, err := s.queryRoot(ctx, root, q)
+		if err != nil {
+			s.log.Warn("影视库查询失败，已跳过", "lib", root.ID, "path", root.Path, "err", err)
+			continue
+		}
+		merged = append(merged, res.Items...)
+		total += res.Total
+	}
+	sortLibraryItems(merged, query.Sort)
+	start := query.Offset
+	if start < 0 {
+		start = 0
+	}
+	end := start + query.Limit
+	if end > len(merged) {
+		end = len(merged)
+	}
+	page := []Item{}
+	if start < len(merged) {
+		page = merged[start:end]
+	}
+	return ItemListResult{Items: page, Total: total, HasMore: end < len(merged) || end < total}, nil
+}
+
+// queryRoot 查询单个库并转换/补全条目（海报 URL 改指向公开端点、提取播放地址）。
+func (s *Service) queryRoot(ctx context.Context, root Root, query strmscrape.ItemListQuery) (ItemListResult, error) {
+	if s.scrape == nil {
+		return ItemListResult{}, domain.Errorf(domain.CodeInternal, "刮削服务未就绪")
+	}
+	res, err := s.scrape.ListItems(ctx, 0, root.Path, query)
+	if err != nil {
+		return ItemListResult{}, err
+	}
+	out := make([]Item, 0, len(res.Items))
+	for _, it := range res.Items {
+		out = append(out, s.toLibraryItem(ctx, root, it))
+	}
+	return ItemListResult{Items: out, Total: res.Total, HasMore: res.HasMore}, nil
+}
+
+func (s *Service) toLibraryItem(ctx context.Context, root Root, it strmscrape.Item) Item {
+	item := Item{
+		Title:      it.Title,
+		Year:       it.Year,
+		MediaType:  it.MediaType,
+		Status:     it.Status,
+		TMDBID:     it.TMDBID,
+		FolderName: it.FolderName,
+		FileCount:  it.FileCount,
+		EpLocal:    it.EpLocal,
+		EpTMDB:     it.EpTMDB,
+		EpScraped:  it.EpScraped,
+		TVState:    it.TVState,
+		LibID:      root.ID,
+		PosterURL:  rebuildPosterURL(root.ID, it.PosterURL),
+		PlayURL:    s.resolvePlayPath(root.Path, it),
+	}
+	return item
+}
+
+// rebuildPosterURL 把 strmscrape 的 admin 海报 URL 改写为影视模式公开端点，并用库 id 代替裸路径。
+func rebuildPosterURL(libID, posterURL string) string {
+	rel := ""
+	if u, err := url.Parse(posterURL); err == nil {
+		rel = u.Query().Get("rel")
+	}
+	if rel == "" {
+		return ""
+	}
+	return "/api/media-library/poster?lib=" + url.QueryEscape(libID) + "&rel=" + url.QueryEscape(rel)
+}
+
+// resolvePlayPath 读取条目对应的本地 .strm 文件，提取播放相对路径。
+// 剧集目录（StrmName 为空、多个 .strm）取排序后第一个。
+func (s *Service) resolvePlayPath(rootPath string, it strmscrape.Item) string {
+	dir := filepath.Join(rootPath, strings.TrimSpace(it.RelDir))
+	name := strings.TrimSpace(it.StrmName)
+	if name == "" {
+		matches, _ := filepath.Glob(filepath.Join(dir, "*.strm"))
+		sort.Strings(matches)
+		if len(matches) == 0 {
+			return ""
+		}
+		data, err := os.ReadFile(matches[0])
+		if err != nil {
+			return ""
+		}
+		return strm.ExtractPlayPath(string(data))
+	}
+	data, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		return ""
+	}
+	return strm.ExtractPlayPath(string(data))
+}
+
+// Poster 返回某库某海报文件的本地路径（委托 strmscrape 校验）。
+func (s *Service) Poster(ctx context.Context, libID, rel string) (string, error) {
+	if s.scrape == nil {
+		return "", domain.Errorf(domain.CodeInternal, "刮削服务未就绪")
+	}
+	root, err := s.RootByID(ctx, libID)
+	if err != nil {
+		return "", err
+	}
+	return s.scrape.ResolvePosterFile(ctx, 0, root.Path, rel)
+}
+
+// Refresh 强制重建各库索引并返回刷新后的条目。
+func (s *Service) Refresh(ctx context.Context, libID string, query strmscrape.ItemListQuery) (ItemListResult, error) {
+	roots, err := s.Roots(ctx)
+	if err != nil {
+		return ItemListResult{}, err
+	}
+	for _, root := range roots {
+		if s.scrape == nil {
+			continue
+		}
+		if _, err := s.scrape.RefreshIndex(ctx, 0, root.Path, query); err != nil {
+			s.log.Warn("影视库索引刷新失败，已跳过", "lib", root.ID, "err", err)
+		}
+	}
+	return s.Items(ctx, libID, query)
+}
+
+// sortLibraryItems 跨库合并结果按查询排序归一（title/year/added）。
+func sortLibraryItems(items []Item, sortKey strmscrape.ItemListSort) {
+	sort.SliceStable(items, func(i, j int) bool {
+		a, b := items[i], items[j]
+		switch sortKey {
+		case strmscrape.ItemListSortYearAsc, strmscrape.ItemListSortYearDesc:
+			av, bv := -1, -1
+			if a.Year != nil {
+				av = *a.Year
+			}
+			if b.Year != nil {
+				bv = *b.Year
+			}
+			if av != bv {
+				if sortKey == strmscrape.ItemListSortYearAsc {
+					return av < bv
+				}
+				return av > bv
+			}
+			return a.Title < b.Title
+		case strmscrape.ItemListSortAddedAsc, strmscrape.ItemListSortAddedDesc:
+			if a.TMDBID != "" && b.TMDBID != "" {
+				// 无独立 added 时间戳，退回标题序。
+				return a.Title < b.Title
+			}
+			return a.Title < b.Title
+		default: // title_asc
+			return strings.ToLower(a.Title) < strings.ToLower(b.Title)
+		}
+	})
+}

@@ -47,6 +47,7 @@ const (
 	KeyStrmScrapeWriteMode         = "strm_scrape_write_mode"
 	KeyStrmScrapeSource            = "strm_scrape_source"
 	KeyStrmScrapeMetaTubeURL       = "strm_scrape_metatube_url"
+	KeyMediaLibraryRoots           = "media_library_roots"
 
 	KeyMagnetSearchBaseURL       = "magnet_search_base_url"
 	KeyMagnetSearchProxyURL      = "magnet_search_proxy_url"
@@ -528,6 +529,14 @@ func defaultSpecs() []Spec {
 			Label:       "MetaTube API 地址",
 			Description: "MetaTube 服务地址，例如 https://your-metatube.example.com/。留空且数据源选 MetaTube 时刮削会提示未配置。",
 			Default:     "",
+		},
+		{
+			Key:         KeyMediaLibraryRoots,
+			Type:        TypeString,
+			Category:    "strm",
+			Label:       "影视库根目录（JSON）",
+			Description: "影视模式读取的刮削输出根目录列表，JSON 数组 [{id,name,path}]。建议在影视页「配置库」里维护，此处一般无需手填。",
+			Default:     "[]",
 		},
 		{
 			Key:         KeyMOProxyEnabled,

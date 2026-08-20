@@ -30,6 +30,7 @@ import (
 	"litepan/internal/fnosproxy"
 	"litepan/internal/fusemount"
 	"litepan/internal/logx"
+	"litepan/internal/medialibrary"
 	"litepan/internal/mediaorganize"
 	"litepan/internal/notification"
 	"litepan/internal/offlinedownload"
@@ -62,6 +63,7 @@ type Deps struct {
 	CacheRetention    *cacheretention.Service
 	MediaOrganize     *mediaorganize.Service
 	StrmScrape        *strmscrape.Service
+	MediaLibrary      *medialibrary.Service
 	Automation        *automation.Service
 	Fuse              *fusemount.Service
 	CrossTransfer     *crosstransfer.Service
@@ -93,6 +95,7 @@ type Handler struct {
 	cacheRetention    *cacheretention.Service
 	mediaOrganize     *mediaorganize.Service
 	strmScrape        *strmscrape.Service
+	mediaLibrary      *medialibrary.Service
 	automation        *automation.Service
 	fuse              *fusemount.Service
 	crossTransfer     *crosstransfer.Service
@@ -128,6 +131,7 @@ func NewRouter(d Deps) http.Handler {
 		cacheRetention:    d.CacheRetention,
 		mediaOrganize:     d.MediaOrganize,
 		strmScrape:        d.StrmScrape,
+		mediaLibrary:      d.MediaLibrary,
 		automation:        d.Automation,
 		fuse:              d.Fuse,
 		crossTransfer:     d.CrossTransfer,
@@ -167,6 +171,13 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/accounts", h.publicAccounts)
 			r.Get("/system-config", h.publicSystemConfig)
 			r.Get("/cache/hit-rate", h.publicCacheHitRate)
+		})
+		r.Route("/media-library", func(r chi.Router) {
+			r.Use(h.requirePublicOrAdmin)
+			r.Get("/roots", h.mediaLibraryRoots)
+			r.Get("/items", h.mediaLibraryItems)
+			r.Get("/poster", h.mediaLibraryPoster)
+			r.Post("/refresh", h.mediaLibraryRefresh)
 		})
 		r.Route("/open", func(r chi.Router) {
 			r.Post("/automation/events", h.automationWebhook)
@@ -285,6 +296,7 @@ func NewRouter(d Deps) http.Handler {
 					r.Post("/test-tmdb", h.testMediaOrganizeTMDB)
 					r.Get("/search-tmdb", h.searchMediaOrganizeTMDB)
 				})
+				r.Put("/media-library/roots", h.adminSaveMediaLibraryRoots)
 				r.Route("/strm-scrape", func(r chi.Router) {
 					r.Get("/settings", h.getStrmScrapeSettings)
 					r.Put("/settings", h.updateStrmScrapeSettings)

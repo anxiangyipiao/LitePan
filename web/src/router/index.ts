@@ -10,6 +10,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: "文件浏览" },
   },
   {
+    path: "/movies",
+    name: "movies",
+    component: () => import("@/views/MediaLibraryView.vue"),
+    meta: { title: "影视" },
+  },
+  {
     path: "/login",
     name: "login",
     component: () => import("@/views/LoginView.vue"),
@@ -65,7 +71,7 @@ router.beforeEach(async (to) => {
     }
   }
 
-  if (to.name === "home") {
+  if (to.name === "home" || to.name === "movies") {
     if (auth.loaded && auth.sessionAdmin) return true;
     try {
       const status = await fetchAuthStatus();
