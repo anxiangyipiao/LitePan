@@ -105,13 +105,8 @@ function playDisc(disc: MediaLibraryDisc) {
             :src="detail.poster_url"
             :alt="detail.title"
             class="detail-poster"
-            :class="{ 'detail-poster--lift': detail.backdrop_url }"
           />
-          <div
-            v-else
-            class="detail-poster detail-poster--empty"
-            :class="{ 'detail-poster--lift': detail.backdrop_url }"
-          >
+          <div v-else class="detail-poster detail-poster--empty">
             {{ detail.title.slice(0, 1) }}
           </div>
 
@@ -152,21 +147,24 @@ function playDisc(disc: MediaLibraryDisc) {
               </button>
               <span v-else-if="!detail.discs?.length" class="detail-nosource">该影视无可用播放源</span>
             </div>
+          </div>
+        </div>
 
-            <div v-if="!isTV && detail.discs?.length" class="detail-discs">
-              <span class="detail-discs__label">碟片</span>
-              <button
-                v-for="(d, i) in detail.discs"
-                :key="i"
-                type="button"
-                class="detail-disc"
-                :disabled="!d.play_url"
-                :title="d.play_url ? '播放' : '无播放源'"
-                @click="playDisc(d)"
-              >
-                {{ d.label }}
-              </button>
-            </div>
+        <div v-if="!isTV && detail.discs?.length" class="detail-episodes">
+          <h3 class="detail-sec">碟片（{{ detail.discs.length }}）</h3>
+          <div class="detail-ep-grid">
+            <button
+              v-for="(d, i) in detail.discs"
+              :key="i"
+              type="button"
+              class="detail-ep"
+              :disabled="!d.play_url"
+              :title="d.play_url ? '播放' : '无播放源'"
+              @click="playDisc(d)"
+            >
+              <span class="detail-ep-num">{{ d.label }}</span>
+              <SvgIcon v-if="d.play_url" name="play" :size="12" />
+            </button>
           </div>
         </div>
 
@@ -250,7 +248,7 @@ function playDisc(disc: MediaLibraryDisc) {
 
 .detail-hero {
   position: relative;
-  height: 320px;
+  height: 260px;
   background-size: cover;
   background-position: center 30%;
 }
@@ -269,7 +267,7 @@ function playDisc(disc: MediaLibraryDisc) {
 .detail-body {
   max-width: 1000px;
   margin: 0 auto;
-  padding: 12px 24px 40px;
+  padding: 20px 24px 40px;
 }
 
 .detail-main {
@@ -292,11 +290,6 @@ function playDisc(disc: MediaLibraryDisc) {
   font-size: 48px;
   font-weight: 700;
   color: var(--text-muted);
-}
-
-/* 仅当存在背景图时让海报上移叠在背景图底部（无背景图时保持原位，避免盖住返回栏） */
-.detail-poster--lift {
-  margin-top: -96px;
 }
 
 .detail-info {
@@ -470,44 +463,6 @@ function playDisc(disc: MediaLibraryDisc) {
   color: var(--text-muted);
 }
 
-.detail-discs {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.detail-discs__label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.detail-disc {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  background: var(--surface-sunken);
-  color: var(--text-regular);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.detail-disc:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--brand) 40%, var(--border-soft));
-  color: var(--brand-strong, var(--brand));
-}
-
-.detail-disc:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
 .detail-episodes {
   margin-top: 26px;
 }
@@ -554,11 +509,10 @@ function playDisc(disc: MediaLibraryDisc) {
 
   .detail-poster {
     width: 130px;
-    margin-top: -56px;
   }
 
   .detail-hero {
-    height: 200px;
+    height: 170px;
   }
 
   .detail-body {
