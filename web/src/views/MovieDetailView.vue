@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onActivated, ref, watch } from "vue";
-import { useRoute, onBeforeRouteLeave } from "vue-router";
+import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
 import { mediaLibraryApi, type MediaLibraryDetail, type MediaLibraryDisc, type MediaLibraryEpisode } from "@/api/mediaLibrary";
 import { getApiErrorMessage } from "@/api/client";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
@@ -8,6 +8,7 @@ import BusySpinner from "@/components/base/BusySpinner.vue";
 import MediaPlayer from "@/components/file/MediaPlayer.vue";
 
 const route = useRoute();
+const router = useRouter();
 
 const detail = ref<MediaLibraryDetail | null>(null);
 const loading = ref(false);
@@ -80,6 +81,14 @@ function playDisc(disc: MediaLibraryDisc) {
   playerUrl.value = disc.play_url;
   playerOpen.value = true;
 }
+
+function filterByGenre(genre: string) {
+  void router.push({ path: "/movies", query: { genre } });
+}
+
+function filterByActor(actor: string) {
+  void router.push({ path: "/movies", query: { actor } });
+}
 </script>
 
 <template>
@@ -120,11 +129,27 @@ function playDisc(disc: MediaLibraryDisc) {
             </p>
 
             <div v-if="detail.genres?.length" class="detail-genres">
-              <span v-for="g in detail.genres" :key="g" class="detail-genre">{{ g }}</span>
+              <button
+                v-for="g in detail.genres"
+                :key="g"
+                type="button"
+                class="detail-genre"
+                @click="filterByGenre(g)"
+              >
+                {{ g }}
+              </button>
             </div>
 
             <div v-if="detail.actors?.length" class="detail-actors">
-              <span v-for="(a, i) in detail.actors" :key="i" class="detail-actor">{{ a }}</span>
+              <button
+                v-for="(a, i) in detail.actors"
+                :key="i"
+                type="button"
+                class="detail-actor"
+                @click="filterByActor(a)"
+              >
+                {{ a }}
+              </button>
             </div>
 
             <div v-if="detail.runtime || detail.studio || detail.director" class="detail-facts">
@@ -326,11 +351,19 @@ function playDisc(disc: MediaLibraryDisc) {
 
 .detail-genre {
   padding: 2px 10px;
+  border: 1px solid transparent;
   border-radius: 999px;
   background: color-mix(in srgb, var(--brand) 12%, var(--surface));
   color: var(--brand-strong, var(--brand));
   font-size: 12px;
   font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.detail-genre:hover {
+  border-color: color-mix(in srgb, var(--brand) 30%, transparent);
+  background: color-mix(in srgb, var(--brand) 18%, var(--surface));
 }
 
 .detail-actors {
@@ -342,11 +375,20 @@ function playDisc(disc: MediaLibraryDisc) {
 
 .detail-actor {
   padding: 2px 10px;
+  border: 1px solid var(--border-soft, #e2e8f0);
   border-radius: 999px;
   background: var(--surface-sunken);
   color: var(--text-regular);
   font-size: 12px;
   font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.detail-actor:hover {
+  border-color: color-mix(in srgb, var(--brand) 26%, var(--border-soft, #e2e8f0));
+  color: var(--brand-strong, var(--brand));
+  background: color-mix(in srgb, var(--brand) 10%, var(--surface-sunken));
 }
 
 .detail-fanart {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onActivated, onMounted, onUnmounted, ref, watch } from "vue";
-import { useRouter, onBeforeRouteLeave } from "vue-router";
+import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import {
   mediaLibraryApi,
@@ -15,6 +15,7 @@ import SvgIcon from "@/components/icons/SvgIcon.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
 
 const PAGE = 120;
+const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 
@@ -208,12 +209,26 @@ function submitSearch() {
   void fetchItems(true);
 }
 
+function applyQueryFiltersFromRoute() {
+  genreFilter.value = String(route.query.genre ?? "");
+  actorFilter.value = String(route.query.actor ?? "");
+}
+
 onMounted(() => {
+  applyQueryFiltersFromRoute();
   void loadRoots().then(() => {
     void loadFacets();
     void fetchItems(true);
   });
 });
+
+watch(
+  () => [String(route.query.genre ?? ""), String(route.query.actor ?? "")],
+  ([g, a]) => {
+    if (g !== genreFilter.value) genreFilter.value = g;
+    if (a !== actorFilter.value) actorFilter.value = a;
+  },
+);
 
 onUnmounted(() => {
   loadMoreObserver?.disconnect();
