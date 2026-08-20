@@ -113,14 +113,13 @@ async function setupPlayer() {
   void video.play().catch(() => {});
 }
 
+defineExpose({ enterFullscreen, setupPlayer });
+
 watch(
   () => props.open,
   (open) => {
     if (!open) return;
-    void nextTick(async () => {
-      await setupPlayer();
-      if (props.fullscreenOnOpen) void enterFullscreen();
-    });
+    void nextTick(setupPlayer);
   },
 );
 </script>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onActivated, ref, watch } from "vue";
+import { computed, nextTick, onActivated, ref, watch } from "vue";
 import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
 import { mediaLibraryApi, type MediaLibraryDetail, type MediaLibraryDisc, type MediaLibraryEpisode } from "@/api/mediaLibrary";
 import { getApiErrorMessage } from "@/api/client";
@@ -18,6 +18,7 @@ const error = ref("");
 const playerOpen = ref(false);
 const playerTitle = ref("");
 const playerUrl = ref("");
+const playerRef = ref<{ enterFullscreen: () => Promise<void>; setupPlayer: () => Promise<void> } | null>(null);
 
 // 背景图全屏查看
 const fanartViewUrl = ref("");
@@ -68,26 +69,29 @@ async function loadDetail() {
 
 watch(() => [route.params.id, route.query.lib] as const, loadDetail, { immediate: true });
 
+async function openPlayer(title: string, url: string) {
+  playerTitle.value = title;
+  playerUrl.value = url;
+  playerOpen.value = true;
+  await nextTick();
+  // 在用户点击的同步上下文后立刻尝试全屏（避免 watch 异步丢失手势）
+  await playerRef.value?.enterFullscreen();
+}
+
 function playMain() {
   if (!detail.value?.play_url) return;
-  playerTitle.value = detail.value.title;
-  playerUrl.value = detail.value.play_url;
-  playerOpen.value = true;
+  void openPlayer(detail.value.title, detail.value.play_url);
 }
 
 function playEpisode(ep: MediaLibraryEpisode) {
   if (!ep.play_url) return;
   const label = `${detail.value?.title ?? ""} · S${String(ep.season ?? 1).padStart(2, "0")}E${String(ep.episode).padStart(2, "0")}`;
-  playerTitle.value = label.trim();
-  playerUrl.value = ep.play_url;
-  playerOpen.value = true;
+  void openPlayer(label.trim(), ep.play_url);
 }
 
 function playDisc(disc: MediaLibraryDisc) {
   if (!disc.play_url) return;
-  playerTitle.value = `${detail.value?.title ?? ""} · ${disc.label}`.trim();
-  playerUrl.value = disc.play_url;
-  playerOpen.value = true;
+  void openPlayer(`${detail.value?.title ?? ""} · ${disc.label}`.trim(), disc.play_url);
 }
 
 function filterByGenre(genre: string) {
@@ -268,9 +272,11 @@ function filterByActor(actor: string) {
     </Teleport>
 
     <MediaPlayer
+      ref="playerRef"
       :open="playerOpen"
       :title="playerTitle"
       :play-url="playerUrl"
+      :fullscreen-on-open="false"
       @close="playerOpen = false"
     />
   </div>
