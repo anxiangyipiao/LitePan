@@ -231,6 +231,8 @@ async function handleLogout() {
 }
 
 .app-nav__btn {
+  box-sizing: border-box;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -272,6 +274,7 @@ async function handleLogout() {
 .app-nav__magnet {
   width: 22px;
   height: 22px;
+  flex: 0 0 22px;
   stroke: currentColor;
   stroke-width: 2;
   fill: none;
@@ -280,6 +283,12 @@ async function handleLogout() {
 }
 
 .app-nav__subicon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 18px;
   line-height: 1;
 }
