@@ -4,6 +4,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
 import AppFooter from "@/components/layout/AppFooter.vue";
+import MagnetSearchModal from "@/components/common/MagnetSearchModal.vue";
 import AdminNotificationBell from "@/components/admin/AdminNotificationBell.vue";
 import { useAuthStore } from "@/stores/auth";
 import { logout } from "@/api/auth";
@@ -21,6 +22,7 @@ import { ref } from "vue";
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+const magnetSearchOpen = ref(false);
 
 // 管理后台子导航（对应 AdminView 的 nav 定义）
 const adminNav = [
@@ -68,28 +70,57 @@ async function handleLogout() {
   await router.push("/login");
 }
 
-const mainNav = [
-  { to: "/", name: "网盘", icon: "cloud" },
-  { to: "/movies", name: "影视", icon: "video" },
-  { to: "/admin", name: "管理", icon: "settings" },
-];
 </script>
 
 <template>
   <div class="app-shell">
     <aside class="app-nav">
       <nav class="app-nav__list" aria-label="主导航">
-        <!-- 三个主页面 -->
+        <!-- 主页面：网盘 / 影视 / 磁力 / 管理 -->
         <RouterLink
-          v-for="item in mainNav"
-          :key="item.to"
-          :to="item.to"
+          to="/"
           class="app-nav__btn"
-          :class="{ 'is-active': route.path === item.to || (item.to === '/admin' && isAdminRoute) }"
-          :aria-label="item.name"
+          :class="{ 'is-active': route.path === '/' }"
+          aria-label="网盘"
         >
-          <SvgIcon :name="item.icon" :size="22" class="app-nav__icon" />
-          <span class="app-nav__label">{{ item.name }}</span>
+          <SvgIcon name="cloud" :size="22" class="app-nav__icon" />
+          <span class="app-nav__label">网盘</span>
+        </RouterLink>
+        <RouterLink
+          to="/movies"
+          class="app-nav__btn"
+          :class="{ 'is-active': route.path === '/movies' }"
+          aria-label="影视"
+        >
+          <SvgIcon name="video" :size="22" class="app-nav__icon" />
+          <span class="app-nav__label">影视</span>
+        </RouterLink>
+
+        <!-- 磁力搜索（登录态可用，弹窗非页面） -->
+        <button
+          v-if="auth.sessionAdmin"
+          type="button"
+          class="app-nav__btn"
+          title="磁力搜索"
+          aria-label="磁力搜索"
+          @click="magnetSearchOpen = true"
+        >
+          <svg viewBox="0 0 24 24" class="app-nav__magnet" aria-hidden="true">
+            <path d="M6 8v5a6 6 0 0 0 12 0V8" />
+            <path d="M6 4v4" />
+            <path d="M18 4v4" />
+          </svg>
+          <span class="app-nav__label">磁力</span>
+        </button>
+
+        <RouterLink
+          to="/admin"
+          class="app-nav__btn"
+          :class="{ 'is-active': isAdminRoute }"
+          aria-label="管理"
+        >
+          <SvgIcon name="settings" :size="22" class="app-nav__icon" />
+          <span class="app-nav__label">管理</span>
         </RouterLink>
 
         <!-- 管理后台子导航 -->
@@ -161,6 +192,8 @@ const mainNav = [
       </main>
       <AppFooter />
     </div>
+
+    <MagnetSearchModal :open="magnetSearchOpen" @close="magnetSearchOpen = false" />
   </div>
 </template>
 
@@ -236,6 +269,16 @@ const mainNav = [
 
 .app-nav__icon {
   display: block;
+}
+
+.app-nav__magnet {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .app-nav__subicon {
