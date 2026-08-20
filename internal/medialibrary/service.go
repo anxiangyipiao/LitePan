@@ -79,8 +79,8 @@ type Detail struct {
 	PosterURL   string    `json:"poster_url,omitempty"`
 	BackdropURL string    `json:"backdrop_url,omitempty"`
 	Overview    string    `json:"overview,omitempty"`
-	PlayURL     string    `json:"play_url,omitempty"`     // 电影直播；剧集为首集
-	Episodes    []Episode `json:"episodes,omitempty"`     // 剧集选集列表
+	PlayURL     string    `json:"play_url,omitempty"` // 电影直播；剧集为首集
+	Episodes    []Episode `json:"episodes,omitempty"` // 剧集选集列表
 }
 
 // mergeCap 跨库合并时单库最多拉取的条目数（首几页分页正确即可，超限截断）。
