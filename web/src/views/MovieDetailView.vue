@@ -26,6 +26,14 @@ function openFanart(url: string) {
   fanartViewUrl.value = url;
 }
 
+const overviewExpanded = ref(false);
+watch(
+  () => detail.value?.id,
+  () => {
+    overviewExpanded.value = false;
+  },
+);
+
 const isTV = computed(() => detail.value?.media_type === "tv");
 
 // KeepAlive 滚动记忆：离开前记录（onBeforeRouteLeave 时机 DOM 未变，最可靠）
@@ -103,11 +111,16 @@ function filterByActor(actor: string) {
     </div>
 
     <template v-else-if="detail">
-      <div v-if="detail.backdrop_url" class="detail-hero" :style="{ backgroundImage: `url(${detail.backdrop_url})` }">
+      <div
+        v-if="detail.backdrop_url"
+        class="detail-hero"
+        :class="{ 'detail-hero--with-poster': detail.poster_url }"
+        :style="{ backgroundImage: `url(${detail.backdrop_url})` }"
+      >
         <div class="detail-hero__shade" />
       </div>
 
-      <div class="detail-body">
+      <div class="detail-body" :class="{ 'detail-body--over-hero': detail.backdrop_url && detail.poster_url }">
         <div class="detail-main">
           <img
             v-if="detail.poster_url"
@@ -158,7 +171,21 @@ function filterByActor(actor: string) {
               <span v-if="detail.studio">{{ detail.studio }}</span>
             </div>
 
-            <p v-if="detail.overview" class="detail-overview">{{ detail.overview }}</p>
+            <p
+              v-if="detail.overview"
+              class="detail-overview"
+              :class="{ 'detail-overview--clamp': !overviewExpanded }"
+            >
+              {{ detail.overview }}
+            </p>
+            <button
+              v-if="detail.overview && detail.overview.length > 140"
+              type="button"
+              class="detail-overview-toggle"
+              @click="overviewExpanded = !overviewExpanded"
+            >
+              {{ overviewExpanded ? "收起" : "展开全文" }}
+            </button>
 
             <div v-if="!isTV" class="detail-actions">
               <button
@@ -273,9 +300,18 @@ function filterByActor(actor: string) {
 
 .detail-hero {
   position: relative;
-  height: 260px;
+  height: clamp(220px, 36vw, 380px);
   background-size: cover;
   background-position: center 30%;
+}
+
+.detail-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 14%;
+  background: linear-gradient(to right, color-mix(in srgb, var(--bg) 18%, transparent), transparent);
+  pointer-events: none;
 }
 
 .detail-hero__shade {
@@ -283,16 +319,26 @@ function filterByActor(actor: string) {
   inset: 0;
   background: linear-gradient(
     to bottom,
-    color-mix(in srgb, var(--bg) 8%, transparent) 0%,
-    color-mix(in srgb, var(--bg) 45%, transparent) 70%,
+    color-mix(in srgb, var(--bg) 6%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 22%, transparent) 55%,
+    color-mix(in srgb, var(--bg) 54%, transparent) 78%,
     var(--bg) 100%
   );
+}
+
+.detail-hero--with-poster {
+  margin-bottom: -56px;
 }
 
 .detail-body {
   max-width: 1000px;
   margin: 0 auto;
   padding: 20px 24px 40px;
+}
+
+.detail-body--over-hero {
+  position: relative;
+  z-index: 1;
 }
 
 .detail-main {
@@ -323,23 +369,49 @@ function filterByActor(actor: string) {
 }
 
 .detail-title {
-  margin: 4px 0 6px;
-  font-size: 24px;
-  font-weight: 700;
+  margin: 2px 0 8px;
+  font-size: clamp(22px, 2.2vw, 28px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   color: var(--text);
 }
 
 .detail-meta {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   font-size: 13px;
   color: var(--text-muted);
 }
 
 .detail-overview {
-  margin: 0 0 18px;
+  margin: 0 0 10px;
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.75;
   color: var(--text-regular);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.detail-overview--clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.detail-overview-toggle {
+  margin: 0 0 14px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--brand-strong, var(--brand));
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.detail-overview-toggle:hover {
+  text-decoration: underline;
 }
 
 .detail-genres {
@@ -490,14 +562,27 @@ function filterByActor(actor: string) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 28px;
+  padding: 11px 30px;
   border: none;
   border-radius: 999px;
-  background: var(--brand);
+  background: linear-gradient(135deg, var(--brand) 0%, color-mix(in srgb, var(--brand) 86%, #111827) 100%);
   color: #fff;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
   cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.detail-play:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+}
+
+.detail-play:active {
+  transform: translateY(0);
 }
 
 .detail-nosource {
@@ -528,11 +613,20 @@ function filterByActor(actor: string) {
   gap: 6px;
   padding: 8px 14px;
   border: 1px solid var(--border-soft);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--surface-sunken);
   color: var(--text-regular);
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.detail-ep:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--brand) 26%, var(--border-soft));
+  background: color-mix(in srgb, var(--brand) 10%, var(--surface-sunken));
+  color: var(--brand-strong, var(--brand));
+  transform: translateY(-1px);
 }
 
 .detail-ep:disabled {
@@ -540,8 +634,13 @@ function filterByActor(actor: string) {
   cursor: default;
 }
 
+.detail-ep:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand) 36%, transparent);
+  outline-offset: 2px;
+}
+
 .detail-ep-num {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 @media (max-width: 640px) {
@@ -554,11 +653,26 @@ function filterByActor(actor: string) {
   }
 
   .detail-hero {
-    height: 170px;
+    height: 190px;
+  }
+
+  .detail-hero--with-poster {
+    margin-bottom: -36px;
   }
 
   .detail-body {
-    padding: 8px 14px 32px;
+    padding: 10px 14px calc(16px + env(safe-area-inset-bottom, 0));
+  }
+
+  .detail-actions {
+    position: sticky;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0));
+    z-index: 2;
+    padding: 10px 12px;
+    margin: 14px -14px 0;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border-soft);
   }
 
   .detail-fanart-img {
