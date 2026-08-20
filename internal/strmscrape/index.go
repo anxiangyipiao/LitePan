@@ -373,6 +373,40 @@ func scanIndexItems(rows *sql.Rows, root string) ([]Item, error) {
 	return out, rows.Err()
 }
 
+// getIndexItemByID 按条目 id 查询单条（海报 URL 用索引库 root 重建）。
+func getIndexItemByID(db *sql.DB, root, id string) (*Item, error) {
+	row := db.QueryRow(`
+SELECT id, rel_dir, strm_name, title, year, media_type, status,
+       has_nfo, has_poster, has_pending, tmdb_id, poster_rel, folder_name,
+       file_count, ep_local, ep_tmdb, ep_scraped, tv_state, added_at
+FROM items WHERE id = ?`, id)
+	var it Item
+	var year sql.NullInt64
+	var hasNFO, hasPoster, hasPending int
+	var posterRel string
+	if err := row.Scan(
+		&it.ID, &it.RelDir, &it.StrmName, &it.Title, &year, &it.MediaType, &it.Status,
+		&hasNFO, &hasPoster, &hasPending, &it.TMDBID, &posterRel, &it.FolderName,
+		&it.FileCount, &it.EpLocal, &it.EpTMDB, &it.EpScraped, &it.TVState, &it.AddedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.Errorf(domain.CodeNotFound, "条目不存在")
+		}
+		return nil, err
+	}
+	it.HasNFO = hasNFO != 0
+	it.HasPoster = hasPoster != 0
+	it.HasPending = hasPending != 0
+	if year.Valid {
+		y := int(year.Int64)
+		it.Year = &y
+	}
+	if strings.TrimSpace(root) != "" {
+		it.PosterURL = posterURLFromRel(root, posterRel)
+	}
+	return &it, nil
+}
+
 func readIndexStats(db *sql.DB) (ItemListStats, error) {
 	var stats ItemListStats
 	err := db.QueryRow(`

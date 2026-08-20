@@ -1205,20 +1205,30 @@ onMounted(async () => {
   letter-spacing: 0.01em;
 }
 
-/* 顶栏「影视」入口：独立于登录态，公开可点 */
+/* 顶栏「影视」入口：胶囊样式，独立于登录态，公开可点 */
 .header-nav-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #64748b;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff;
   text-decoration: none;
   white-space: nowrap;
   font-size: 13px;
   font-weight: 600;
   margin-right: 14px;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
 .header-nav-link:hover {
-  color: #fff;
+  background: rgba(255, 255, 255, 0.26);
+}
+.header-nav-link.router-link-active {
+  background: #fff;
+  color: var(--brand, #4f8ef7);
+  border-color: transparent;
 }
 
 /* 顶栏图标按钮（传输任务 / 暗色开关） */

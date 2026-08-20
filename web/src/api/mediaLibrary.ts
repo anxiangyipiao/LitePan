@@ -7,6 +7,7 @@ export interface MediaLibraryRoot {
 }
 
 export interface MediaLibraryItem {
+  id: string;
   title: string;
   year?: number;
   media_type: "movie" | "tv";
@@ -29,6 +30,33 @@ export interface MediaLibraryItemsResult {
   has_more: boolean;
 }
 
+export interface MediaLibraryEpisode {
+  season?: number;
+  episode: number;
+  title?: string;
+  play_url: string;
+}
+
+export interface MediaLibraryDetail {
+  id: string;
+  title: string;
+  year?: number;
+  media_type: "movie" | "tv";
+  tmdb_id?: string;
+  folder_name?: string;
+  file_count: number;
+  ep_local?: number;
+  ep_tmdb?: number;
+  ep_scraped?: number;
+  tv_state?: string;
+  status: "ok" | "miss" | "doubt";
+  poster_url?: string;
+  backdrop_url?: string;
+  overview?: string;
+  play_url?: string;
+  episodes?: MediaLibraryEpisode[];
+}
+
 export type MediaLibrarySort = "title_asc" | "year_desc" | "year_asc" | "added_desc" | "added_asc";
 
 export interface MediaLibraryQuery {
@@ -42,6 +70,9 @@ export interface MediaLibraryQuery {
 
 export const mediaLibraryApi = {
   roots: () => http.get<MediaLibraryRoot[]>("/media-library/roots"),
+
+  detail: (lib: string, id: string) =>
+    http.get<MediaLibraryDetail>("/media-library/detail", { lib, id }),
 
   items: (q: MediaLibraryQuery = {}) =>
     http.get<MediaLibraryItemsResult>("/media-library/items", {

@@ -3,6 +3,8 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import {
   mediaLibraryApi,
+  type MediaLibraryDetail,
+  type MediaLibraryEpisode,
   type MediaLibraryItem,
   type MediaLibraryRoot,
   type MediaLibrarySort,
@@ -11,6 +13,8 @@ import { getApiErrorMessage } from "@/api/client";
 import { useVirtualPosterWall } from "@/composables/useVirtualPosterWall";
 import { useAuthStore } from "@/stores/auth";
 import { fileExtension } from "@/utils/format";
+import AppHeader from "@/components/layout/AppHeader.vue";
+import AppFooter from "@/components/layout/AppFooter.vue";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
 
@@ -31,8 +35,47 @@ const error = ref("");
 
 const wall = useVirtualPosterWall(items);
 
+// ---- 详情页 ----
+const detail = ref<MediaLibraryDetail | null>(null);
+const detailLoading = ref(false);
+const detailError = ref("");
+
+async function openDetail(item: MediaLibraryItem) {
+  detail.value = null;
+  detailError.value = "";
+  detailLoading.value = true;
+  try {
+    detail.value = await mediaLibraryApi.detail(item.lib_id, item.id);
+  } catch (e) {
+    detailError.value = getApiErrorMessage(e, "详情加载失败");
+  } finally {
+    detailLoading.value = false;
+  }
+}
+
+function closeDetail() {
+  detail.value = null;
+  detailError.value = "";
+  closePlayer();
+}
+
+function playDetail() {
+  const d = detail.value;
+  if (!d?.play_url) return;
+  openPlayer(d.title, d.play_url);
+}
+
+function playEpisode(ep: MediaLibraryEpisode) {
+  const d = detail.value;
+  if (!d?.play_url && !ep.play_url) return;
+  const label = `${d?.title ?? ""} · S${String(ep.season ?? 1).padStart(2, "0")}E${String(ep.episode).padStart(2, "0")}`;
+  openPlayer(label.trim(), ep.play_url);
+}
+
+const detailIsTV = computed(() => detail.value?.media_type === "tv");
+
 // ---- 播放 ----
-const playing = ref<MediaLibraryItem | null>(null);
+const playing = ref<{ title: string; play_url: string } | null>(null);
 const playerVideoRef = ref<HTMLVideoElement | null>(null);
 const playerError = ref(false);
 type HlsLike = import("hls.js").default;
@@ -60,7 +103,6 @@ const webdavUrl = computed(() => `http://${window.location.host}/dav`);
 const playingSrc = computed(() =>
   playing.value?.play_url ? `${window.location.origin}${playing.value.play_url}` : "",
 );
-const playingIsTV = computed(() => playing.value?.media_type === "tv");
 
 // ---- 配置弹窗 ----
 const configOpen = ref(false);
@@ -173,12 +215,12 @@ async function updateLoadMoreObserver() {
 }
 
 // ---- 播放器 ----
-function openPlayer(item: MediaLibraryItem) {
-  if (!item.play_url) return;
+function openPlayer(title: string, playURL: string) {
+  if (!playURL) return;
   playerError.value = false;
   playerMenuOpen.value = false;
   skyboxGuideOpen.value = false;
-  playing.value = item;
+  playing.value = { title, play_url: playURL };
 }
 
 function closePlayer() {
@@ -275,8 +317,11 @@ const subtitle = (item: MediaLibraryItem) => {
 </script>
 
 <template>
-  <div class="ml-page">
-    <header class="ml-topbar">
+  <div class="page">
+    <AppHeader />
+    <main class="page__main">
+      <div class="ml-page">
+        <header class="ml-topbar">
       <h1 class="ml-title">影视</h1>
 
       <select v-model="libId" class="ml-control" aria-label="选择影视库">
@@ -372,12 +417,11 @@ const subtitle = (item: MediaLibraryItem) => {
             v-for="item in wall.visibleItems.value"
             :key="item.lib_id + item.tmdb_id + item.folder_name"
             class="ml-card"
-            :class="{ 'ml-card--disabled': !item.play_url }"
             role="button"
             tabindex="0"
-            :title="item.play_url ? `播放：${item.title}` : `${item.title}（无播放地址）`"
-            @click="openPlayer(item)"
-            @keydown.enter="openPlayer(item)"
+            :title="`查看详情：${item.title}`"
+            @click="openDetail(item)"
+            @keydown.enter="openDetail(item)"
           >
             <div class="ml-card__poster">
               <img
@@ -416,7 +460,7 @@ const subtitle = (item: MediaLibraryItem) => {
       <div class="ml-player">
         <header class="ml-player-head">
           <span class="ml-player-title" :title="playing.title">{{ playing.title }}</span>
-          <span class="ml-player-meta">{{ playingIsTV ? "剧集" : "电影" }}</span>
+          <span class="ml-player-meta">播放中</span>
           <span class="ml-player-spacer" />
           <button type="button" class="ml-player-close" title="关闭" @click="closePlayer">
             <SvgIcon name="sign-out" :size="14" />
@@ -456,6 +500,79 @@ const subtitle = (item: MediaLibraryItem) => {
       </div>
     </div>
 
+    <!-- 详情页 -->
+    <div v-if="detail" class="ml-detail-mask" @click.self="closeDetail">
+      <div class="ml-detail">
+        <button type="button" class="ml-detail-close" title="关闭" @click="closeDetail">
+          <SvgIcon name="sign-out" :size="16" />
+        </button>
+
+        <div
+          v-if="detail.backdrop_url"
+          class="ml-detail-hero"
+          :style="{ backgroundImage: `url(${detail.backdrop_url})` }"
+        >
+          <div class="ml-detail-hero__shade" />
+        </div>
+
+        <div class="ml-detail-body">
+          <div class="ml-detail-main">
+            <img
+              v-if="detail.poster_url"
+              :src="detail.poster_url"
+              :alt="detail.title"
+              class="ml-detail-poster"
+            />
+            <div v-else class="ml-detail-poster ml-detail-poster--empty">{{ detail.title.slice(0, 1) }}</div>
+
+            <div class="ml-detail-info">
+              <h2 class="ml-detail-title">{{ detail.title }}</h2>
+              <p class="ml-detail-meta">
+                <span>{{ detail.media_type === "tv" ? "剧集" : "电影" }}</span>
+                <span v-if="detail.year"> · {{ detail.year }}</span>
+                <span v-if="detail.media_type === 'tv' && detail.tv_state === 'updating'"> · 追更中</span>
+                <span v-if="detail.ep_tmdb"> · 共 {{ detail.ep_tmdb }} 集</span>
+              </p>
+              <p v-if="detail.overview" class="ml-detail-overview">{{ detail.overview }}</p>
+
+              <div v-if="!detailIsTV" class="ml-detail-actions">
+                <button
+                  v-if="detail.play_url"
+                  type="button"
+                  class="ml-detail-play"
+                  @click="playDetail"
+                >
+                  <SvgIcon name="play" :size="16" />
+                  <span>播放</span>
+                </button>
+                <span v-else class="ml-detail-nosource">该影视无可用播放源</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="detailIsTV && detail.episodes?.length" class="ml-detail-episodes">
+            <h3 class="ml-detail-sec">选集（{{ detail.episodes.length }}）</h3>
+            <div class="ml-detail-ep-grid">
+              <button
+                v-for="(ep, i) in detail.episodes"
+                :key="i"
+                type="button"
+                class="ml-detail-ep"
+                :disabled="!ep.play_url"
+                :title="ep.play_url ? '播放' : '无播放源'"
+                @click="playEpisode(ep)"
+              >
+                <span class="ml-detail-ep-num">
+                  S{{ String(ep.season ?? 1).padStart(2, "0") }}E{{ String(ep.episode).padStart(2, "0") }}
+                </span>
+                <SvgIcon v-if="ep.play_url" name="play" :size="12" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 配置弹窗 -->
     <div v-if="configOpen" class="ml-config-mask" @click.self="configOpen = false">
       <div class="ml-config">
@@ -475,6 +592,9 @@ const subtitle = (item: MediaLibraryItem) => {
         </div>
       </div>
     </div>
+      </div>
+    </main>
+    <AppFooter />
   </div>
 </template>
 
@@ -942,6 +1062,191 @@ const subtitle = (item: MediaLibraryItem) => {
   color: var(--text-regular, #334155);
 }
 
+/* 页面外壳（与 IndexView 一致） */
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.page__main {
+  flex: 1;
+  background: var(--bg);
+}
+
+/* ---- 详情页 ---- */
+.ml-detail-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 205;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.ml-detail {
+  position: relative;
+  width: min(760px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  background: var(--surface, #fff);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.ml-detail-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ml-detail-hero {
+  position: relative;
+  height: 240px;
+  background-size: cover;
+  background-position: center 30%;
+}
+
+.ml-detail-hero__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 20%, var(--surface, #fff) 100%);
+}
+
+.ml-detail-body {
+  padding: 0 24px 24px;
+  margin-top: -8px;
+}
+
+.ml-detail-main {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.ml-detail-poster {
+  flex: 0 0 auto;
+  width: 168px;
+  aspect-ratio: 2 / 3;
+  border-radius: 12px;
+  object-fit: cover;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+  background: var(--surface-sunken, #f1f5f9);
+  margin-top: -64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--text-muted, #94a3b8);
+}
+
+.ml-detail-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.ml-detail-title {
+  margin: 4px 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text, #111827);
+}
+
+.ml-detail-meta {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--text-muted, #64748b);
+}
+
+.ml-detail-overview {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-regular, #334155);
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ml-detail-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.ml-detail-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 26px;
+  border: none;
+  border-radius: 999px;
+  background: var(--brand, #4f8ef7);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ml-detail-nosource {
+  font-size: 13px;
+  color: var(--text-muted, #94a3b8);
+}
+
+.ml-detail-episodes {
+  margin-top: 22px;
+}
+
+.ml-detail-sec {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-regular, #334155);
+}
+
+.ml-detail-ep-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ml-detail-ep {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--border-soft, #e2e8f0);
+  border-radius: 8px;
+  background: var(--surface-sunken, #f8fafc);
+  color: var(--text-regular, #334155);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ml-detail-ep:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ml-detail-ep-num {
+  font-weight: 600;
+}
+
 @media (max-width: 640px) {
   .ml-page {
     padding: 12px;
@@ -949,6 +1254,22 @@ const subtitle = (item: MediaLibraryItem) => {
 
   .ml-type-btn {
     padding: 6px 9px;
+  }
+
+  .ml-detail-body {
+    padding: 0 16px 16px;
+  }
+
+  .ml-detail-main {
+    flex-direction: column;
+  }
+
+  .ml-detail-poster {
+    width: 120px;
+  }
+
+  .ml-detail-hero {
+    height: 160px;
   }
 }
 </style>

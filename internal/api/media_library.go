@@ -43,6 +43,22 @@ func (h *Handler) mediaLibraryItems(w http.ResponseWriter, r *http.Request) {
 	writeOK(w, items)
 }
 
+// mediaLibraryDetail 返回影视条目详情（公开/管理员）。
+func (h *Handler) mediaLibraryDetail(w http.ResponseWriter, r *http.Request) {
+	svc := h.ensureMediaLibrary()
+	if !ensureServiceReady(w, svc != nil) {
+		return
+	}
+	lib := strings.TrimSpace(r.URL.Query().Get("lib"))
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	detail, err := svc.Detail(r.Context(), lib, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeOK(w, detail)
+}
+
 // mediaLibraryPoster 流式返回海报文件（公开/管理员）。lib 为不透明库 id，不泄露服务器路径。
 func (h *Handler) mediaLibraryPoster(w http.ResponseWriter, r *http.Request) {
 	svc := h.ensureMediaLibrary()

@@ -136,6 +136,33 @@ func (s *Service) ListItems(ctx context.Context, strmTaskID int64, root string, 
 	return out, err
 }
 
+// GetItem 按条目 id 查询单条（影视模式详情页用）。
+func (s *Service) GetItem(ctx context.Context, strmTaskID int64, root, id string) (*Item, error) {
+	sr, err := s.resolveScrapeRoot(ctx, strmTaskID, root)
+	if err != nil {
+		return nil, err
+	}
+	var out *Item
+	err = s.withTaskIndexLock(sr.indexKey, func() error {
+		if err := s.ensureIndexLocked(ctx, sr.indexKey, sr.root); err != nil {
+			return err
+		}
+		db, err := openTaskIndexDB(s.indexPath(sr.indexKey))
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		storedRoot, _ := readIndexMeta(db, "root")
+		it, err := getIndexItemByID(db, storedRoot, id)
+		if err != nil {
+			return err
+		}
+		out = it
+		return nil
+	})
+	return out, err
+}
+
 // RefreshIndex 扫盘重建索引并返回列表（海报墙刷新按钮）。
 func (s *Service) RefreshIndex(ctx context.Context, strmTaskID int64, root string, query ItemListQuery) (ItemListResult, error) {
 	query = normalizeItemListQuery(query)

@@ -5,6 +5,7 @@ package medialibrary
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 	"strings"
 
 	"litepan/internal/domain"
+	"litepan/internal/mediaorganize/rules"
 	"litepan/internal/settings"
 	"litepan/internal/strm"
 	"litepan/internal/strmscrape"
@@ -28,6 +30,7 @@ type Root struct {
 
 // Item 影视模式展示条目：strmscrape.Item 的公开子集 + 库 id 与播放地址。
 type Item struct {
+	ID         string `json:"id"`
 	Title      string `json:"title"`
 	Year       *int   `json:"year,omitempty"`
 	MediaType  string `json:"media_type"`
@@ -49,6 +52,35 @@ type ItemListResult struct {
 	Items   []Item `json:"items"`
 	Total   int    `json:"total"`
 	HasMore bool   `json:"has_more"`
+}
+
+// Episode 剧集的单集信息（详情页选集播放）。
+type Episode struct {
+	Season  int    `json:"season,omitempty"`
+	Episode int    `json:"episode"`
+	Title   string `json:"title,omitempty"`
+	PlayURL string `json:"play_url"`
+}
+
+// Detail 影视条目详情：元数据 + 简介 + 背景图 + 播放地址（剧集含选集列表）。
+type Detail struct {
+	ID          string    `json:"id"`
+	Title       string    `json:"title"`
+	Year        *int      `json:"year,omitempty"`
+	MediaType   string    `json:"media_type"`
+	TMDBID      string    `json:"tmdb_id,omitempty"`
+	FolderName  string    `json:"folder_name,omitempty"`
+	FileCount   int       `json:"file_count"`
+	EpLocal     int       `json:"ep_local,omitempty"`
+	EpTMDB      int       `json:"ep_tmdb,omitempty"`
+	EpScraped   int       `json:"ep_scraped,omitempty"`
+	TVState     string    `json:"tv_state,omitempty"`
+	Status      string    `json:"status"`
+	PosterURL   string    `json:"poster_url,omitempty"`
+	BackdropURL string    `json:"backdrop_url,omitempty"`
+	Overview    string    `json:"overview,omitempty"`
+	PlayURL     string    `json:"play_url,omitempty"`     // 电影直播；剧集为首集
+	Episodes    []Episode `json:"episodes,omitempty"`     // 剧集选集列表
 }
 
 // mergeCap 跨库合并时单库最多拉取的条目数（首几页分页正确即可，超限截断）。
@@ -210,6 +242,7 @@ func (s *Service) queryRoot(ctx context.Context, root Root, query strmscrape.Ite
 
 func (s *Service) toLibraryItem(ctx context.Context, root Root, it strmscrape.Item) Item {
 	item := Item{
+		ID:         it.ID,
 		Title:      it.Title,
 		Year:       it.Year,
 		MediaType:  it.MediaType,
@@ -262,6 +295,147 @@ func (s *Service) resolvePlayPath(rootPath string, it strmscrape.Item) string {
 		return ""
 	}
 	return strm.ExtractPlayPath(string(data))
+}
+
+// Detail 返回影视条目详情：nfo 简介、背景图、播放地址（剧集含选集）。
+func (s *Service) Detail(ctx context.Context, libID, id string) (*Detail, error) {
+	if s.scrape == nil {
+		return nil, domain.Errorf(domain.CodeInternal, "刮削服务未就绪")
+	}
+	root, err := s.RootByID(ctx, libID)
+	if err != nil {
+		return nil, err
+	}
+	it, err := s.scrape.GetItem(ctx, 0, root.Path, id)
+	if err != nil {
+		return nil, err
+	}
+	relDir := strings.TrimSpace(it.RelDir)
+
+	d := &Detail{
+		ID:          it.ID,
+		Title:       it.Title,
+		Year:        it.Year,
+		MediaType:   it.MediaType,
+		TMDBID:      it.TMDBID,
+		FolderName:  it.FolderName,
+		FileCount:   it.FileCount,
+		EpLocal:     it.EpLocal,
+		EpTMDB:      it.EpTMDB,
+		EpScraped:   it.EpScraped,
+		TVState:     it.TVState,
+		Status:      it.Status,
+		PosterURL:   rebuildPosterURL(libID, it.PosterURL),
+		Overview:    readNFOPlot(root.Path, relDir, it.MediaType),
+		BackdropURL: s.resolveBackdropURL(libID, root.Path, relDir, it),
+	}
+	if it.MediaType == strmscrape.MediaTypeTV {
+		d.Episodes = s.listEpisodes(root.Path, *it)
+		if len(d.Episodes) > 0 {
+			d.PlayURL = d.Episodes[0].PlayURL
+		}
+	} else {
+		d.PlayURL = s.resolvePlayPath(root.Path, *it)
+	}
+	return d, nil
+}
+
+// resolveBackdropURL 尝试定位条目背景图（目录 backdrop.jpg / fanart.jpg / 单文件 {stem}-fanart.jpg）。
+func (s *Service) resolveBackdropURL(libID, rootPath, relDir string, it *strmscrape.Item) string {
+	candidates := []string{
+		filepath.Join(relDir, "backdrop.jpg"),
+		filepath.Join(relDir, "fanart.jpg"),
+	}
+	if it.MediaType == strmscrape.MediaTypeMovie {
+		if stem := mediaStem(it.StrmName); stem != "" {
+			candidates = append(candidates, filepath.Join(relDir, stem+"-fanart.jpg"))
+		}
+	}
+	for _, rel := range candidates {
+		if fileExists(filepath.Join(rootPath, rel)) {
+			return "/api/media-library/poster?lib=" + url.QueryEscape(libID) + "&rel=" + url.QueryEscape(filepath.ToSlash(rel))
+		}
+	}
+	return ""
+}
+
+// mediaStem 从 .strm 文件名提取媒体主名（Inception.mkv.strm → Inception）。
+func mediaStem(strmName string) string {
+	name := strings.TrimSuffix(strings.TrimSpace(strmName), ".strm")
+	return strings.TrimSuffix(name, filepath.Ext(name))
+}
+
+// listEpisodes 扫描剧集目录下所有 .strm，解析季/集号并排序。
+func (s *Service) listEpisodes(rootPath string, it strmscrape.Item) []Episode {
+	dir := filepath.Join(rootPath, strings.TrimSpace(it.RelDir))
+	matches, err := filepath.Glob(filepath.Join(dir, "*.strm"))
+	if err != nil {
+		return nil
+	}
+	eps := make([]Episode, 0, len(matches))
+	for _, m := range matches {
+		stem := strings.TrimSuffix(filepath.Base(m), filepath.Ext(m)) // S01E01.mkv
+		parsed := rules.NormalizeParsedMedia(rules.ParseFilenameStrict(stem + ".mkv"))
+		data, rerr := os.ReadFile(m)
+		if rerr != nil {
+			continue
+		}
+		ep := Episode{PlayURL: strm.ExtractPlayPath(string(data))}
+		if parsed.Season != nil {
+			ep.Season = *parsed.Season
+		}
+		if parsed.Episode != nil {
+			ep.Episode = *parsed.Episode
+		}
+		eps = append(eps, ep)
+	}
+	sort.SliceStable(eps, func(i, j int) bool {
+		if eps[i].Season != eps[j].Season {
+			return eps[i].Season < eps[j].Season
+		}
+		return eps[i].Episode < eps[j].Episode
+	})
+	return eps
+}
+
+// movieNFO / tvshowNFO 是 Kodi/Emby 兼容 nfo 的最小解析结构（仅取简介）。
+type movieNFO struct {
+	Title string `xml:"title"`
+	Plot  string `xml:"plot"`
+}
+
+type tvshowNFO struct {
+	Title string `xml:"title"`
+	Plot  string `xml:"plot"`
+}
+
+// readNFOPlot 读取条目目录下 movie.nfo / tvshow.nfo 的简介。
+func readNFOPlot(rootPath, relDir, mediaType string) string {
+	name := "tvshow.nfo"
+	if mediaType == strmscrape.MediaTypeMovie {
+		name = "movie.nfo"
+	}
+	data, err := os.ReadFile(filepath.Join(rootPath, relDir, name))
+	if err != nil {
+		return ""
+	}
+	if mediaType == strmscrape.MediaTypeTV {
+		var nf tvshowNFO
+		if err := xml.Unmarshal(data, &nf); err != nil {
+			return ""
+		}
+		return strings.TrimSpace(nf.Plot)
+	}
+	var nf movieNFO
+	if err := xml.Unmarshal(data, &nf); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(nf.Plot)
+}
+
+func fileExists(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && !st.IsDir()
 }
 
 // Poster 返回某库某海报文件的本地路径（委托 strmscrape 校验）。
