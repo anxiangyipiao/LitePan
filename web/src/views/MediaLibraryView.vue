@@ -255,7 +255,6 @@ const subtitle = (item: MediaLibraryItem) => {
   <div class="ml-page">
     <header class="ml-topbar">
       <div class="ml-topbar__primary">
-        <h1 class="ml-title">影视</h1>
 
         <select v-model="libId" class="ml-control ml-control--lib" aria-label="选择影视库">
           <option value="">全部库</option>
