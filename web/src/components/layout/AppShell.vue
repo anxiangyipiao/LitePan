@@ -22,6 +22,9 @@ const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 
+// 仅缓存影视相关页面（返回保留状态）；网盘页 IndexView 不缓存，避免启动数据不刷新。
+const keepAlivePages = ["MediaLibraryView", "MovieDetailView", "MagnetSearchView", "AdminView"];
+
 // 管理后台子导航（对应 AdminView 的 nav 定义）
 const adminNav = [
   { key: "dashboard", label: "仪表盘", icon: "fa-solid fa-gauge-high" },
@@ -185,7 +188,7 @@ async function handleLogout() {
                KeepAlive 按 (组件,key) 缓存页面，返回时保留库选择/筛选/滚动等状态。
                无 mode + 离场 transition:none，避免异步路由离场竞态卡住 -->
           <Transition name="page">
-            <KeepAlive>
+            <KeepAlive :include="keepAlivePages">
               <component :is="Component" :key="$route.path" />
             </KeepAlive>
           </Transition>
