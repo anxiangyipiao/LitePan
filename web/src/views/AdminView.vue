@@ -9,9 +9,12 @@ import {
   type Component,
 } from "vue";
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from "vue-router";
-import AdminShell from "@/components/admin/AdminShell.vue";
 import WarningBanner from "@/components/admin/WarningBanner.vue";
 import AdminEmptyState from "@/components/admin/AdminEmptyState.vue";
+import { useAuthStore } from "@/stores/auth";
+import { provideAdminPageContext } from "@/composables/useAdminLoadingBar";
+import { useUnsavedChanges } from "@/composables/useUnsavedChanges";
+import { toast } from "@/composables/useToast";
 
 const adminPageLoaders = {
   dashboard: () => import("@/components/admin/DashboardManagement.vue"),
@@ -29,24 +32,17 @@ const TaskManagement = defineAsyncComponent(adminPageLoaders.tasks);
 const AuxToolsManagement = defineAsyncComponent(adminPageLoaders.tools);
 const CrossDriveTransfer = defineAsyncComponent(adminPageLoaders["cross-transfer"]);
 const FileShareManagement = defineAsyncComponent(adminPageLoaders.share);
-import { logout, fetchSystemConfig } from "@/api/auth";
-import { useAuthStore } from "@/stores/auth";
-import { provideAdminPageContext } from "@/composables/useAdminLoadingBar";
-import { useUnsavedChanges } from "@/composables/useUnsavedChanges";
-import { toast } from "@/composables/useToast";
 
-const BROWSER_LOCATION_STORAGE_KEY = "litepan:index:browser-location";
 const BROWSER_LOCATION_RESET_ONCE_KEY = "litepan:index:reset-once";
-const LEGACY_TASK_TOOL_TABS = new Set(["scrape", "aggregate"]);
 
 const nav = [
-  { key: "dashboard", label: "仪表盘", icon: "tachometer-alt" },
-  { key: "accounts", label: "存储管理", icon: "hdd" },
-  { key: "settings", label: "系统设置", icon: "cogs" },
-  { key: "tasks", label: "任务管理", icon: "tasks" },
-  { key: "tools", label: "辅助工具", icon: "toolbox" },
-  { key: "cross-transfer", label: "跨盘秒传", icon: "right-left" },
-  { key: "share", label: "文件共享", icon: "share-alt" },
+  { key: "dashboard", label: "仪表盘", icon: "fa-solid fa-gauge-high" },
+  { key: "accounts", label: "存储管理", icon: "fa-solid fa-hard-drive" },
+  { key: "settings", label: "系统设置", icon: "fa-solid fa-gear" },
+  { key: "tasks", label: "任务管理", icon: "fa-solid fa-list-check" },
+  { key: "tools", label: "辅助工具", icon: "fa-solid fa-toolbox" },
+  { key: "cross-transfer", label: "跨盘秒传", icon: "fa-solid fa-right-left" },
+  { key: "share", label: "文件共享", icon: "fa-solid fa-share-nodes" },
 ];
 const navKeys = nav.map((n) => n.key);
 
@@ -54,8 +50,6 @@ const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 const { dirty, confirmLeave, discardChanges } = useUnsavedChanges();
-let resetBrowserLocationOnLeave = false;
-const preloadedPages = new Set<string>();
 
 const mustChangePassword = computed(() => auth.mustChangePassword);
 const passwordChangeReason = computed(() => auth.passwordChangeReason);
@@ -72,14 +66,13 @@ const passwordChangeMessage = computed(() => {
 
 function normalize(value: unknown): string {
   const raw = String(value ?? "").trim();
-  const v = raw;
-  if (mustChangePassword.value && v !== "settings") return "settings";
-  return navKeys.includes(v) ? v : "dashboard";
+  if (mustChangePassword.value && raw !== "settings") return "settings";
+  return navKeys.includes(raw) ? raw : "dashboard";
 }
 
 const page = ref(normalize(route.query.page));
 provideAdminPageContext(page);
-const adminHomeReturnMode = ref<"sidebar" | "top_icon">("top_icon");
+
 const cachedPageComponents: Record<string, Component> = {
   dashboard: DashboardManagement,
   accounts: AccountManagement,
@@ -90,22 +83,6 @@ const cachedPageComponent = computed(() => cachedPageComponents[page.value] ?? n
 
 const pageTitle = computed(() => nav.find((n) => n.key === page.value)?.label ?? "后台");
 
-function preloadAdminPage(key: string) {
-  const loader = adminPageLoaders[key as keyof typeof adminPageLoaders];
-  if (!loader || preloadedPages.has(key)) return;
-  preloadedPages.add(key);
-  void loader().catch(() => preloadedPages.delete(key));
-}
-
-async function loadAdminUiConfig() {
-  try {
-    const cfg = await fetchSystemConfig();
-    adminHomeReturnMode.value = cfg.admin_home_return_mode === "sidebar" ? "sidebar" : "top_icon";
-  } catch {
-    adminHomeReturnMode.value = "top_icon";
-  }
-}
-
 function isPageLocked(key: string): boolean {
   return mustChangePassword.value && key !== "settings";
 }
@@ -114,27 +91,6 @@ async function changePage(next: string) {
   if (isPageLocked(next)) return;
   if (next === page.value) return;
   await router.push({ query: buildPageQuery(next) });
-}
-
-async function goHome() {
-  resetBrowserLocationOnLeave = true;
-  try {
-    await router.push("/");
-  } finally {
-    resetBrowserLocationOnLeave = false;
-  }
-}
-
-async function handleLogout() {
-  if (!(await confirmPendingChanges())) return;
-  try {
-    await logout();
-  } catch {
-    /* 即使接口失败也清本地状态 */
-  }
-  auth.clear();
-  toast.success("已退出登录");
-  await router.push("/login");
 }
 
 async function handlePasswordUpdated() {
@@ -160,35 +116,21 @@ async function confirmPendingChanges(): Promise<boolean> {
 }
 
 onBeforeRouteUpdate(() => {
-  // 干净页面同步放行，避免每次 sidebar/tab 导航都多等一轮异步守卫。
   if (!dirty.value) return true;
   return confirmPendingChanges();
 });
 
 onBeforeRouteLeave(async (to) => {
   if (!(await confirmPendingChanges())) return false;
-  if (resetBrowserLocationOnLeave && to.name === "home") {
-    localStorage.removeItem(BROWSER_LOCATION_STORAGE_KEY);
+  if (to.name === "home") {
     sessionStorage.setItem(BROWSER_LOCATION_RESET_ONCE_KEY, "1");
   }
   return true;
 });
 
 watch(
-  () => [route.query.page, route.query.tab] as const,
-  ([qPage, qTab]) => {
-    const pageKey = String(qPage ?? "").trim();
-    const tabKey = String(qTab ?? "").trim();
-    // 旧书签：任务管理里的刮削 → 辅助工具；聚合已下线，落到刮削页
-    if (pageKey === "tasks" && LEGACY_TASK_TOOL_TABS.has(tabKey)) {
-      const tab = tabKey === "aggregate" ? "scrape" : tabKey;
-      void router.replace({ query: { ...route.query, page: "tools", tab } });
-      return;
-    }
-    if (pageKey === "tools" && tabKey === "aggregate") {
-      void router.replace({ query: { ...route.query, page: "tools", tab: "scrape" } });
-      return;
-    }
+  () => route.query.page,
+  (qPage) => {
     const target = normalize(qPage);
     if (target !== page.value) page.value = target;
   },
@@ -198,58 +140,143 @@ watch(
 watch(mustChangePassword, (locked) => {
   if (locked) {
     page.value = "settings";
+    router.replace({ query: buildPageQuery("settings") });
   }
 });
 
 onMounted(async () => {
-  // 守卫进入后台时已拉取过认证状态，有缓存则跳过，避免重复的 /auth/status 往返。
   if (!auth.loaded) await auth.load();
-  // 后台 UI 配置只影响"返回首页"按钮样式，不在首屏关键路径上，后台并行拉取。
-  void loadAdminUiConfig();
   if (mustChangePassword.value) {
     page.value = "settings";
     router.replace({ query: buildPageQuery("settings") });
   }
-  // 不再全量预加载所有后台页面，改为 sidebar hover 时按需预加载（@preload 事件）。
 });
 </script>
 
 <template>
-  <AdminShell
-    :nav="nav"
-    :model-value="page"
-    :page-title="pageTitle"
-    :home-return-mode="adminHomeReturnMode"
-    :locked-keys="mustChangePassword ? navKeys.filter((k) => k !== 'settings') : []"
-    @update:model-value="changePage"
-    @preload="preloadAdminPage"
-    @go-home="goHome"
-    @logout="handleLogout"
-  >
-    <WarningBanner v-if="mustChangePassword">
-      <span>🛡️</span>
-      <span>{{ passwordChangeMessage }}</span>
-    </WarningBanner>
+  <div class="admin-page">
+    <div v-if="mustChangePassword" class="admin-page__warn">
+      <WarningBanner>
+        <span>🛡️</span>
+        <span>{{ passwordChangeMessage }}</span>
+      </WarningBanner>
+    </div>
+
+    <!-- 页面标题 + 移动端子导航（桌面由左侧导航承接） -->
+    <header class="admin-page__head">
+      <h1 class="admin-page__title">{{ pageTitle }}</h1>
+      <nav class="admin-page__tabs" aria-label="后台子导航">
+        <button
+          v-for="item in nav"
+          :key="item.key"
+          type="button"
+          class="admin-page__tab"
+          :class="{ 'is-active': page === item.key }"
+          :disabled="isPageLocked(item.key)"
+          :title="isPageLocked(item.key) ? '请先修改管理员密码' : item.label"
+          @click="changePage(item.key)"
+        >
+          <i :class="item.icon" aria-hidden="true"></i>
+          <span>{{ item.label }}</span>
+        </button>
+      </nav>
+    </header>
 
     <AdminEmptyState
       v-if="!cachedPageComponent && !['settings', 'cross-transfer', 'share'].includes(page)"
       icon="🚧"
       :title="`「${nav.find((n) => n.key === page)?.label}」功能开发中`"
     />
-    <KeepAlive>
-      <SystemSettings
-        v-if="page === 'settings'"
-        :force-password-change="mustChangePassword"
-        :password-change-reason="passwordChangeReason"
-        @password-updated="handlePasswordUpdated"
-        @admin-ui-updated="loadAdminUiConfig"
-      />
-      <CrossDriveTransfer v-else-if="page === 'cross-transfer'" />
-      <FileShareManagement v-else-if="page === 'share'" />
-      <component :is="cachedPageComponent" v-else-if="cachedPageComponent" :key="page" />
-    </KeepAlive>
-  </AdminShell>
+
+    <div class="admin-page__body">
+      <KeepAlive>
+        <SystemSettings
+          v-if="page === 'settings'"
+          :force-password-change="mustChangePassword"
+          :password-change-reason="passwordChangeReason"
+          @password-updated="handlePasswordUpdated"
+        />
+        <CrossDriveTransfer v-else-if="page === 'cross-transfer'" />
+        <FileShareManagement v-else-if="page === 'share'" />
+        <component :is="cachedPageComponent" v-else-if="cachedPageComponent" :key="page" />
+      </KeepAlive>
+    </div>
+  </div>
 </template>
 
 <style scoped>
+.admin-page {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.admin-page__warn {
+  padding: 16px 20px 0;
+}
+
+.admin-page__head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px 0;
+}
+
+.admin-page__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.admin-page__tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 4px;
+}
+
+.admin-page__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.admin-page__tab:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.admin-page__tab.is-active {
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+  color: var(--brand-strong, var(--brand));
+  border-color: color-mix(in srgb, var(--brand) 30%, transparent);
+  font-weight: 600;
+}
+
+.admin-page__tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-page__body {
+  padding: 20px;
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  /* 桌面：子导航在左侧栏，内容区不再显示横向条，仅保留标题 */
+  .admin-page__tabs {
+    display: none;
+  }
+}
 </style>
