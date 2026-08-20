@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onActivated, onDeactivated, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { computed, onActivated, ref, watch } from "vue";
+import { useRoute, onBeforeRouteLeave } from "vue-router";
 import { mediaLibraryApi, type MediaLibraryDetail, type MediaLibraryEpisode } from "@/api/mediaLibrary";
 import { getApiErrorMessage } from "@/api/client";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
@@ -20,9 +20,9 @@ const playerUrl = ref("");
 
 const isTV = computed(() => detail.value?.media_type === "tv");
 
-// KeepAlive 滚动记忆
+// KeepAlive 滚动记忆：离开前记录（onBeforeRouteLeave 时机 DOM 未变，最可靠）
 let savedScrollY = 0;
-onDeactivated(() => {
+onBeforeRouteLeave(() => {
   savedScrollY = window.scrollY || 0;
 });
 onActivated(() => {
@@ -80,12 +80,6 @@ function playEpisode(ep: MediaLibraryEpisode) {
     </div>
 
     <template v-else-if="detail">
-      <div class="detail-topbar">
-        <RouterLink to="/movies" class="detail-back" title="返回影视">
-          ← 返回影视
-        </RouterLink>
-      </div>
-
       <div v-if="detail.backdrop_url" class="detail-hero" :style="{ backgroundImage: `url(${detail.backdrop_url})` }">
         <div class="detail-hero__shade" />
       </div>
@@ -203,25 +197,6 @@ function playEpisode(ep: MediaLibraryEpisode) {
 .detail-error {
   margin: 0;
   color: var(--danger);
-}
-
-.detail-topbar {
-  padding: 14px 20px 6px;
-  background: var(--bg);
-}
-
-.detail-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-regular);
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.detail-back:hover {
-  color: var(--brand);
 }
 
 .detail-hero {

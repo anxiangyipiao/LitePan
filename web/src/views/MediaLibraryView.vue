@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { nextTick, onActivated, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRouter, onBeforeRouteLeave } from "vue-router";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import {
   mediaLibraryApi,
@@ -37,9 +37,9 @@ function goDetail(item: MediaLibraryItem) {
   void router.push({ path: `/movies/${item.id}`, query: { lib: item.lib_id } });
 }
 
-// KeepAlive 滚动记忆：离开时记录窗口滚动位置，返回时恢复
+// KeepAlive 滚动记忆：离开前记录窗口滚动位置（onBeforeRouteLeave 时机 DOM 未变，最可靠），返回时恢复
 let savedScrollY = 0;
-onDeactivated(() => {
+onBeforeRouteLeave(() => {
   savedScrollY = window.scrollY || 0;
 });
 onActivated(() => {
