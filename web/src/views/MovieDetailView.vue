@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onActivated, onDeactivated, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { mediaLibraryApi, type MediaLibraryDetail, type MediaLibraryEpisode } from "@/api/mediaLibrary";
 import { getApiErrorMessage } from "@/api/client";
@@ -19,6 +19,17 @@ const playerTitle = ref("");
 const playerUrl = ref("");
 
 const isTV = computed(() => detail.value?.media_type === "tv");
+
+// KeepAlive 滚动记忆
+let savedScrollY = 0;
+onDeactivated(() => {
+  savedScrollY = window.scrollY || 0;
+});
+onActivated(() => {
+  if (savedScrollY > 0) {
+    requestAnimationFrame(() => window.scrollTo({ top: savedScrollY }));
+  }
+});
 
 async function loadDetail() {
   const id = String(route.params.id ?? "");

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import {
@@ -36,6 +36,17 @@ const wall = useVirtualPosterWall(items);
 function goDetail(item: MediaLibraryItem) {
   void router.push({ path: `/movies/${item.id}`, query: { lib: item.lib_id } });
 }
+
+// KeepAlive 滚动记忆：离开时记录窗口滚动位置，返回时恢复
+let savedScrollY = 0;
+onDeactivated(() => {
+  savedScrollY = window.scrollY || 0;
+});
+onActivated(() => {
+  if (savedScrollY > 0) {
+    requestAnimationFrame(() => window.scrollTo({ top: savedScrollY }));
+  }
+});
 
 // ---- 配置弹窗 ----
 const configOpen = ref(false);
