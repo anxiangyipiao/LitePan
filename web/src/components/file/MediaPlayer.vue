@@ -1,11 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import { fileExtension } from "@/utils/format";
-import SvgIcon from "@/components/icons/SvgIcon.vue";
-
-// 影视模式通用播放器：内嵌视频，支持 hls.js / mpegts.js 流。
-
 const props = withDefaults(
   defineProps<{
     open: boolean;
@@ -47,7 +43,6 @@ async function enterFullscreen() {
   try {
     await el.requestFullscreen?.();
   } catch {
-    // 忽略用户手势/策略限制导致的失败，保留弹窗可播放
   }
 }
 
@@ -56,9 +51,14 @@ function exitFullscreenIfNeeded() {
   void document.exitFullscreen?.().catch(() => {});
 }
 
+function lockBody(lock: boolean) {
+  document.documentElement.style.overflow = lock ? "hidden" : "";
+  document.body.style.overflow = lock ? "hidden" : "";
+}
 
 function closePlayer() {
   exitFullscreenIfNeeded();
+  lockBody(false);
   playerSession += 1;
   playerHls?.destroy();
   playerHls = null;
@@ -118,121 +118,144 @@ defineExpose({ enterFullscreen, setupPlayer });
 watch(
   () => props.open,
   (open) => {
-    if (!open) return;
+    if (!open) {
+      lockBody(false);
+      return;
+    }
+    lockBody(true);
     void nextTick(setupPlayer);
   },
 );
+
+function onKey(e: KeyboardEvent) {
+  if (e.key === "Escape" && props.open) {
+    // 如果在浏览器全屏中，先退全屏，再关弹窗由 closePlayer 处理
+    if (isFullscreen()) exitFullscreenIfNeeded();
+    else closePlayer();
+  }
+}
+
+onMounted(() => window.addEventListener("keydown", onKey));
+onUnmounted(() => {
+  window.removeEventListener("keydown", onKey);
+  lockBody(false);
+});
 </script>
 
 <template>
-  <div v-if="open" class="mp-mask" @click.self="closePlayer">
-    <div ref="wrapRef" class="mp">
+  <Teleport to="body">
+    <div v-if="open" ref="wrapRef" class="mp-screen" @click.self="closePlayer">
       <header class="mp-head">
         <span class="mp-title" :title="title">{{ title }}</span>
-        <span class="mp-meta">播放中</span>
         <span class="mp-spacer" />
-        <button type="button" class="mp-close" title="全屏" @click="enterFullscreen">
-          <i class="fa-solid fa-expand" aria-hidden="true"></i>
-        </button>
-        <button type="button" class="mp-close" title="关闭" @click="closePlayer">
-          <SvgIcon name="sign-out" :size="14" />
+        <button type="button" class="mp-btn" title="退出" aria-label="关闭播放" @click="closePlayer">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
         </button>
       </header>
 
-      <video ref="videoRef" class="mp-video" controls playsinline />
+      <div class="mp-stage" @click.self="closePlayer">
+        <video ref="videoRef" class="mp-video" controls autoplay playsinline preload="metadata" @error="playerError = true" />
+      </div>
       <p v-if="playerError" class="mp-error">播放失败，请稍后重试</p>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <style scoped>
-.mp-mask {
+.mp-screen {
   position: fixed;
   inset: 0;
-  z-index: 200;
-  background: rgba(0, 0, 0, 0.72);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.mp {
-  width: min(960px, 100%);
-  max-height: 100%;
-  background: #0f172a;
-  border-radius: 14px;
-  overflow: hidden;
+  z-index: 400;
   display: flex;
   flex-direction: column;
-}
-
-.mp:fullscreen {
+  background: #000;
   width: 100vw;
   height: 100vh;
-  max-height: none;
-  border-radius: 0;
+  height: 100dvh;
+}
+
+/* 浏览器 Fullscreen API 时让容器真正占满屏幕 */
+.mp-screen:fullscreen {
+  width: 100vw;
+  height: 100vh;
   background: #000;
 }
 
-.mp:fullscreen .mp-video {
-  flex: 1 1 auto;
-  aspect-ratio: auto;
-  min-height: 0;
-}
-
 .mp-head {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
+  padding: 12px 16px;
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
   color: #e2e8f0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.72), rgba(0,0,0,0.0));
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  pointer-events: none;
 }
 
 .mp-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-shadow: 0 1px 8px rgba(0,0,0,0.6);
 }
 
-.mp-meta {
-  font-size: 12px;
-  color: #94a3b8;
-  border: 1px solid #334155;
-  border-radius: 999px;
-  padding: 1px 8px;
-  flex-shrink: 0;
-}
+.mp-spacer { flex: 1; }
 
-.mp-spacer {
-  flex: 1;
-}
-
-.mp-close {
+.mp-btn {
+  pointer-events: auto;
   appearance: none;
   border: none;
-  background: transparent;
-  color: #94a3b8;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.12);
+  color: #e2e8f0;
   cursor: pointer;
-  padding: 4px;
+  backdrop-filter: blur(8px);
 }
+.mp-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
 
-.mp-close:hover {
-  color: #fff;
+.mp-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
 }
 
 .mp-video {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  height: 100%;
+  max-width: 100vw;
+  max-height: 100vh;
+  max-height: 100dvh;
+  object-fit: contain;
   background: #000;
+  outline: none;
 }
 
 .mp-error {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
   margin: 0;
   padding: 8px 14px;
-  color: #fca5a5;
+  border-radius: 999px;
+  background: rgba(220,38,38,0.92);
+  color: #fff;
   font-size: 13px;
 }
 </style>
