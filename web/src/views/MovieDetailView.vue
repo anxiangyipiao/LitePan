@@ -18,6 +18,13 @@ const playerOpen = ref(false);
 const playerTitle = ref("");
 const playerUrl = ref("");
 
+// 背景图全屏查看
+const fanartViewUrl = ref("");
+
+function openFanart(url: string) {
+  fanartViewUrl.value = url;
+}
+
 const isTV = computed(() => detail.value?.media_type === "tv");
 
 // KeepAlive 滚动记忆：离开前记录（onBeforeRouteLeave 时机 DOM 未变，最可靠）
@@ -114,6 +121,10 @@ function playEpisode(ep: MediaLibraryEpisode) {
               <span v-for="g in detail.genres" :key="g" class="detail-genre">{{ g }}</span>
             </div>
 
+            <div v-if="detail.actors?.length" class="detail-actors">
+              <span v-for="(a, i) in detail.actors" :key="i" class="detail-actor">{{ a }}</span>
+            </div>
+
             <div v-if="detail.runtime || detail.studio || detail.director || detail.tmdb_id" class="detail-facts">
               <span v-if="detail.runtime">时长 {{ detail.runtime }} 分钟</span>
               <span v-if="detail.director">导演 {{ detail.director }}</span>
@@ -165,8 +176,33 @@ function playEpisode(ep: MediaLibraryEpisode) {
             </button>
           </div>
         </div>
+
+        <div v-if="detail.extra_fanart_urls?.length" class="detail-fanart">
+          <h3 class="detail-sec">背景图（{{ detail.extra_fanart_urls.length }}）</h3>
+          <div class="detail-fanart-scroll">
+            <img
+              v-for="(url, i) in detail.extra_fanart_urls"
+              :key="i"
+              :src="url"
+              class="detail-fanart-img"
+              loading="lazy"
+              decoding="async"
+              @click="openFanart(url)"
+            />
+          </div>
+        </div>
       </div>
     </template>
+
+    <!-- 全屏背景图查看器 -->
+    <Teleport to="body">
+      <Transition name="fanart-overlay">
+        <div v-if="fanartViewUrl" class="fanart-overlay" @click="fanartViewUrl = ''">
+          <img :src="fanartViewUrl" class="fanart-overlay__img" />
+          <button type="button" class="fanart-overlay__close" aria-label="关闭" @click.stop="fanartViewUrl = ''">×</button>
+        </div>
+      </Transition>
+    </Teleport>
 
     <MediaPlayer
       :open="playerOpen"
@@ -286,6 +322,101 @@ function playEpisode(ep: MediaLibraryEpisode) {
   font-weight: 600;
 }
 
+.detail-actors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.detail-actor {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-regular);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.detail-fanart {
+  margin-top: 26px;
+}
+
+.detail-fanart-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  padding-bottom: 4px;
+}
+
+.detail-fanart-img {
+  flex: 0 0 auto;
+  width: 280px;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  object-fit: cover;
+  cursor: pointer;
+  scroll-snap-align: start;
+  background: var(--surface-sunken);
+  transition: transform 0.18s ease;
+}
+
+.detail-fanart-img:hover {
+  transform: scale(1.02);
+}
+
+.fanart-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  cursor: zoom-out;
+}
+
+.fanart-overlay__img {
+  max-width: 95vw;
+  max-height: 90vh;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.fanart-overlay__close {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.fanart-overlay__close:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.fanart-overlay-enter-active,
+.fanart-overlay-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fanart-overlay-enter-from,
+.fanart-overlay-leave-to {
+  opacity: 0;
+}
+
 .detail-facts {
   display: flex;
   flex-wrap: wrap;
@@ -381,6 +512,10 @@ function playEpisode(ep: MediaLibraryEpisode) {
 
   .detail-hero {
     height: 180px;
+  }
+
+  .detail-fanart-img {
+    width: 220px;
   }
 }
 </style>

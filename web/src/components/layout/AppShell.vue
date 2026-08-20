@@ -361,6 +361,15 @@ async function handleLogout() {
   opacity: 0;
 }
 
+@media (max-width: 767px) {
+  .page-enter-active {
+    transition: opacity 0.2s ease;
+  }
+  .page-enter-from {
+    transform: none;
+  }
+}
+
 /* 移动端：底部 Tab 栏 + 管理子导航横向条 */
 @media (max-width: 767px) {
   .app-shell {
@@ -382,6 +391,8 @@ async function handleLogout() {
     align-items: center;
     border-right: none;
     border-top: 1px solid var(--border-soft);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    z-index: 90;
   }
 
   .app-nav__list {
@@ -406,7 +417,6 @@ async function handleLogout() {
     display: none;
   }
 
-  /* 管理子导航在移动端由 AdminView 内的横向条承接，此处隐藏 */
   .app-nav__btn--sub {
     display: none;
   }
@@ -416,7 +426,7 @@ async function handleLogout() {
   }
 
   .app-body {
-    padding-bottom: 58px;
+    padding-bottom: calc(58px + env(safe-area-inset-bottom, 0));
   }
 }
 </style>

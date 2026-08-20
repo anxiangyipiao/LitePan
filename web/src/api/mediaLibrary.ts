@@ -57,6 +57,8 @@ export interface MediaLibraryDetail {
   runtime?: string;
   studio?: string;
   director?: string;
+  actors?: string[];
+  extra_fanart_urls?: string[];
   play_url?: string;
   episodes?: MediaLibraryEpisode[];
 }

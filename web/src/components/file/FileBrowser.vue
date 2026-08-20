@@ -14,6 +14,7 @@ import { useOfflineDownloads } from "@/composables/useOfflineDownloads";
 import { useTransferBadge, type TransferBadgeKind } from "@/composables/upload/useTransferBadge";
 import { toast } from "@/composables/useToast";
 import { filesApi } from "@/api/files";
+import { logout } from "@/api/auth";
 import type { Account, BrowserFavoriteItem, FileItem, FileNameAlignPreviewResult } from "@/api/types";
 import type { OfflineDownloadTask } from "@/types/offline-download";
 import { getApiErrorMessage } from "@/api/client";
@@ -91,6 +92,13 @@ let nameAlignApplyTimer: number | undefined;
 const mobileSidebarOpen = ref(false);
 const bottomSheetOpen = ref(false);
 const bottomSheetTarget = ref<FileItem | null>(null);
+
+async function handleLogout() {
+  try { await logout(); } catch { /* ignore */ }
+  auth.clear();
+  toast.success("已退出登录");
+  router.push("/login");
+}
 
 const selectedAccountName = computed(
   () => accounts.value.find((a) => a.id === currentAccountId.value)?.name || "",
@@ -895,6 +903,19 @@ onUnmounted(() => {
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
+        <button
+          v-if="isAdmin"
+          type="button"
+          class="browser__mobile-logout"
+          aria-label="退出登录"
+          @click="handleLogout"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </button>
         <BreadcrumbNav class="browser__breadcrumb" :items="breadcrumb" @navigate="store.goTo" />
         <FileToolbar
           :is-admin="isAdmin"
@@ -1328,6 +1349,27 @@ onUnmounted(() => {
   .browser__hamburger {
     display: inline-flex;
   }
+  .browser__mobile-logout {
+    display: inline-flex;
+  }
+}
+
+/* ---- Mobile: logout button ---- */
+.browser__mobile-logout {
+  display: none;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  color: var(--text-primary, #1f2937);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.browser__mobile-logout:active {
+  background: var(--bg-secondary, #f3f4f6);
 }
 
 /* ---- Mobile: sidebar content ---- */

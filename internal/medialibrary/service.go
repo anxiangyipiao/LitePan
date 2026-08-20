@@ -64,27 +64,29 @@ type Episode struct {
 
 // Detail 影视条目详情：元数据 + 简介 + 背景图 + 播放地址（剧集含选集列表）。
 type Detail struct {
-	ID          string    `json:"id"`
-	Title       string    `json:"title"`
-	Year        *int      `json:"year,omitempty"`
-	MediaType   string    `json:"media_type"`
-	TMDBID      string    `json:"tmdb_id,omitempty"`
-	FolderName  string    `json:"folder_name,omitempty"`
-	FileCount   int       `json:"file_count"`
-	EpLocal     int       `json:"ep_local,omitempty"`
-	EpTMDB      int       `json:"ep_tmdb,omitempty"`
-	EpScraped   int       `json:"ep_scraped,omitempty"`
-	TVState     string    `json:"tv_state,omitempty"`
-	Status      string    `json:"status"`
-	PosterURL   string    `json:"poster_url,omitempty"`
-	BackdropURL string    `json:"backdrop_url,omitempty"`
-	Overview    string    `json:"overview,omitempty"`
-	Genres      []string  `json:"genres,omitempty"`  // nfo 类型标签
-	Runtime     string    `json:"runtime,omitempty"` // 时长（分钟）
-	Studio      string    `json:"studio,omitempty"`  // 制片/发行
-	Director    string    `json:"director,omitempty"`
-	PlayURL     string    `json:"play_url,omitempty"` // 电影直播；剧集为首集
-	Episodes    []Episode `json:"episodes,omitempty"` // 剧集选集列表
+	ID              string    `json:"id"`
+	Title           string    `json:"title"`
+	Year            *int      `json:"year,omitempty"`
+	MediaType       string    `json:"media_type"`
+	TMDBID          string    `json:"tmdb_id,omitempty"`
+	FolderName      string    `json:"folder_name,omitempty"`
+	FileCount       int       `json:"file_count"`
+	EpLocal         int       `json:"ep_local,omitempty"`
+	EpTMDB          int       `json:"ep_tmdb,omitempty"`
+	EpScraped       int       `json:"ep_scraped,omitempty"`
+	TVState         string    `json:"tv_state,omitempty"`
+	Status          string    `json:"status"`
+	PosterURL       string    `json:"poster_url,omitempty"`
+	BackdropURL     string    `json:"backdrop_url,omitempty"`
+	Overview        string    `json:"overview,omitempty"`
+	Genres          []string  `json:"genres,omitempty"`           // nfo 类型标签
+	Runtime         string    `json:"runtime,omitempty"`         // 时长（分钟）
+	Studio          string    `json:"studio,omitempty"`          // 制片/发行
+	Director        string    `json:"director,omitempty"`
+	Actors          []string  `json:"actors,omitempty"`          // nfo 演员列表
+	ExtraFanartURLs []string  `json:"extra_fanart_urls,omitempty"` // extrafanart/ 轮播背景图
+	PlayURL         string    `json:"play_url,omitempty"`        // 电影直播；剧集为首集
+	Episodes        []Episode `json:"episodes,omitempty"`        // 剧集选集列表
 }
 
 // mergeCap 跨库合并时单库最多拉取的条目数（首几页分页正确即可，超限截断）。
@@ -318,25 +320,27 @@ func (s *Service) Detail(ctx context.Context, libID, id string) (*Detail, error)
 	info := readNFOInfo(root.Path, relDir, it.MediaType)
 
 	d := &Detail{
-		ID:          it.ID,
-		Title:       it.Title,
-		Year:        it.Year,
-		MediaType:   it.MediaType,
-		TMDBID:      it.TMDBID,
-		FolderName:  it.FolderName,
-		FileCount:   it.FileCount,
-		EpLocal:     it.EpLocal,
-		EpTMDB:      it.EpTMDB,
-		EpScraped:   it.EpScraped,
-		TVState:     it.TVState,
-		Status:      it.Status,
-		PosterURL:   rebuildPosterURL(libID, it.PosterURL),
-		Overview:    info.Plot,
-		Genres:      info.Genres,
-		Runtime:     info.Runtime,
-		Studio:      info.Studio,
-		Director:    info.Director,
-		BackdropURL: s.resolveBackdropURL(libID, root.Path, relDir, it),
+		ID:              it.ID,
+		Title:           it.Title,
+		Year:            it.Year,
+		MediaType:       it.MediaType,
+		TMDBID:          it.TMDBID,
+		FolderName:      it.FolderName,
+		FileCount:       it.FileCount,
+		EpLocal:         it.EpLocal,
+		EpTMDB:          it.EpTMDB,
+		EpScraped:       it.EpScraped,
+		TVState:         it.TVState,
+		Status:          it.Status,
+		PosterURL:       rebuildPosterURL(libID, it.PosterURL),
+		Overview:        info.Plot,
+		Genres:          info.Genres,
+		Runtime:         info.Runtime,
+		Studio:          info.Studio,
+		Director:        info.Director,
+		Actors:          info.Actors,
+		BackdropURL:     s.resolveBackdropURL(libID, root.Path, relDir, it),
+		ExtraFanartURLs: s.resolveExtraFanartURLs(libID, root.Path, relDir),
 	}
 	if it.MediaType == strmscrape.MediaTypeTV {
 		d.Episodes = s.listEpisodes(root.Path, *it)
@@ -366,6 +370,27 @@ func (s *Service) resolveBackdropURL(libID, rootPath, relDir string, it *strmscr
 		}
 	}
 	return ""
+}
+
+// resolveExtraFanartURLs 扫描 extrafanart/ 目录下的 fanart1..N.jpg，返回可用的背景图 URL 列表。
+func (s *Service) resolveExtraFanartURLs(libID, rootPath, relDir string) []string {
+	dir := filepath.Join(rootPath, relDir, "extrafanart")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var urls []string
+	for i := 1; i <= 5; i++ {
+		name := fmt.Sprintf("fanart%d.jpg", i)
+		rel := filepath.ToSlash(filepath.Join(relDir, "extrafanart", name))
+		for _, e := range entries {
+			if e.Name() == name && !e.IsDir() {
+				urls = append(urls, "/api/media-library/poster?lib="+url.QueryEscape(libID)+"&rel="+url.QueryEscape(rel))
+				break
+			}
+		}
+	}
+	return urls
 }
 
 // mediaStem 从 .strm 文件名提取媒体主名（Inception.mkv.strm → Inception）。
@@ -408,14 +433,19 @@ func (s *Service) listEpisodes(rootPath string, it strmscrape.Item) []Episode {
 }
 
 // movieNFO / tvshowNFO 是 Kodi/Emby 兼容 nfo 的最小解析结构。
+type nfoActor struct {
+	Name string `xml:"name"`
+}
+
 type movieNFO struct {
-	Title    string   `xml:"title"`
-	Year     string   `xml:"year"`
-	Plot     string   `xml:"plot"`
-	Runtime  string   `xml:"runtime"`
-	Genres   []string `xml:"genre"`
-	Studio   string   `xml:"studio"`
-	Director string   `xml:"director"`
+	Title    string     `xml:"title"`
+	Year     string     `xml:"year"`
+	Plot     string     `xml:"plot"`
+	Runtime  string     `xml:"runtime"`
+	Genres   []string   `xml:"genre"`
+	Studio   string     `xml:"studio"`
+	Director string     `xml:"director"`
+	Actors   []nfoActor `xml:"actor"`
 }
 
 type tvshowNFO struct {
@@ -430,6 +460,7 @@ type nfoInfo struct {
 	Runtime  string
 	Studio   string
 	Director string
+	Actors   []string
 }
 
 // readNFOInfo 读取条目目录下 movie.nfo / tvshow.nfo 的详情字段。
@@ -459,12 +490,19 @@ func readNFOInfo(rootPath, relDir, mediaType string) nfoInfo {
 			genres = append(genres, t)
 		}
 	}
+	actors := make([]string, 0, len(nf.Actors))
+	for _, a := range nf.Actors {
+		if t := strings.TrimSpace(a.Name); t != "" {
+			actors = append(actors, t)
+		}
+	}
 	return nfoInfo{
 		Plot:     strings.TrimSpace(nf.Plot),
 		Genres:   genres,
 		Runtime:  strings.TrimSpace(nf.Runtime),
 		Studio:   strings.TrimSpace(nf.Studio),
 		Director: strings.TrimSpace(nf.Director),
+		Actors:   actors,
 	}
 }
 
