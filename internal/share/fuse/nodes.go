@@ -218,16 +218,14 @@ func (d *cloudDir) lookupChildItem(ctx context.Context, name string) (domain.Fil
 }
 
 func (d *cloudDir) lookupChildItemIfExists(ctx context.Context, name string) (domain.FileItem, bool, syscall.Errno) {
-	items, err := d.b.deps.Files.List(ctx, d.b.accountID(), d.item.ID, false)
+	item, err := d.b.deps.Files.Lookup(ctx, d.b.accountID(), d.item.ID, name)
 	if err != nil {
+		if ae, ok := domain.AsAppError(err); ok && ae.Code == domain.CodeNotFound {
+			return domain.FileItem{}, false, 0
+		}
 		return domain.FileItem{}, false, errnoFor(err)
 	}
-	for _, it := range items {
-		if it.Name == name {
-			return it, true, 0
-		}
-	}
-	return domain.FileItem{}, false, 0
+	return *item, true, 0
 }
 
 func normalizeChildName(name string) (string, syscall.Errno) {

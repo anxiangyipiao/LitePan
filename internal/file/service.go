@@ -14,10 +14,19 @@ import (
 	"litepan/internal/driver"
 	"litepan/internal/eventbus"
 	"litepan/internal/settings"
+	"litepan/pkg/ttlcache"
 )
 
 // defaultDirTTL 是 settings 不可用（如测试）时的目录缓存兜底时长。
 const defaultDirTTL = 30 * time.Minute
+
+// accountTTLInfo 是单账号 cache_ttl 的记忆化结果。
+// set=true 表示账号配置里显式写了 cache_ttl（含 0=禁用）；found 表示账号存在。
+type accountTTLInfo struct {
+	minutes int
+	set     bool
+	found   bool
+}
 
 // Service 跨驱动文件浏览；读走缓存，写后发 FileMutated。
 type Service struct {
@@ -28,10 +37,19 @@ type Service struct {
 	settings *settings.Service
 	listHits *cache.HitTracker
 	log      *slog.Logger
+
+	// ttlMemo 记忆化每账号 cache_ttl，避免命中缓存时仍查库取 TTL。
+	// 账号配置变更最多延迟 TTL（60s）生效。
+	ttlMemo *ttlcache.Cache[int64, accountTTLInfo]
+
+	// lookupMemo 目录 name→item 索引，key=DirKey(accountID, parentID)。
+	// FUSE Lookup 等按名查找复用索引，避免每请求全量线性扫描；
+	// 写操作失效目录缓存时同步失效（见 invalidateLookupIndexes）。
+	lookupMemo *ttlcache.Cache[string, map[string]domain.FileItem]
 }
 
 func NewService(exec *driverexec.Executor, c *cache.Service, accounts domain.AccountRepository, bus *eventbus.Bus, set *settings.Service, listHits *cache.HitTracker) *Service {
-	return &Service{exec: exec, cache: c, accounts: accounts, bus: bus, settings: set, listHits: listHits, log: slog.Default()}
+	return &Service{exec: exec, cache: c, accounts: accounts, bus: bus, settings: set, listHits: listHits, log: slog.Default(), ttlMemo: ttlcache.New[int64, accountTTLInfo](60*time.Second, 512), lookupMemo: ttlcache.New[string, map[string]domain.FileItem](30*time.Second, 1024)}
 }
 
 // SetLogger 装配期注入 file_op 模块 logger；不调用则回落 slog.Default。
@@ -138,6 +156,38 @@ func (s *Service) Info(ctx context.Context, accountID int64, fileID string) (*do
 	}
 	item := info
 	return &item, nil
+}
+
+// Lookup 在父目录内按名称查子项。目录列表命中缓存时复用预建 name→item 索引，
+// 避免 FUSE Lookup 等高频路径对每个名称全量线性扫描。
+func (s *Service) Lookup(ctx context.Context, accountID int64, parentID, name string) (*domain.FileItem, error) {
+	items, err := s.List(ctx, accountID, parentID, false)
+	if err != nil {
+		return nil, err
+	}
+	key := cache.DirKey(accountID, parentID)
+	idx, ok := s.lookupMemo.Get(key)
+	if !ok || len(idx) != len(items) {
+		idx = make(map[string]domain.FileItem, len(items))
+		for _, it := range items {
+			idx[it.Name] = it
+		}
+		s.lookupMemo.Set(key, idx)
+	}
+	if it, ok := idx[name]; ok {
+		return &it, nil
+	}
+	return nil, domain.Errorf(domain.CodeNotFound, "文件不存在: %s", name)
+}
+
+// invalidateLookupIndexes 失效受影响目录的 name→item 索引，与目录缓存失效同步。
+func (s *Service) invalidateLookupIndexes(accountID int64, parentIDs ...string) {
+	if s.lookupMemo == nil {
+		return
+	}
+	for _, p := range parentIDs {
+		s.lookupMemo.Delete(cache.DirKey(accountID, p))
+	}
 }
 
 func (s *Service) infoFromDriver(ctx context.Context, accountID int64, fileID string) (*domain.FileItem, error) {
@@ -309,6 +359,7 @@ func (s *Service) UploadLocal(ctx context.Context, accountID int64, req driver.L
 	s.log.Debug("上传文件成功", "account_id", accountID, "name", result.FileName, "size", result.Size)
 	parentID := cache.NormalizeDirParentID(req.ParentID)
 	resolvedParentID := cache.NormalizeDirParentID(result.ParentID)
+	s.invalidateLookupIndexes(accountID, parentID, resolvedParentID)
 	if s.cache != nil && resolvedParentID != "" && resolvedParentID != parentID {
 		cache.InvalidateDirKeys(s.cache, accountID, resolvedParentID)
 	}
@@ -361,6 +412,7 @@ func (s *Service) DirCacheTTL(ctx context.Context, accountID int64) time.Duratio
 func (s *Service) publishMutation(ctx context.Context, e eventbus.FileMutated) {
 	e.ParentID = cache.NormalizeDirParentID(e.ParentID)
 	e.OldParentID = cache.NormalizeDirParentID(e.OldParentID)
+	s.invalidateLookupIndexes(e.AccountID, e.ParentID, e.OldParentID)
 	if s.cache != nil {
 		cache.ApplyMutation(s.cache, e)
 	}
@@ -375,16 +427,36 @@ func (s *Service) dirTTL(ctx context.Context, accountID int64) time.Duration {
 		return 0
 	}
 	if s.accounts != nil {
-		if acc, err := s.accounts.Get(ctx, accountID); err == nil && acc != nil {
-			if minutes, ok := parseCacheTTLMinutes(acc.Config); ok {
-				if minutes <= 0 {
-					return 0
-				}
-				return time.Duration(minutes) * time.Minute
+		if minutes, ok := s.accountTTLMinutes(ctx, accountID); ok {
+			if minutes <= 0 {
+				return 0
 			}
+			return time.Duration(minutes) * time.Minute
 		}
 	}
 	return s.globalDirTTL()
+}
+
+// accountTTLMinutes 记忆化读取账号 cache_ttl。返回 ok=true 表示账号配置显式设置了
+// cache_ttl（含 0=禁用）；账号不存在或未配置时 ok=false（回退全局默认）。
+func (s *Service) accountTTLMinutes(ctx context.Context, accountID int64) (int, bool) {
+	if s.ttlMemo != nil {
+		if v, ok := s.ttlMemo.Get(accountID); ok {
+			return v.minutes, v.set && v.found
+		}
+	}
+	var info accountTTLInfo
+	if acc, err := s.accounts.Get(ctx, accountID); err == nil && acc != nil {
+		info.found = true
+		if minutes, ok := parseCacheTTLMinutes(acc.Config); ok {
+			info.minutes = minutes
+			info.set = true
+		}
+	}
+	if s.ttlMemo != nil {
+		s.ttlMemo.Set(accountID, info)
+	}
+	return info.minutes, info.set && info.found
 }
 
 // globalDirTTL 返回全局默认目录缓存时长；settings 不可用时回落兜底常量。

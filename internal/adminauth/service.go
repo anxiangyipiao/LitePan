@@ -14,6 +14,7 @@ import (
 
 	"litepan/internal/domain"
 	"litepan/pkg/security"
+	"litepan/pkg/ttlcache"
 )
 
 const (
@@ -115,13 +116,45 @@ type Service struct {
 	resetIPCooldown sync.Map
 	resetLastAt     int64
 	resetMu         sync.Mutex
+
+	// configCache 短 TTL 缓存 configs.Get，消除每个请求多次 SQLite 读取。
+	// 本包内所有 configs.Set 走 setConfig 立即失效对应键。
+	configCache *ttlcache.Cache[string, configVal]
+}
+
+// configVal 缓存 configs.Get 的返回值（ok 为 key 是否存在）。
+type configVal struct {
+	val string
+	ok  bool
 }
 
 func New(configs domain.ConfigRepository, secret []byte, log *slog.Logger) *Service {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Service{configs: configs, secret: secret, log: log}
+	return &Service{configs: configs, secret: secret, log: log, configCache: ttlcache.New[string, configVal](5*time.Second, 512)}
+}
+
+// configGet 带缓存的 configs.Get 读取。
+func (s *Service) configGet(ctx context.Context, key string) (string, bool) {
+	if v, ok := s.configCache.Get(key); ok {
+		return v.val, v.ok
+	}
+	val, ok, err := s.configs.Get(ctx, key)
+	if err != nil {
+		return "", false
+	}
+	s.configCache.Set(key, configVal{val: val, ok: ok})
+	return val, ok
+}
+
+// setConfig 写配置并立即失效缓存，避免同批请求读到旧值。
+func (s *Service) setConfig(ctx context.Context, key, value string) error {
+	if err := s.configs.Set(ctx, key, value); err != nil {
+		return err
+	}
+	s.configCache.Delete(key)
+	return nil
 }
 
 func (s *Service) serializer() *security.TimedSerializer {
@@ -296,9 +329,9 @@ func (s *Service) ResetPassword(ctx context.Context, r *http.Request) (map[strin
 	password := randomPassword(12)
 	hash := security.HashPassword(password)
 	expiresAt := now + tempPasswordTTL
-	_ = s.configs.Set(ctx, KeyAdminTempPasswordHash, hash)
-	_ = s.configs.Set(ctx, KeyAdminTempPasswordExpiresAt, strconv.FormatInt(expiresAt, 10))
-	_ = s.configs.Set(ctx, KeyAdminTempPasswordLastReset, strconv.FormatInt(now, 10))
+	_ = s.setConfig(ctx, KeyAdminTempPasswordHash, hash)
+	_ = s.setConfig(ctx, KeyAdminTempPasswordExpiresAt, strconv.FormatInt(expiresAt, 10))
+	_ = s.setConfig(ctx, KeyAdminTempPasswordLastReset, strconv.FormatInt(now, 10))
 	s.resetLastAt = now
 	if ip != "" {
 		s.resetIPCooldown.Store(ip, now)
@@ -378,7 +411,7 @@ func (s *Service) IndexStrmAutoDetectEnabled(ctx context.Context) bool {
 
 func (s *Service) UpdateWebDAVConfig(ctx context.Context, req WebDAVConfigRequest) error {
 	if req.WebDAVEnabled != nil {
-		_ = s.configs.Set(ctx, KeyWebDAVEnabled, boolString(*req.WebDAVEnabled))
+		_ = s.setConfig(ctx, KeyWebDAVEnabled, boolString(*req.WebDAVEnabled))
 	}
 	return nil
 }
@@ -394,7 +427,7 @@ func (s *Service) UpdateCredentials(ctx context.Context, r *http.Request, w http
 		return err
 	}
 	for _, update := range updates {
-		if err := s.configs.Set(ctx, update.key, update.value); err != nil {
+		if err := s.setConfig(ctx, update.key, update.value); err != nil {
 			return domain.Wrap(domain.CodeInternal, err)
 		}
 	}
@@ -512,7 +545,7 @@ func (s *Service) adminCredentials(ctx context.Context) (string, string) {
 	password := s.configString(ctx, KeyAdminPassword, "")
 	if password == "" || (username == defaultAdminUsername && strings.TrimSpace(password) == defaultAdminPassword) {
 		password = security.HashPassword(defaultAdminPassword)
-		_ = s.configs.Set(ctx, KeyAdminPassword, password)
+		_ = s.setConfig(ctx, KeyAdminPassword, password)
 	}
 	return username, password
 }
@@ -594,16 +627,16 @@ func (s *Service) tempPasswordState(ctx context.Context) tempPasswordState {
 }
 
 func (s *Service) configString(ctx context.Context, key, fallback string) string {
-	v, ok, err := s.configs.Get(ctx, key)
-	if err != nil || !ok || strings.TrimSpace(v) == "" {
+	v, ok := s.configGet(ctx, key)
+	if !ok || strings.TrimSpace(v) == "" {
 		return fallback
 	}
 	return strings.TrimSpace(v)
 }
 
 func (s *Service) configInt(ctx context.Context, key string, fallback int) int {
-	v, ok, err := s.configs.Get(ctx, key)
-	if err != nil || !ok || strings.TrimSpace(v) == "" {
+	v, ok := s.configGet(ctx, key)
+	if !ok || strings.TrimSpace(v) == "" {
 		return fallback
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(v))
@@ -614,8 +647,8 @@ func (s *Service) configInt(ctx context.Context, key string, fallback int) int {
 }
 
 func (s *Service) configBool(ctx context.Context, key string, fallback bool) bool {
-	v, ok, err := s.configs.Get(ctx, key)
-	if err != nil || !ok {
+	v, ok := s.configGet(ctx, key)
+	if !ok {
 		return fallback
 	}
 	switch strings.ToLower(strings.TrimSpace(v)) {

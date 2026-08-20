@@ -272,7 +272,13 @@ async function setupMediaSource() {
     const { default: Hls } = await import("hls.js");
     if (session !== mediaSession || video !== videoRef.value) return;
     if (!Hls.isSupported()) throw new Error("当前浏览器不支持 HLS 播放");
-    const player = new Hls();
+    const player = new Hls({
+      // 限制已播段内存：hls.js 默认 backBufferLength 为 Infinity，
+      // 长片会把所有已播片段留在内存。60s 背缓冲 + 前瞻上限足够流畅播放。
+      backBufferLength: 60,
+      maxBufferLength: 30,
+      maxMaxBufferLength: 60,
+    });
     player.loadSource(url);
     player.attachMedia(video);
     hlsPlayer = player;

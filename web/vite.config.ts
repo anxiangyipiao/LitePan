@@ -35,9 +35,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules/three')) {
-            return 'three-vendor';
-          }
           if (id.includes('node_modules/vue') || id.includes('node_modules/pinia') || id.includes('node_modules/vue-router')) {
             return 'vue-vendor';
           }
@@ -50,8 +47,12 @@ export default defineConfig({
           if (id.includes('node_modules/@zip.js')) {
             return 'zip-vendor';
           }
-          if (id.includes('node_modules/mpegts') || id.includes('node_modules/hls.js')) {
-            return 'media-vendor';
+          // hls.js 与 mpegts.js 分别分包：打开 m3u8/flv 只加载用到的解码器，避免双份下载。
+          if (id.includes('node_modules/hls.js')) {
+            return 'hls-vendor';
+          }
+          if (id.includes('node_modules/mpegts')) {
+            return 'mpegts-vendor';
           }
         }
       }

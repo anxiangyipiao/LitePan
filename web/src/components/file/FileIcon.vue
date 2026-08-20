@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import type { FileItem } from "@/api/types";
 import { fileKind } from "@/utils/fileIcon";
-import { filesApi } from "@/api/files";
+import { getThumbURL, loadThumbURL } from "@/utils/thumbCache";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
 
 const props = withDefaults(
@@ -19,15 +19,43 @@ const props = withDefaults(
 const kind = computed(() => fileKind(props.file));
 const isImage = computed(() => kind.value === "image" && !props.file.is_dir);
 const thumbFailed = ref(false);
+// 实际用于 <img> 的地址：命中缓存立即返回，未命中异步加载 blob 后回填。
+const thumbSrc = ref("");
 
-const thumbUrl = computed(() => {
-  if (!props.thumbnail || !isImage.value || props.accountId == null) return "";
-  return filesApi.previewURL(props.accountId, props.file.id, props.file.name);
-});
+const thumbKey = computed(() =>
+  props.thumbnail && isImage.value && props.accountId != null
+    ? {
+        accountId: props.accountId,
+        fileId: props.file.id,
+        modTime: props.file.mod_time,
+        fileName: props.file.name,
+      }
+    : null,
+);
 
-watch(thumbUrl, () => {
-  thumbFailed.value = false;
-});
+watch(
+  thumbKey,
+  (key) => {
+    thumbFailed.value = false;
+    thumbSrc.value = "";
+    if (!key) return;
+    const cached = getThumbURL(key);
+    if (cached) {
+      thumbSrc.value = cached;
+      return;
+    }
+    loadThumbURL(key)
+      .then((url) => {
+        if (thumbKey.value && thumbKey.value.fileId === key.fileId) {
+          thumbSrc.value = url;
+        }
+      })
+      .catch(() => {
+        thumbFailed.value = true;
+      });
+  },
+  { immediate: true },
+);
 
 function handleThumbError() {
   thumbFailed.value = true;
@@ -44,8 +72,8 @@ function handleThumbError() {
     :style="{ width: `${size}px`, height: `${size}px` }"
   >
     <img
-      v-if="thumbnail && isImage && !thumbFailed"
-      :src="thumbUrl"
+      v-if="thumbnail && isImage && !thumbFailed && thumbSrc"
+      :src="thumbSrc"
       :alt="file.name"
       class="file-icon__thumb"
       loading="lazy"

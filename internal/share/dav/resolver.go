@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"litepan/internal/domain"
@@ -23,6 +24,7 @@ type Resolver struct {
 	files    *file.Service
 	accounts domain.AccountRepository
 	wc       *webdavCache
+	acct     *accountCache
 }
 
 func NewResolver(files *file.Service, accounts domain.AccountRepository, wc *webdavCache) *Resolver {
@@ -30,7 +32,67 @@ func NewResolver(files *file.Service, accounts domain.AccountRepository, wc *web
 		files:    files,
 		accounts: accounts,
 		wc:       wc,
+		acct:     newAccountCache(15 * time.Second),
 	}
+}
+
+// accountCache 缓存活跃账号快照（name→账号），避免每个 WebDAV 请求全表扫库。
+// TTL 过期后自动重读；账号增删改最多延迟 ttl 生效。
+type accountCache struct {
+	mu      sync.Mutex
+	ttl     time.Duration
+	at      time.Time
+	byLower map[string]*domain.Account
+	list    []*domain.Account
+}
+
+func newAccountCache(ttl time.Duration) *accountCache {
+	return &accountCache{ttl: ttl, byLower: make(map[string]*domain.Account)}
+}
+
+func (r *Resolver) activeAccounts(ctx context.Context) ([]*domain.Account, map[string]*domain.Account) {
+	if r.accounts == nil {
+		return nil, nil
+	}
+	if r.acct != nil {
+		if list, by := r.acct.get(); list != nil {
+			return list, by
+		}
+	}
+	list, err := r.accounts.List(ctx)
+	if err != nil {
+		return nil, nil
+	}
+	by := make(map[string]*domain.Account, len(list))
+	active := make([]*domain.Account, 0, len(list))
+	for _, acc := range list {
+		if !acc.IsActive {
+			continue
+		}
+		by[strings.ToLower(acc.Name)] = acc
+		active = append(active, acc)
+	}
+	if r.acct != nil {
+		r.acct.set(active, by)
+	}
+	return active, by
+}
+
+func (c *accountCache) get() ([]*domain.Account, map[string]*domain.Account) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.list == nil || time.Since(c.at) >= c.ttl {
+		return nil, nil
+	}
+	return c.list, c.byLower
+}
+
+func (c *accountCache) set(list []*domain.Account, by map[string]*domain.Account) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.list = list
+	c.byLower = by
+	c.at = time.Now()
 }
 
 func (r *Resolver) Resolve(ctx context.Context, webPath string) (*Node, error) {
@@ -66,37 +128,20 @@ func (r *Resolver) accountByName(ctx context.Context, name string) (*domain.Acco
 	if r.accounts == nil {
 		return nil, os.ErrNotExist
 	}
-	list, err := r.accounts.List(ctx)
-	if err != nil {
-		return nil, err
+	_, by := r.activeAccounts(ctx)
+	acc, ok := by[strings.ToLower(strings.TrimSpace(name))]
+	if !ok {
+		return nil, os.ErrNotExist
 	}
-	want := strings.ToLower(strings.TrimSpace(name))
-	for _, acc := range list {
-		if !acc.IsActive {
-			continue
-		}
-		if strings.ToLower(acc.Name) == want {
-			return acc, nil
-		}
-	}
-	return nil, os.ErrNotExist
+	return acc, nil
 }
 
 func (r *Resolver) ListChildren(ctx context.Context, node *Node) ([]domain.FileItem, error) {
 	switch {
 	case node.IsRoot:
-		if r.accounts == nil {
-			return nil, nil
-		}
-		list, err := r.accounts.List(ctx)
-		if err != nil {
-			return nil, err
-		}
+		list, _ := r.activeAccounts(ctx)
 		out := make([]domain.FileItem, 0, len(list))
 		for _, acc := range list {
-			if !acc.IsActive {
-				continue
-			}
 			out = append(out, domain.FileItem{
 				ID:      acc.Name,
 				Name:    acc.Name,

@@ -110,16 +110,15 @@ const selectAll = computed(
   () => props.files.length > 0 && props.selectedIds.length === props.files.length,
 );
 const selectedCount = computed(() => props.selectedIds.length);
-const listVisibleCount = ref(INITIAL_LIST_RENDER_COUNT);
-const listLoadMoreSentinel = ref<HTMLTableRowElement | null>(null);
-let listLoadMoreObserver: IntersectionObserver | null = null;
 
-const visibleListFiles = computed(() =>
-  props.view === "list" ? props.files.slice(0, listVisibleCount.value) : props.files,
-);
-const hasMoreListFiles = computed(
-  () => props.view === "list" && visibleListFiles.value.length < props.files.length,
-);
+// 列表/网格统一窗口化渲染：初始渲染前 N 项，滚动到底部哨兵时按块扩增，
+// 避免万级目录一次性渲染全部 DOM。
+const visibleCount = ref(INITIAL_LIST_RENDER_COUNT);
+const loadMoreSentinel = ref<HTMLElement | null>(null);
+let loadMoreObserver: IntersectionObserver | null = null;
+
+const visibleFiles = computed(() => props.files.slice(0, visibleCount.value));
+const hasMoreFiles = computed(() => visibleFiles.value.length < props.files.length);
 const headerContextMenu = ref({
   open: false,
   x: 0,
@@ -160,39 +159,36 @@ function handleHeaderContextAction(action: string) {
   }
 }
 
-function expandVisibleListFiles() {
-  listVisibleCount.value = Math.min(
-    props.files.length,
-    listVisibleCount.value + LIST_RENDER_CHUNK_SIZE,
-  );
+function expandVisibleFiles() {
+  visibleCount.value = Math.min(props.files.length, visibleCount.value + LIST_RENDER_CHUNK_SIZE);
 }
 
-function resetVisibleListFiles() {
-  listVisibleCount.value = INITIAL_LIST_RENDER_COUNT;
+function resetVisibleFiles() {
+  visibleCount.value = INITIAL_LIST_RENDER_COUNT;
 }
 
-function disconnectListLoadMoreObserver() {
-  listLoadMoreObserver?.disconnect();
-  listLoadMoreObserver = null;
+function disconnectLoadMoreObserver() {
+  loadMoreObserver?.disconnect();
+  loadMoreObserver = null;
 }
 
-function bindListLoadMoreSentinel(el: unknown) {
-  listLoadMoreSentinel.value = el instanceof HTMLTableRowElement ? el : null;
-  void nextTick(updateListLoadMoreObserver);
+function bindLoadMoreSentinel(el: unknown) {
+  loadMoreSentinel.value = el instanceof Element ? (el as HTMLElement) : null;
+  void nextTick(updateLoadMoreObserver);
 }
 
-async function updateListLoadMoreObserver() {
-  disconnectListLoadMoreObserver();
-  if (!hasMoreListFiles.value || !listLoadMoreSentinel.value) return;
+async function updateLoadMoreObserver() {
+  disconnectLoadMoreObserver();
+  if (!hasMoreFiles.value || !loadMoreSentinel.value) return;
   if (typeof window === "undefined" || typeof window.IntersectionObserver === "undefined") {
-    listVisibleCount.value = props.files.length;
+    visibleCount.value = props.files.length;
     return;
   }
-  listLoadMoreObserver = new window.IntersectionObserver(
+  loadMoreObserver = new window.IntersectionObserver(
     (entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return;
-      expandVisibleListFiles();
-      void nextTick(updateListLoadMoreObserver);
+      expandVisibleFiles();
+      void nextTick(updateLoadMoreObserver);
     },
     {
       root: null,
@@ -200,7 +196,7 @@ async function updateListLoadMoreObserver() {
       threshold: 0,
     },
   );
-  listLoadMoreObserver.observe(listLoadMoreSentinel.value);
+  loadMoreObserver.observe(loadMoreSentinel.value);
 }
 
 function toggleSelection(id: string, checked: boolean) {
@@ -453,15 +449,15 @@ function handleGlobalKeydown(event: KeyboardEvent) {
 watch(
   [() => props.files, () => props.view, () => props.sortKey, () => props.sortOrder],
   async () => {
-    resetVisibleListFiles();
+    resetVisibleFiles();
     await nextTick();
-    void updateListLoadMoreObserver();
+    void updateLoadMoreObserver();
   },
 );
 
-watch(hasMoreListFiles, async () => {
+watch(hasMoreFiles, async () => {
   await nextTick();
-  void updateListLoadMoreObserver();
+  void updateLoadMoreObserver();
 });
 
 // 触屏设备（无 hover 主输入）：单击打开，选择靠常显 checkbox
@@ -475,7 +471,7 @@ onMounted(() => {
   touchMediaQuery = window.matchMedia("(hover: none)");
   updateTouchDevice();
   touchMediaQuery.addEventListener("change", updateTouchDevice);
-  void nextTick(updateListLoadMoreObserver);
+  void nextTick(updateLoadMoreObserver);
   document.addEventListener("keydown", handleHeaderMenuKeydown);
   document.addEventListener("keydown", handleGlobalKeydown);
   window.addEventListener("resize", closeDirectoryContextMenu);
@@ -485,7 +481,7 @@ onMounted(() => {
 onUnmounted(() => {
   touchMediaQuery?.removeEventListener("change", updateTouchDevice);
   touchMediaQuery = null;
-  disconnectListLoadMoreObserver();
+  disconnectLoadMoreObserver();
   document.removeEventListener("keydown", handleHeaderMenuKeydown);
   document.removeEventListener("keydown", handleGlobalKeydown);
   window.removeEventListener("resize", closeDirectoryContextMenu);
@@ -581,7 +577,7 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
         </tr>
 
         <tr
-          v-for="(f, index) in visibleListFiles"
+          v-for="(f, index) in visibleFiles"
           v-if="!showEmptyRow"
           :key="fileKey(f)"
           class="file-row"
@@ -692,8 +688,8 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
           </td>
         </tr>
         <tr
-          v-if="hasMoreListFiles && !showEmptyRow"
-          :ref="bindListLoadMoreSentinel"
+          v-if="hasMoreFiles && !showEmptyRow"
+          :ref="bindLoadMoreSentinel"
           aria-hidden="true"
           class="file-list__load-more-row"
         >
@@ -784,7 +780,7 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
         </article>
 
         <article
-          v-for="(f, index) in files"
+          v-for="(f, index) in visibleFiles"
           :key="fileKey(f)"
           class="file-card"
           :class="{
@@ -902,6 +898,13 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
             </span>
           </div>
         </article>
+
+        <div
+          v-if="hasMoreFiles"
+          :ref="bindLoadMoreSentinel"
+          aria-hidden="true"
+          class="file-grid__load-more-sentinel"
+        />
       </div>
     </div>
 
@@ -1004,6 +1007,12 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
   padding: 0;
   border-bottom: none;
   background: transparent;
+}
+
+.file-grid__load-more-sentinel {
+  grid-column: 1 / -1;
+  height: 1px;
+  pointer-events: none;
 }
 
 .file-name {

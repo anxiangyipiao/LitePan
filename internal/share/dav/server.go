@@ -21,6 +21,7 @@ import (
 	"litepan/internal/settings"
 	"litepan/internal/upload"
 	"litepan/pkg/security"
+	"litepan/pkg/ttlcache"
 )
 
 const (
@@ -50,6 +51,18 @@ type Server struct {
 	handler  *webdav.Handler
 	configs  domain.ConfigRepository
 	wc       *webdavCache
+
+	// configCache 短 TTL 缓存 configs.Get，消除每请求多次 SQLite 读取。
+	configCache *ttlcache.Cache[string, configCacheVal]
+	// credCache 缓存密码哈希校验结果，key=存储哈希+"\x00"+明文密码；
+	// 密码变更后存储哈希变化自动失效，无需手动清。
+	credCache *ttlcache.Cache[string, bool]
+}
+
+// configCacheVal 缓存 configs.Get 的返回值（ok 为 key 是否存在）。
+type configCacheVal struct {
+	val string
+	ok  bool
 }
 
 type webDAVHandlerError struct {
@@ -97,7 +110,24 @@ func New(d Deps) *Server {
 		handler:  h,
 		configs:  d.Configs,
 		wc:       wc,
+		// config 读取短缓存：5s 内对配置变更的感知延迟可接受（变更极少）。
+		// 凭据结果缓存以存储哈希为 key，改密后自动失效，TTL 可放长。
+		configCache: ttlcache.New[string, configCacheVal](5*time.Second, 512),
+		credCache:   ttlcache.New[string, bool](10*time.Minute, 4096),
 	}
+}
+
+// configValue 带缓存的 configs.Get 读取。
+func (s *Server) configValue(ctx context.Context, key string) (string, bool) {
+	if v, ok := s.configCache.Get(key); ok {
+		return v.val, v.ok
+	}
+	val, ok, err := s.configs.Get(ctx, key)
+	if err != nil {
+		return "", false
+	}
+	s.configCache.Set(key, configCacheVal{val: val, ok: ok})
+	return val, ok
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -235,11 +265,11 @@ func (s *Server) credentialsConfigured(ctx context.Context) bool {
 	if s.configs == nil {
 		return false
 	}
-	v, ok, err := s.configs.Get(ctx, configAdminPassword)
-	if err != nil || !ok {
+	pass, ok := s.configValue(ctx, configAdminPassword)
+	if !ok {
 		return false
 	}
-	pass := strings.TrimSpace(v)
+	pass = strings.TrimSpace(pass)
 	if pass == "" {
 		return false
 	}
@@ -250,8 +280,8 @@ func (s *Server) webdavEnabled(ctx context.Context) bool {
 	if s.configs == nil {
 		return true
 	}
-	v, ok, err := s.configs.Get(ctx, configWebDAVEnabled)
-	if err != nil || !ok {
+	v, ok := s.configValue(ctx, configWebDAVEnabled)
+	if !ok {
 		return true
 	}
 	switch strings.ToLower(strings.TrimSpace(v)) {
@@ -284,20 +314,28 @@ func (s *Server) checkCredentials(ctx context.Context, username, password string
 	storedUser := "admin"
 	storedPass := ""
 	if s.configs != nil {
-		if v, ok, _ := s.configs.Get(ctx, configAdminUsername); ok && strings.TrimSpace(v) != "" {
+		if v, ok := s.configValue(ctx, configAdminUsername); ok && strings.TrimSpace(v) != "" {
 			storedUser = strings.TrimSpace(v)
 		}
-		if v, ok, _ := s.configs.Get(ctx, configAdminPassword); ok {
+		if v, ok := s.configValue(ctx, configAdminPassword); ok {
 			storedPass = strings.TrimSpace(v)
 		}
 	}
 	if username != storedUser {
 		return false
 	}
-	if strings.HasPrefix(storedPass, "pbkdf2:") || strings.HasPrefix(storedPass, "scrypt:") {
-		return security.CheckPasswordHash(storedPass, password)
+	if !strings.HasPrefix(storedPass, "pbkdf2:") && !strings.HasPrefix(storedPass, "scrypt:") {
+		return false
 	}
-	return false
+	// 结果以 存储哈希+明文密码 为 key：改密后哈希变化自动失效。
+	// 仅在设置时才做昂贵的 PBKDF2/scrypt 校验，其余请求直接命中缓存。
+	ck := storedPass + "\x00" + password
+	if v, ok := s.credCache.Get(ck); ok {
+		return v
+	}
+	ok := security.CheckPasswordHash(storedPass, password)
+	s.credCache.Set(ck, ok)
+	return ok
 }
 
 func (s *Server) serveRead(w http.ResponseWriter, r *http.Request) bool {

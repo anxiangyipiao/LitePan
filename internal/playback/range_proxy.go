@@ -117,7 +117,9 @@ func (s *Service) streamUpstreamSpanParallel(ctx context.Context, w io.Writer, l
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			var buf growBuffer
+			// 按块大小预分配，避免 growBuffer 从 nil 反复扩容搬移。
+			partLen := partEnd - partStart + 1
+			buf := growBuffer{b: make([]byte, 0, partLen)}
 			err := s.pipeUpstreamRange(workerCtx, &buf, lh, partStart, partEnd)
 			select {
 			case results <- result{index: index, data: buf.Bytes(), err: err}:

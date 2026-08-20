@@ -116,7 +116,7 @@ func (h *httpSeeker) fetchChunk(off int64) error {
 	if h.size > 0 && end >= h.size {
 		end = h.size - 1
 	}
-	var buf growBuffer
+	buf := growBuffer{b: make([]byte, 0, h.partSize)}
 	if err := h.svc.pipeUpstreamRange(h.ctx, &buf, h.lh, off, end); err != nil {
 		return err
 	}
