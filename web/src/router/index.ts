@@ -22,6 +22,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "影视" },
       },
       {
+        path: "movies/:id",
+        name: "movie-detail",
+        component: () => import("@/views/MovieDetailView.vue"),
+        meta: { title: "影视详情" },
+      },
+      {
+        path: "magnet",
+        name: "magnet",
+        component: () => import("@/views/MagnetSearchView.vue"),
+        meta: { title: "磁力搜索", requiresAuth: true },
+      },
+      {
         path: "admin",
         name: "admin",
         component: () => import("@/views/AdminView.vue"),

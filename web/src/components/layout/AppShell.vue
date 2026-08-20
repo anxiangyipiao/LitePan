@@ -4,7 +4,6 @@ import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
 import AppFooter from "@/components/layout/AppFooter.vue";
-import MagnetSearchModal from "@/components/common/MagnetSearchModal.vue";
 import AdminNotificationBell from "@/components/admin/AdminNotificationBell.vue";
 import { useAuthStore } from "@/stores/auth";
 import { logout } from "@/api/auth";
@@ -22,7 +21,6 @@ import { ref } from "vue";
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
-const magnetSearchOpen = ref(false);
 
 // 管理后台子导航（对应 AdminView 的 nav 定义）
 const adminNav = [
@@ -96,14 +94,14 @@ async function handleLogout() {
           <span class="app-nav__label">影视</span>
         </RouterLink>
 
-        <!-- 磁力搜索（登录态可用，弹窗非页面） -->
-        <button
+        <!-- 磁力搜索（登录态可用，独立页） -->
+        <RouterLink
           v-if="auth.sessionAdmin"
-          type="button"
+          to="/magnet"
           class="app-nav__btn"
+          :class="{ 'is-active': route.path === '/magnet' }"
           title="磁力搜索"
           aria-label="磁力搜索"
-          @click="magnetSearchOpen = true"
         >
           <svg viewBox="0 0 24 24" class="app-nav__magnet" aria-hidden="true">
             <path d="M6 8v5a6 6 0 0 0 12 0V8" />
@@ -111,7 +109,7 @@ async function handleLogout() {
             <path d="M18 4v4" />
           </svg>
           <span class="app-nav__label">磁力</span>
-        </button>
+        </RouterLink>
 
         <RouterLink
           to="/admin"
@@ -192,8 +190,6 @@ async function handleLogout() {
       </main>
       <AppFooter />
     </div>
-
-    <MagnetSearchModal :open="magnetSearchOpen" @close="magnetSearchOpen = false" />
   </div>
 </template>
 

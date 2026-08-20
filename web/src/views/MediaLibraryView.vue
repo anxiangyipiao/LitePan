@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import {
   mediaLibraryApi,
-  type MediaLibraryDetail,
-  type MediaLibraryEpisode,
   type MediaLibraryItem,
   type MediaLibraryRoot,
   type MediaLibrarySort,
@@ -12,11 +11,11 @@ import {
 import { getApiErrorMessage } from "@/api/client";
 import { useVirtualPosterWall } from "@/composables/useVirtualPosterWall";
 import { useAuthStore } from "@/stores/auth";
-import { fileExtension } from "@/utils/format";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
 
 const PAGE = 120;
+const router = useRouter();
 const auth = useAuthStore();
 
 const roots = ref<MediaLibraryRoot[]>([]);
@@ -33,74 +32,10 @@ const error = ref("");
 
 const wall = useVirtualPosterWall(items);
 
-// ---- 详情页 ----
-const detail = ref<MediaLibraryDetail | null>(null);
-const detailLoading = ref(false);
-const detailError = ref("");
-
-async function openDetail(item: MediaLibraryItem) {
-  detail.value = null;
-  detailError.value = "";
-  detailLoading.value = true;
-  try {
-    detail.value = await mediaLibraryApi.detail(item.lib_id, item.id);
-  } catch (e) {
-    detailError.value = getApiErrorMessage(e, "详情加载失败");
-  } finally {
-    detailLoading.value = false;
-  }
+// 点海报 → 独立详情页
+function goDetail(item: MediaLibraryItem) {
+  void router.push({ path: `/movies/${item.id}`, query: { lib: item.lib_id } });
 }
-
-function closeDetail() {
-  detail.value = null;
-  detailError.value = "";
-  closePlayer();
-}
-
-function playDetail() {
-  const d = detail.value;
-  if (!d?.play_url) return;
-  openPlayer(d.title, d.play_url);
-}
-
-function playEpisode(ep: MediaLibraryEpisode) {
-  const d = detail.value;
-  if (!d?.play_url && !ep.play_url) return;
-  const label = `${d?.title ?? ""} · S${String(ep.season ?? 1).padStart(2, "0")}E${String(ep.episode).padStart(2, "0")}`;
-  openPlayer(label.trim(), ep.play_url);
-}
-
-const detailIsTV = computed(() => detail.value?.media_type === "tv");
-
-// ---- 播放 ----
-const playing = ref<{ title: string; play_url: string } | null>(null);
-const playerVideoRef = ref<HTMLVideoElement | null>(null);
-const playerError = ref(false);
-type HlsLike = import("hls.js").default;
-interface MpegtsLike {
-  destroy(): void;
-  detachMediaElement(): void;
-  attachMediaElement(el: HTMLMediaElement): void;
-  load(): void;
-}
-let playerHls: HlsLike | null = null;
-let playerMpegts: MpegtsLike | null = null;
-let playerSession = 0;
-
-// 外部播放器（与 VideoPreview 一致）
-const playerMenuOpen = ref(false);
-const skyboxGuideOpen = ref(false);
-const externalPlayers = [
-  { name: "VLC", icon: "fa-brands fa-vlc", buildUrl: (url: string) => `vlc://${url}` },
-  { name: "PotPlayer", icon: "fa-solid fa-play", buildUrl: (url: string) => `potplayer://${url}` },
-  { name: "IINA", icon: "fa-solid fa-play", buildUrl: (url: string) => `iina://weblink?url=${encodeURIComponent(url)}` },
-  { name: "mpv", icon: "fa-solid fa-play", buildUrl: (url: string) => `mpv://${url}` },
-];
-const webdavUrl = computed(() => `http://${window.location.host}/dav`);
-
-const playingSrc = computed(() =>
-  playing.value?.play_url ? `${window.location.origin}${playing.value.play_url}` : "",
-);
 
 // ---- 配置弹窗 ----
 const configOpen = ref(false);
@@ -212,81 +147,6 @@ async function updateLoadMoreObserver() {
   loadMoreObserver.observe(loadMoreEl.value);
 }
 
-// ---- 播放器 ----
-function openPlayer(title: string, playURL: string) {
-  if (!playURL) return;
-  playerError.value = false;
-  playerMenuOpen.value = false;
-  skyboxGuideOpen.value = false;
-  playing.value = { title, play_url: playURL };
-}
-
-function closePlayer() {
-  playerSession += 1;
-  playerHls?.destroy();
-  playerHls = null;
-  if (playerMpegts) {
-    playerMpegts.detachMediaElement();
-    playerMpegts.destroy();
-    playerMpegts = null;
-  }
-  const v = playerVideoRef.value;
-  if (v) {
-    v.pause();
-    v.removeAttribute("src");
-    v.load();
-  }
-  playing.value = null;
-}
-
-async function setupPlayer() {
-  const video = playerVideoRef.value;
-  const src = playingSrc.value;
-  if (!video || !src) return;
-  const session = ++playerSession;
-  playerError.value = false;
-  const path = src.split("?")[0];
-  const ext = fileExtension(path);
-  if (ext === "m3u8" && !video.canPlayType("application/vnd.apple.mpegurl")) {
-    const { default: Hls } = await import("hls.js");
-    if (session !== playerSession) return;
-    if (Hls.isSupported()) {
-      const p = new Hls({ backBufferLength: 60, maxBufferLength: 30, maxMaxBufferLength: 60 });
-      playerHls = p;
-      p.loadSource(src);
-      p.attachMedia(video);
-      p.on(Hls.Events.ERROR, (_evt: unknown, data: { fatal?: boolean }) => {
-        if (data?.fatal) playerError.value = true;
-      });
-      return;
-    }
-  }
-  if (["flv", "ts", "m2ts"].includes(ext)) {
-    const m = await import("mpegts.js");
-    if (session !== playerSession) return;
-    const mpegts = m.default;
-    if (mpegts.getFeatureList().msePlayback) {
-      const p = mpegts.createPlayer({ type: ext === "flv" ? "flv" : "mpegts", url: src, isLive: false });
-      playerMpegts = p;
-      p.attachMediaElement(video);
-      p.load();
-      return;
-    }
-  }
-  video.src = src;
-  void video.play().catch(() => {});
-}
-
-watch(playing, (item) => {
-  if (item) void nextTick(setupPlayer);
-  else closePlayer();
-});
-
-function openExternalPlayer(url: string) {
-  window.location.href = url;
-  playerMenuOpen.value = false;
-}
-
 // ---- 过滤联动 ----
 watch([libId, typeFilter, sort], () => void fetchItems(true));
 
@@ -302,7 +162,6 @@ onMounted(() => {
 onUnmounted(() => {
   loadMoreObserver?.disconnect();
   loadMoreObserver = null;
-  closePlayer();
 });
 
 const typeLabel = (t: string) => (t === "tv" ? "剧集" : "电影");
@@ -415,8 +274,8 @@ const subtitle = (item: MediaLibraryItem) => {
             role="button"
             tabindex="0"
             :title="`查看详情：${item.title}`"
-            @click="openDetail(item)"
-            @keydown.enter="openDetail(item)"
+            @click="goDetail(item)"
+            @keydown.enter="goDetail(item)"
           >
             <div class="ml-card__poster">
               <img
@@ -447,124 +306,6 @@ const subtitle = (item: MediaLibraryItem) => {
       >
         <BusySpinner :size="18" />
         <span>加载更多…</span>
-      </div>
-    </div>
-
-    <!-- 播放器 -->
-    <div v-if="playing" class="ml-player-mask" @click.self="closePlayer">
-      <div class="ml-player">
-        <header class="ml-player-head">
-          <span class="ml-player-title" :title="playing.title">{{ playing.title }}</span>
-          <span class="ml-player-meta">播放中</span>
-          <span class="ml-player-spacer" />
-          <button type="button" class="ml-player-close" title="关闭" @click="closePlayer">
-            <SvgIcon name="sign-out" :size="14" />
-          </button>
-        </header>
-
-        <video ref="playerVideoRef" class="ml-player-video" controls playsinline />
-        <p v-if="playerError" class="ml-player-error">播放失败，可尝试外部播放器</p>
-
-        <div class="ml-player-foot">
-          <div class="ml-player-ext">
-            <button
-              v-for="p in externalPlayers"
-              :key="p.name"
-              type="button"
-              class="ml-ext-btn"
-              :disabled="!playingSrc"
-              @click="openExternalPlayer(p.buildUrl(playingSrc))"
-            >
-              <i :class="p.icon" aria-hidden="true"></i>
-              <span>{{ p.name }}</span>
-            </button>
-            <button
-              type="button"
-              class="ml-ext-btn"
-              @click="skyboxGuideOpen = !skyboxGuideOpen"
-            >
-              <i class="fa-solid fa-vr-cardboard" aria-hidden="true"></i>
-              <span>Skybox</span>
-            </button>
-          </div>
-          <p v-if="skyboxGuideOpen" class="ml-skybox-guide">
-            Quest 端 Skybox 不支持 URL 调用。请在 Skybox → 设置 → 网络 → WebDAV 添加：地址
-            <code>{{ webdavUrl }}</code>，账号为管理员账号密码，即可浏览并播放网盘内 VR 视频。
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- 详情页 -->
-    <div v-if="detail" class="ml-detail-mask" @click.self="closeDetail">
-      <div class="ml-detail">
-        <button type="button" class="ml-detail-close" title="关闭" @click="closeDetail">
-          <SvgIcon name="sign-out" :size="16" />
-        </button>
-
-        <div
-          v-if="detail.backdrop_url"
-          class="ml-detail-hero"
-          :style="{ backgroundImage: `url(${detail.backdrop_url})` }"
-        >
-          <div class="ml-detail-hero__shade" />
-        </div>
-
-        <div class="ml-detail-body">
-          <div class="ml-detail-main">
-            <img
-              v-if="detail.poster_url"
-              :src="detail.poster_url"
-              :alt="detail.title"
-              class="ml-detail-poster"
-            />
-            <div v-else class="ml-detail-poster ml-detail-poster--empty">{{ detail.title.slice(0, 1) }}</div>
-
-            <div class="ml-detail-info">
-              <h2 class="ml-detail-title">{{ detail.title }}</h2>
-              <p class="ml-detail-meta">
-                <span>{{ detail.media_type === "tv" ? "剧集" : "电影" }}</span>
-                <span v-if="detail.year"> · {{ detail.year }}</span>
-                <span v-if="detail.media_type === 'tv' && detail.tv_state === 'updating'"> · 追更中</span>
-                <span v-if="detail.ep_tmdb"> · 共 {{ detail.ep_tmdb }} 集</span>
-              </p>
-              <p v-if="detail.overview" class="ml-detail-overview">{{ detail.overview }}</p>
-
-              <div v-if="!detailIsTV" class="ml-detail-actions">
-                <button
-                  v-if="detail.play_url"
-                  type="button"
-                  class="ml-detail-play"
-                  @click="playDetail"
-                >
-                  <SvgIcon name="play" :size="16" />
-                  <span>播放</span>
-                </button>
-                <span v-else class="ml-detail-nosource">该影视无可用播放源</span>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="detailIsTV && detail.episodes?.length" class="ml-detail-episodes">
-            <h3 class="ml-detail-sec">选集（{{ detail.episodes.length }}）</h3>
-            <div class="ml-detail-ep-grid">
-              <button
-                v-for="(ep, i) in detail.episodes"
-                :key="i"
-                type="button"
-                class="ml-detail-ep"
-                :disabled="!ep.play_url"
-                :title="ep.play_url ? '播放' : '无播放源'"
-                @click="playEpisode(ep)"
-              >
-                <span class="ml-detail-ep-num">
-                  S{{ String(ep.season ?? 1).padStart(2, "0") }}E{{ String(ep.episode).padStart(2, "0") }}
-                </span>
-                <SvgIcon v-if="ep.play_url" name="play" :size="12" />
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
 
