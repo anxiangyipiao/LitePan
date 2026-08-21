@@ -396,6 +396,8 @@ func (p *Planner) structuredSkipReason(items []batchEntry, tmdbID string) string
 // 仅在移动模式且目标不是跨库搬迁时生效：散落文件仍会建夹整理，
 // 已归入目录的电影视为已整理，避免把 SIVR-498.CD1/abc-123 这类已有目录的
 // 文件再挪进一个同名目录。跨库搬迁（target_root 指向另一目录）仍按整体搬迁处理。
+// 修复：若父目录下子文件夹内包含多个不同影片，容器目录不应视为已整理，
+// 需校验目录名与影片标题是否对齐（JAV 番号或标题松匹配），不对齐则不跳过。
 func (p *Planner) shouldSkipInDirMovie(key groupKey) bool {
 	if p.actionType != "move" {
 		return false
@@ -406,7 +408,40 @@ func (p *Planner) shouldSkipInDirMovie(key groupKey) bool {
 	if p.targetRootID != "" && p.targetRootID != p.parentID {
 		return false
 	}
-	return true
+	// 目录名与影片是否对齐：JAV 番号相等或标题松匹配才视为已在目录中
+	dirJav := rules.FindJAVNumber(key.dirName)
+	titleJav := ""
+	if jav := rules.FindJAVNumber(key.title); jav != "" {
+		titleJav = jav
+	}
+	if dirJav != "" || titleJav != "" {
+		if dirJav != "" && titleJav != "" && sameLooseTitle(dirJav, titleJav) {
+			return true
+		}
+		// 单边有番号时要求目录番号与标题番号一致；提取目录番号后剥离分盘标签再比对
+		if dirJav != "" && sameLooseTitle(dirJav, key.title) {
+			return true
+		}
+		if titleJav != "" {
+			dirParsedForJav := rules.NormalizeParsedMedia(rules.ParseDirName(key.dirName))
+			if sameLooseTitle(dirParsedForJav.Title, titleJav) {
+				return true
+			}
+		}
+		return false
+	}
+	dirParsed := rules.NormalizeParsedMedia(rules.ParseDirName(key.dirName))
+	dirTitle := strings.TrimSpace(dirParsed.Title)
+	if dirTitle == "" {
+		return false
+	}
+	// 剥离分盘标签后比较（CD1/CD2 等不应影响对齐判断）
+	dirTitle = stripPartSuffixFromTitle(dirTitle, rules.ExtractPartLabel(key.dirName))
+	groupTitle := stripPartSuffixFromTitle(key.title, rules.ExtractPartLabel(key.title))
+	if sameLooseTitle(dirTitle, groupTitle) {
+		return true
+	}
+	return false
 }
 
 func (p *Planner) isAlreadyOrganizedRenameGroup(key groupKey, items []batchEntry) bool {

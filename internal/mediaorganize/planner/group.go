@@ -239,12 +239,29 @@ func (p *Planner) groupEntries(entries []batchEntry) (map[groupKey][]batchEntry,
 					continue
 				}
 				parsed := rules.NormalizeParsedMedia(rules.ParseDirName(anc.Name))
-				if parsed.Title != "" {
-					movieDirID = anc.ID
-					movieDirName = anc.Name
-					movieParsed = parsed
-					break
+				if parsed.Title == "" {
+					continue
 				}
+				// 仅当目录名与文件标题对齐时才绑定为作品目录，避免
+				// 父文件夹下子文件夹内含多部不同影片时，把容器目录误当作品目录
+				// 导致错误合并/重复建目录（JAV 按番号对齐，其余按标题松匹配）。
+				fileJav := rules.FindJAVNumber(entry.item.Name)
+				dirJav := rules.FindJAVNumber(anc.Name)
+				aligned := false
+				if fileJav != "" || dirJav != "" {
+					if fileJav != "" && dirJav != "" && sameLooseTitle(fileJav, dirJav) {
+						aligned = true
+					}
+				} else if sameLooseTitle(parsed.Title, fileParsed.Title) || sameLooseTitle(parsed.Title, rawFileParsed.Title) {
+					aligned = true
+				}
+				if !aligned {
+					continue
+				}
+				movieDirID = anc.ID
+				movieDirName = anc.Name
+				movieParsed = parsed
+				break
 			}
 		}
 		if movieDirID == "" && len(ancestors) > 0 {
@@ -252,9 +269,21 @@ func (p *Planner) groupEntries(entries []batchEntry) (map[groupKey][]batchEntry,
 			if !rules.IsGenericMediaDir(anc.Name) && !rules.IsSeasonDirName(anc.Name) && !rules.IsEpisodeRangeDirName(anc.Name) {
 				parsed := rules.NormalizeParsedMedia(rules.ParseDirName(anc.Name))
 				if parsed.Title != "" {
-					movieDirID = anc.ID
-					movieDirName = anc.Name
-					movieParsed = parsed
+					fileJav := rules.FindJAVNumber(entry.item.Name)
+					dirJav := rules.FindJAVNumber(anc.Name)
+					aligned := false
+					if fileJav != "" || dirJav != "" {
+						if fileJav != "" && dirJav != "" && sameLooseTitle(fileJav, dirJav) {
+							aligned = true
+						}
+					} else if sameLooseTitle(parsed.Title, fileParsed.Title) || sameLooseTitle(parsed.Title, rawFileParsed.Title) {
+						aligned = true
+					}
+					if aligned {
+						movieDirID = anc.ID
+						movieDirName = anc.Name
+						movieParsed = parsed
+					}
 				}
 			}
 		}
