@@ -199,6 +199,7 @@ async function handleLogout() {
 .app-shell {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg);
 }
 
@@ -208,6 +209,7 @@ async function handleLogout() {
   top: 0;
   flex: 0 0 96px;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;

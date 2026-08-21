@@ -231,7 +231,9 @@ function onResolve(folder: {
   display: flex;
   width: min(90vw, 680px);
   height: min(86vh, 570px);
+  height: min(calc(100dvh - 40px), 570px);
   min-height: 0;
+  max-height: calc(100dvh - 24px - env(safe-area-inset-bottom, 0px));
 }
 .folder-picker--accounts {
   width: min(94vw, 900px);

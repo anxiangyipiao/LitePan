@@ -617,6 +617,7 @@ function filterByActor(actor: string) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-height: 44px;
   padding: 8px 14px;
   border: 1px solid var(--border-soft);
   border-radius: 10px;
@@ -625,6 +626,7 @@ function filterByActor(actor: string) {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+  touch-action: manipulation;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 

@@ -13,12 +13,16 @@ const emit = defineEmits<{
 const sheetRef = ref<HTMLElement | null>(null);
 let startY = 0;
 let currentY = 0;
+let startTime = 0;
 let dragging = false;
 
 function onTouchStart(e: TouchEvent) {
   if (!props.open) return;
   startY = e.touches[0].clientY;
+  currentY = startY;
+  startTime = Date.now();
   dragging = true;
+  if (sheetRef.value) sheetRef.value.style.transition = "none";
 }
 
 function onTouchMove(e: TouchEvent) {
@@ -26,7 +30,10 @@ function onTouchMove(e: TouchEvent) {
   currentY = e.touches[0].clientY;
   const delta = currentY - startY;
   if (delta > 0 && sheetRef.value) {
-    sheetRef.value.style.transform = `translateY(${delta}px)`;
+    // 轻微阻尼，避免过度跟手
+    const damped = delta * 0.92;
+    sheetRef.value.style.transform = `translateY(${damped}px)`;
+    if (e.cancelable) e.preventDefault();
   }
 }
 
@@ -34,10 +41,13 @@ function onTouchEnd() {
   if (!dragging) return;
   dragging = false;
   const delta = currentY - startY;
+  const elapsed = Math.max(1, Date.now() - startTime);
+  const velocity = delta / elapsed; // px/ms
   if (sheetRef.value) {
+    sheetRef.value.style.transition = "transform 180ms ease";
     sheetRef.value.style.transform = "";
   }
-  if (delta > 80) {
+  if (delta > 80 || velocity > 0.6) {
     emit("close");
   }
 }
@@ -49,6 +59,24 @@ function onBackdropClick() {
 function onKeyDown(e: KeyboardEvent) {
   if (e.key === "Escape" && props.open) {
     emit("close");
+    return;
+  }
+  if (e.key !== "Tab" || !props.open || !sheetRef.value) return;
+  const focusable = Array.from(
+    sheetRef.value.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  );
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement as HTMLElement | null;
+  if (e.shiftKey && active === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && active === last) {
+    e.preventDefault();
+    first.focus();
   }
 }
 
@@ -60,10 +88,29 @@ onUnmounted(() => {
   document.removeEventListener("keydown", onKeyDown);
 });
 
+let savedScrollY = 0;
+
 watch(
   () => props.open,
   (v) => {
-    document.body.style.overflow = v ? "hidden" : "";
+    if (v) {
+      savedScrollY = window.scrollY || 0;
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${savedScrollY}px`;
+      document.body.style.left = "0";
+      document.body.style.right = "0";
+      document.body.style.width = "100%";
+      document.body.style.overflow = "hidden";
+      requestAnimationFrame(() => sheetRef.value?.querySelector<HTMLElement>("button, a, [tabindex]")?.focus());
+    } else {
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+      document.body.style.width = "";
+      document.body.style.overflow = "";
+      window.scrollTo(0, savedScrollY);
+    }
   },
 );
 </script>

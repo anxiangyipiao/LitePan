@@ -249,7 +249,7 @@ onUnmounted(() => {
 .mp-error {
   position: absolute;
   left: 50%;
-  bottom: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   margin: 0;
   padding: 8px 14px;
@@ -257,5 +257,15 @@ onUnmounted(() => {
   background: rgba(220,38,38,0.92);
   color: #fff;
   font-size: 13px;
+}
+
+@media (orientation: landscape) and (max-height: 420px) {
+  .mp-head {
+    padding-top: 8px;
+    background: none;
+  }
+  .mp-title {
+    display: none;
+  }
 }
 </style>

@@ -235,6 +235,7 @@ onBeforeUnmount(() => {
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   grid-template-rows: var(--admin-chrome-h) minmax(0, 1fr);
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: var(--bg);
 }
@@ -579,6 +580,7 @@ onBeforeUnmount(() => {
     width: min(260px, 82vw);
     min-width: 0;
     height: 100vh;
+    height: 100dvh;
     transform: translateX(-100%);
     border-top-right-radius: 0;
   }

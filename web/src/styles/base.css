@@ -43,9 +43,28 @@ img {
   max-width: 100%;
 }
 
-/* 移动端点击无高亮闪烁 */
+/* 移动端点击无高亮闪烁 + 横向溢出收口 */
 html {
   -webkit-tap-highlight-color: transparent;
+  overflow-x: clip;
+  max-width: 100vw;
+}
+
+body {
+  overflow-x: clip;
+  max-width: 100vw;
+}
+
+/* grid/flex 子项默认 min-width:auto 会撑破窄屏 */
+*,
+*::before,
+*::after {
+  min-width: 0;
+}
+
+button,
+a {
+  touch-action: manipulation;
 }
 
 ::selection {
@@ -115,6 +134,7 @@ textarea {
   inset: 0;
   z-index: 10000;
   width: 100vw;
+  height: 100vh;
   height: 100dvh;
   min-width: 320px;
   overflow: hidden;

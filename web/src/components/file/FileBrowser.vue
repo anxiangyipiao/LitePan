@@ -1354,7 +1354,7 @@ onUnmounted(() => {
 }
 .mobile-sidebar__logout {
   margin-top: auto;
-  padding: 12px 16px 18px;
+  padding: 12px 16px calc(18px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--border-soft, #e5e7eb);
 }
 .mobile-sidebar__logout-btn {
@@ -1383,7 +1383,7 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 4px;
-  padding: 8px 12px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
 }
 .mobile-sheet-action {
   display: flex;
@@ -1391,6 +1391,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-height: 44px;
   padding: 14px 8px;
   border: none;
   background: none;
@@ -1398,6 +1399,7 @@ onUnmounted(() => {
   color: var(--text-primary, #1f2937);
   font-size: 12px;
   cursor: pointer;
+  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 .mobile-sheet-action:active {

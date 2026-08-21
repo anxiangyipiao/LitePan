@@ -123,7 +123,8 @@ function formatDate(unix: number): string {
   max-width: 900px;
   margin: 0 auto;
   min-height: 100vh;
-  padding: 24px 20px;
+  min-height: 100dvh;
+  padding: 24px 20px calc(20px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
@@ -147,6 +148,7 @@ function formatDate(unix: number): string {
 .magnet-page__bar {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
   margin-bottom: 16px;
 }
 

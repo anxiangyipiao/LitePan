@@ -681,12 +681,13 @@ const subtitle = (item: MediaLibraryItem) => {
   justify-content: center;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 18px 0 4px;
+  padding: 18px 0 calc(4px + env(safe-area-inset-bottom, 0px));
 }
 
 .ml-pager-btn {
-  min-width: 36px;
-  height: 32px;
+  min-width: 44px;
+  min-height: 44px;
+  height: 44px;
   padding: 0 10px;
   border: 1px solid var(--border-soft, #e2e8f0);
   border-radius: 8px;
@@ -694,6 +695,7 @@ const subtitle = (item: MediaLibraryItem) => {
   color: var(--text-regular, #334155);
   font-size: 13px;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .ml-pager-btn:disabled {

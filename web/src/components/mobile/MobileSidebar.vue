@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch, onMounted, onUnmounted } from "vue";
+import { ref, watch, onMounted, onUnmounted, nextTick } from "vue";
 
 const props = defineProps<{
   open: boolean;
@@ -9,6 +9,10 @@ const emit = defineEmits<{
   close: [];
 }>();
 
+const panelRef = ref<HTMLElement | null>(null);
+let lastActive: HTMLElement | null = null;
+let savedScrollY = 0;
+
 function onBackdropClick() {
   emit("close");
 }
@@ -16,6 +20,24 @@ function onBackdropClick() {
 function onKeyDown(e: KeyboardEvent) {
   if (e.key === "Escape" && props.open) {
     emit("close");
+    return;
+  }
+  if (e.key !== "Tab" || !props.open || !panelRef.value) return;
+  const focusable = Array.from(
+    panelRef.value.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  );
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement as HTMLElement | null;
+  if (e.shiftKey && active === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && active === last) {
+    e.preventDefault();
+    first.focus();
   }
 }
 
@@ -25,12 +47,39 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener("keydown", onKeyDown);
+  document.body.style.position = "";
+  document.body.style.top = "";
+  document.body.style.left = "";
+  document.body.style.right = "";
+  document.body.style.width = "";
+  document.body.style.overflow = "";
 });
 
 watch(
   () => props.open,
-  (v) => {
-    document.body.style.overflow = v ? "hidden" : "";
+  async (v) => {
+    if (v) {
+      lastActive = document.activeElement as HTMLElement | null;
+      savedScrollY = window.scrollY || 0;
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${savedScrollY}px`;
+      document.body.style.left = "0";
+      document.body.style.right = "0";
+      document.body.style.width = "100%";
+      document.body.style.overflow = "hidden";
+      await nextTick();
+      panelRef.value?.querySelector<HTMLElement>("button, a, [tabindex]")?.focus();
+    } else {
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+      document.body.style.width = "";
+      document.body.style.overflow = "";
+      window.scrollTo(0, savedScrollY);
+      lastActive?.focus?.();
+      lastActive = null;
+    }
   },
 );
 </script>
@@ -38,8 +87,15 @@ watch(
 <template>
   <Teleport to="body">
     <Transition name="mobile-sidebar">
-      <div v-if="open" class="mobile-sidebar-backdrop" @click="onBackdropClick">
-        <nav class="mobile-sidebar" @click.stop>
+      <div
+        v-if="open"
+        class="mobile-sidebar-backdrop"
+        role="dialog"
+        aria-modal="true"
+        aria-label="导航抽屉"
+        @click="onBackdropClick"
+      >
+        <nav ref="panelRef" class="mobile-sidebar" @click.stop>
           <div class="mobile-sidebar__header">
             <span class="mobile-sidebar__title">导航</span>
             <button class="mobile-sidebar__close" @click="emit('close')" aria-label="关闭">
