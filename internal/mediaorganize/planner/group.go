@@ -2,6 +2,7 @@ package planner
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"litepan/internal/domain"
@@ -258,12 +259,43 @@ func (p *Planner) groupEntries(entries []batchEntry) (map[groupKey][]batchEntry,
 			}
 		}
 
+		// 规范化电影分组：JAV 番号归一 + 剥离 CD/PART 分盘标签
+		javCanonical := ""
+		if jav := rules.FindJAVNumber(entry.item.Name); jav != "" {
+			javCanonical = strings.ToUpper(jav)
+		} else if movieDirName != "" {
+			if jav := rules.FindJAVNumber(movieDirName); jav != "" {
+				javCanonical = strings.ToUpper(jav)
+			}
+		}
+		partForTitle := partLabel
+		if partForTitle == "" && movieDirName != "" {
+			partForTitle = rules.ExtractPartLabel(movieDirName)
+		}
+
 		var key groupKey
-		if movieDirID != "" {
+		if javCanonical != "" {
+			// 多碟（CD1/CD2）按同一番号归一为同一组标题。
+			// 散落文件（无目录）合并为一组；已位于作品目录内的 JAV 保留目录绑定，
+			// 由 planGroup 按「已在目录中」跳过，避免把已归类的文件再挪进新目录。
+			key = groupKey{
+				mediaKind: "movie",
+				dirID:     movieDirID,
+				dirName:   movieDirName,
+				title:     javCanonical,
+			}
+			key.setYear(fileParsed.Year)
+			if movieParsed.Year != nil && key.yearPtr() == nil {
+				key.setYear(movieParsed.Year)
+			}
+		} else if movieDirID != "" {
 			groupTitle, groupYear := rules.ResolveMovieGroupIdentity(movieDirName, fileParsed)
 			title := groupTitle
 			if title == "" {
 				title = movieParsed.Title
+			}
+			if partForTitle != "" {
+				title = stripPartSuffixFromTitle(title, partForTitle)
 			}
 			year := groupYear
 			if year == nil {
@@ -286,15 +318,30 @@ func (p *Planner) groupEntries(entries []batchEntry) (map[groupKey][]batchEntry,
 			if isoTitle == "" {
 				isoTitle = strings.TrimSpace(entry.item.Name)
 			}
+			if partForTitle != "" {
+				isoTitle = stripPartSuffixFromTitle(isoTitle, partForTitle)
+				if isoTitle == "" {
+					fallback := scatteredMovieIsolationBase(entry.item.Name, fileParsed)
+					isoTitle = stripPartSuffixFromTitle(fallback, partForTitle)
+				}
+			}
+			// abc-123 这类短番号按完整番号为准，避免 fileParsed.Title 被截断为 abc
+			if jav := rules.FindJAVNumber(entry.item.Name); jav != "" {
+				isoTitle = strings.ToUpper(jav)
+			}
 			key = groupKey{
 				mediaKind: "movie",
 				title:     isoTitle,
 			}
 			key.setYear(fileParsed.Year)
 		} else {
+			title := fileParsed.Title
+			if partForTitle != "" {
+				title = stripPartSuffixFromTitle(title, partForTitle)
+			}
 			key = groupKey{
 				mediaKind: "movie",
-				title:     fileParsed.Title,
+				title:     title,
 			}
 			key.setYear(fileParsed.Year)
 			key.setSeason(fileParsed.Season)
@@ -309,6 +356,23 @@ func (p *Planner) groupEntries(entries []batchEntry) (map[groupKey][]batchEntry,
 		groups[key] = append(groups[key], entry)
 	}
 	return groups, pending
+}
+
+func stripPartSuffixFromTitle(title, partLabel string) string {
+	title = strings.TrimSpace(title)
+	partLabel = strings.TrimSpace(partLabel)
+	if title == "" || partLabel == "" {
+		return title
+	}
+	low := strings.ToLower(partLabel)
+	_ = low
+	// 常见：标题本身已包含分盘标签，直接去除尾缀
+	re := regexp.MustCompile(`(?i)[\s._\-]*` + regexp.QuoteMeta(partLabel) + `\s*$`)
+	stripped := strings.TrimSpace(re.ReplaceAllString(title, ""))
+	if stripped != "" {
+		return stripped
+	}
+	return title
 }
 
 func shouldPreferStructuredMovieDir(fileParsed, dirParsed rules.ParsedMedia, ancestors []rules.Ancestor, fileName string) bool {
@@ -332,6 +396,10 @@ func shouldPreferStructuredMovieDir(fileParsed, dirParsed rules.ParsedMedia, anc
 func scatteredMovieIsolationBase(fileName string, parsed rules.ParsedMedia) string {
 	stem, _ := rules.SplitBasename(fileName)
 	stem = rules.StripReleaseSitePrefix(stem)
+	// 去除分盘后缀再取隔离目录名（避免 SIVR-498.CD2 vs SIVR-498.CD1 拆成两组）
+	if stem != "" {
+		stem = rules.StripPartSuffix(stem)
+	}
 	base := rules.SanitizeFilename(strings.TrimSpace(stem))
 	if base != "" {
 		return base

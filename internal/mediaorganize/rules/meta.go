@@ -166,3 +166,29 @@ func MatchMetaFilePrefix(name string, matchBases []string, metaExts map[string]s
 	}
 	return ""
 }
+
+func StripPartSuffix(stem string) string {
+	s := strings.TrimSpace(stem)
+	if s == "" {
+		return s
+	}
+	orig := s
+	if part := ExtractPartLabel(s); part != "" {
+		re := regexp.MustCompile(`(?i)[\s._\-]*` + regexp.QuoteMeta(part) + `\s*$`)
+		stripped := strings.TrimSpace(re.ReplaceAllString(s, ""))
+		if stripped != "" {
+			s = stripped
+		}
+	}
+	re2 := regexp.MustCompile(`(?i)[\s._\-]+(?:CD|DVD|DISC|DISK|PART|PT)[\s._-]*\d{1,2}\s*$`)
+	if re2.MatchString(s) {
+		s2 := strings.TrimSpace(re2.ReplaceAllString(s, ""))
+		if s2 != "" {
+			s = s2
+		}
+	}
+	if s == "" {
+		return orig
+	}
+	return s
+}

@@ -23,6 +23,13 @@ func (p *Planner) planGroup(key groupKey, items []batchEntry, alignDefaults map[
 		return nil
 	}
 
+	if p.shouldSkipInDirMovie(key) {
+		for _, entry := range items {
+			p.skip(entry.item, "已在目录中")
+		}
+		return nil
+	}
+
 	if title == "" {
 		for _, entry := range items {
 			p.skip(entry.item, "无法识别")
@@ -385,6 +392,23 @@ func (p *Planner) structuredSkipReason(items []batchEntry, tmdbID string) string
 	return "已整理"
 }
 
+// shouldSkipInDirMovie 判断是否跳过「已位于作品目录内」的电影文件。
+// 仅在移动模式且目标不是跨库搬迁时生效：散落文件仍会建夹整理，
+// 已归入目录的电影视为已整理，避免把 SIVR-498.CD1/abc-123 这类已有目录的
+// 文件再挪进一个同名目录。跨库搬迁（target_root 指向另一目录）仍按整体搬迁处理。
+func (p *Planner) shouldSkipInDirMovie(key groupKey) bool {
+	if p.actionType != "move" {
+		return false
+	}
+	if key.mediaKind != "movie" || key.dirID == "" {
+		return false
+	}
+	if p.targetRootID != "" && p.targetRootID != p.parentID {
+		return false
+	}
+	return true
+}
+
 func (p *Planner) isAlreadyOrganizedRenameGroup(key groupKey, items []batchEntry) bool {
 	if p.actionType != "rename" || len(items) == 0 {
 		return false
@@ -554,6 +578,12 @@ func (p *Planner) planMetaFollowers(entry batchEntry, newBase, ext, dependAction
 func scatteredFolderNameForEntry(entry batchEntry) string {
 	stem, _ := rules.SplitBasename(entry.item.Name)
 	stem = rules.StripReleaseSitePrefix(stem)
+	stem = rules.StripPartSuffix(stem)
+	if jav := rules.FindJAVNumber(stem); jav != "" {
+		stem = strings.ToUpper(jav)
+	} else if jav := rules.FindJAVNumber(entry.item.Name); jav != "" {
+		stem = strings.ToUpper(jav)
+	}
 	return rules.SanitizeFilename(strings.TrimSpace(stem))
 }
 
