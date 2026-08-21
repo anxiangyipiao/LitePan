@@ -203,7 +203,7 @@ docker run -d \
 第三方依赖见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。请遵守各网盘服务条款与当地法规。
 
 [docker-pulls-shield]: https://img.shields.io/docker/pulls/ponphil/litepan?logo=docker&logoColor=white&style=flat-square
-[version-shield]: https://img.shields.io/badge/Version-v0.4.6--Beta-6C63FF?style=flat-square
+[version-shield]: https://img.shields.io/badge/Version-v0.5.0--Beta-6C63FF?style=flat-square
 [license-shield]: https://img.shields.io/badge/License-PolyForm%20NC-red?style=flat-square
 [docker-url]: https://hub.docker.com/r/ponphil/litepan
 [license-url]: ./LICENSE
