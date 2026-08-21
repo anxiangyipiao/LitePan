@@ -1,5 +1,17 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from "vue";
+import { computed, defineAsyncComponent, h } from "vue";
+import BusySpinner from "@/components/base/BusySpinner.vue";
+
+const previewFallback = () => h(BusySpinner, { variant: "notch", size: 28, color: "var(--brand)" });
+
+function lazyPreview(loader: () => Promise<unknown>) {
+  return defineAsyncComponent({
+    loader: loader as never,
+    loadingComponent: previewFallback as never,
+    delay: 200,
+    timeout: 15000,
+  });
+}
 import type { FileItem } from "@/api/types";
 import type { ActiveFilePreview, FilePreviewKind } from "./filePreview";
 
@@ -15,15 +27,15 @@ const emit = defineEmits<{
 }>();
 
 const previewComponents = {
-  video: defineAsyncComponent(() => import("./VideoPreview.vue")),
-  audio: defineAsyncComponent(() => import("./AudioPreview.vue")),
-  image: defineAsyncComponent(() => import("./ImagePreview.vue")),
-  text: defineAsyncComponent(() => import("./TextPreview.vue")),
-  pdf: defineAsyncComponent(() => import("./PdfPreview.vue")),
-  docx: defineAsyncComponent(() => import("./DocxPreview.vue")),
-  spreadsheet: defineAsyncComponent(() => import("./SpreadsheetPreview.vue")),
-  archive: defineAsyncComponent(() => import("./ArchivePreview.vue")),
-  pptx: defineAsyncComponent(() => import("./PptxPreview.vue")),
+  video: lazyPreview(() => import("./VideoPreview.vue")),
+  audio: lazyPreview(() => import("./AudioPreview.vue")),
+  image: lazyPreview(() => import("./ImagePreview.vue")),
+  text: lazyPreview(() => import("./TextPreview.vue")),
+  pdf: lazyPreview(() => import("./PdfPreview.vue")),
+  docx: lazyPreview(() => import("./DocxPreview.vue")),
+  spreadsheet: lazyPreview(() => import("./SpreadsheetPreview.vue")),
+  archive: lazyPreview(() => import("./ArchivePreview.vue")),
+  pptx: lazyPreview(() => import("./PptxPreview.vue")),
 } satisfies Record<FilePreviewKind, ReturnType<typeof defineAsyncComponent>>;
 
 const mediaPreviewKinds = new Set<FilePreviewKind>(["video", "audio", "image"]);

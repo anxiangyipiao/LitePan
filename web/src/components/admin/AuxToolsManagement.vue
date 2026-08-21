@@ -9,9 +9,19 @@ import { useSettingsPageDirty } from "@/composables/useSettingsPageDirty";
 import { readPanelSaving, type SettingsPanelExpose } from "@/composables/useSettingsForm";
 import "@/styles/admin-shared.css";
 
-const StrmScrapePanel = defineAsyncComponent(() => import("@/components/admin/StrmScrapePanel.vue"));
-const StrmScrapeSettings = defineAsyncComponent(() => import("@/components/admin/StrmScrapeSettings.vue"));
-const ProxyToolsPanel = defineAsyncComponent(() => import("@/components/admin/ProxyToolsPanel.vue"));
+import BusySpinner from "@/components/base/BusySpinner.vue";
+
+function lazyAuxPanel(loader: () => Promise<unknown>) {
+  return defineAsyncComponent({
+    loader: loader as never,
+    loadingComponent: BusySpinner,
+    delay: 200,
+    timeout: 15000,
+  });
+}
+const StrmScrapePanel = lazyAuxPanel(() => import("@/components/admin/StrmScrapePanel.vue"));
+const StrmScrapeSettings = lazyAuxPanel(() => import("@/components/admin/StrmScrapeSettings.vue"));
+const ProxyToolsPanel = lazyAuxPanel(() => import("@/components/admin/ProxyToolsPanel.vue"));
 
 const SCRAPE_TAB = "scrape";
 const PROXY_TAB = "proxy";

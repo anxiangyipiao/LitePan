@@ -425,6 +425,8 @@ func davBypass(dav http.Handler, next http.Handler) http.Handler {
 	})
 }
 
+// spaHandler 负责内嵌前端资源与 SPA 回退：/api 侧的 chimw.Compress 仅作用于 /api 路由，
+// 此处的 assets/*.gz 由 serveCompressedAsset 按 Accept-Encoding 直传 gzip，不再二次压缩。
 func spaHandler(fsys fs.FS) http.Handler {
 	fileServer := http.FileServer(http.FS(fsys))
 	index, _ := fs.ReadFile(fsys, "index.html")
@@ -490,6 +492,8 @@ func serveCompressedAsset(w http.ResponseWriter, r *http.Request, fsys fs.FS, up
 func setStaticCacheHeader(w http.ResponseWriter, upath string) {
 	if strings.HasPrefix(upath, "assets/") {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		// 配合 serveCompressedAsset 的 Vary: Accept-Encoding，避免 CDN 误用错误编码。
+		w.Header().Set("Vary", "Accept-Encoding")
 		return
 	}
 	w.Header().Set("Cache-Control", "no-cache")

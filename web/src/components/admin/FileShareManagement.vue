@@ -7,7 +7,13 @@ import SectionTabBar from "@/components/admin/SectionTabBar.vue";
 import WebDAVSettings from "@/components/admin/WebDAVSettings.vue";
 // 本地挂载面板较大且非默认 tab，按需加载；type-only import 仅用于 ref 类型，不引入代码。
 import type FuseManagementComponent from "@/components/admin/FuseManagement.vue";
-const FuseManagement = defineAsyncComponent(() => import("@/components/admin/FuseManagement.vue"));
+import BusySpinner from "@/components/base/BusySpinner.vue";
+const FuseManagement = defineAsyncComponent({
+  loader: () => import("@/components/admin/FuseManagement.vue") as never,
+  loadingComponent: BusySpinner,
+  delay: 200,
+  timeout: 15000,
+});
 import { useSectionTabRoute } from "@/composables/useSectionTabRoute";
 import { useSettingsPageDirty } from "@/composables/useSettingsPageDirty";
 import { toast } from "@/composables/useToast";

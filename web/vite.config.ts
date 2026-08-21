@@ -47,6 +47,25 @@ export default defineConfig({
           if (id.includes('node_modules/@zip.js')) {
             return 'zip-vendor';
           }
+          // 重型预览解码器按需分包：首屏不加载，仅在对应预览触发时下载。
+          if (id.includes('node_modules/rtf.js')) {
+            return 'rtf-vendor';
+          }
+          if (id.includes('node_modules/heic-to')) {
+            return 'heic-vendor';
+          }
+          if (id.includes('node_modules/@aiden0z/pptx-renderer')) {
+            return 'pptx-vendor';
+          }
+          if (id.includes('node_modules/libbitsub')) {
+            return 'libbitsub-vendor';
+          }
+          if (id.includes('node_modules/docx-preview')) {
+            return 'docx-vendor';
+          }
+          if (id.includes('node_modules/@fortawesome')) {
+            return 'fa-vendor';
+          }
           // hls.js 与 mpegts.js 分别分包：打开 m3u8/flv 只加载用到的解码器，避免双份下载。
           if (id.includes('node_modules/hls.js')) {
             return 'hls-vendor';

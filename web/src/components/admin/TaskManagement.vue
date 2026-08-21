@@ -63,11 +63,19 @@ import FolderPickerModal from "@/components/file/FolderPickerModal.vue";
   // 重面板仅在对应 Tab 或抽屉首次打开时加载。
 import type CacheRetentionPanelComponent from "@/components/admin/CacheRetentionPanel.vue";
 import type MediaOrganizePanelComponent from "@/components/admin/MediaOrganizePanel.vue";
-const CacheRetentionPanel = defineAsyncComponent(() => import("@/components/admin/CacheRetentionPanel.vue"));
-const CacheSettingsPanel = defineAsyncComponent(() => import("@/components/admin/CacheSettingsPanel.vue"));
-const AutomationPanel = defineAsyncComponent(() => import("@/components/admin/AutomationPanel.vue"));
-const MediaOrganizePanel = defineAsyncComponent(() => import("@/components/admin/MediaOrganizePanel.vue"));
-const MediaOrganizeSettings = defineAsyncComponent(() => import("@/components/admin/MediaOrganizeSettings.vue"));
+function lazyAdminPanel(loader: () => Promise<unknown>) {
+  return defineAsyncComponent({
+    loader: loader as never,
+    loadingComponent: BusySpinner,
+    delay: 200,
+    timeout: 15000,
+  });
+}
+const CacheRetentionPanel = lazyAdminPanel(() => import("@/components/admin/CacheRetentionPanel.vue"));
+const CacheSettingsPanel = lazyAdminPanel(() => import("@/components/admin/CacheSettingsPanel.vue"));
+const AutomationPanel = lazyAdminPanel(() => import("@/components/admin/AutomationPanel.vue"));
+const MediaOrganizePanel = lazyAdminPanel(() => import("@/components/admin/MediaOrganizePanel.vue"));
+const MediaOrganizeSettings = lazyAdminPanel(() => import("@/components/admin/MediaOrganizeSettings.vue"));
 import CacheRuntimeStats from "@/components/admin/CacheRuntimeStats.vue";
 import AdminSettingsDrawer from "@/components/admin/AdminSettingsDrawer.vue";
 import { useAccountPathLabel } from "@/composables/useAccountPathLabel";

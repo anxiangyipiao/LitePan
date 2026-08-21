@@ -18,7 +18,13 @@ import { fetchStrmTasks, type StrmTask } from "@/api/strm";
 import SectionTabBar from "@/components/admin/SectionTabBar.vue";
 import AppCardActionButton from "@/components/base/AppCardActionButton.vue";
 // 日志面板非默认 tab，按需加载,减小仪表盘首包。
-const SystemLogs = defineAsyncComponent(() => import("@/components/admin/SystemLogs.vue"));
+import BusySpinner from "@/components/base/BusySpinner.vue";
+const SystemLogs = defineAsyncComponent({
+  loader: () => import("@/components/admin/SystemLogs.vue") as never,
+  loadingComponent: BusySpinner,
+  delay: 200,
+  timeout: 15000,
+});
 import { useSectionTabRoute } from "@/composables/useSectionTabRoute";
 import { useAdminPageLoading } from "@/composables/useAdminLoadingBar";
 import { toast } from "@/composables/useToast";

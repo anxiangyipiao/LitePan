@@ -25,13 +25,24 @@ const adminPageLoaders = {
   "cross-transfer": () => import("@/components/admin/CrossDriveTransfer.vue"),
   share: () => import("@/components/admin/FileShareManagement.vue"),
 };
-const DashboardManagement = defineAsyncComponent(adminPageLoaders.dashboard);
-const AccountManagement = defineAsyncComponent(adminPageLoaders.accounts);
-const SystemSettings = defineAsyncComponent(adminPageLoaders.settings);
-const TaskManagement = defineAsyncComponent(adminPageLoaders.tasks);
-const AuxToolsManagement = defineAsyncComponent(adminPageLoaders.tools);
-const CrossDriveTransfer = defineAsyncComponent(adminPageLoaders["cross-transfer"]);
-const FileShareManagement = defineAsyncComponent(adminPageLoaders.share);
+import BusySpinner from "@/components/base/BusySpinner.vue";
+
+function withSpinner(loader: () => Promise<unknown>) {
+  return defineAsyncComponent({
+    loader: loader as never,
+    loadingComponent: BusySpinner,
+    delay: 200,
+    timeout: 15000,
+  });
+}
+
+const DashboardManagement = withSpinner(adminPageLoaders.dashboard);
+const AccountManagement = withSpinner(adminPageLoaders.accounts);
+const SystemSettings = withSpinner(adminPageLoaders.settings);
+const TaskManagement = withSpinner(adminPageLoaders.tasks);
+const AuxToolsManagement = withSpinner(adminPageLoaders.tools);
+const CrossDriveTransfer = withSpinner(adminPageLoaders["cross-transfer"]);
+const FileShareManagement = withSpinner(adminPageLoaders.share);
 
 const BROWSER_LOCATION_RESET_ONCE_KEY = "litepan:index:reset-once";
 

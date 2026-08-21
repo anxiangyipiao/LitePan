@@ -17,6 +17,8 @@ type Service struct {
 	mu       sync.Mutex
 	ll       *list.List // LRU：队首最新，队尾最旧
 	items    map[string]*list.Element
+	// 前缀索引：按 accountTypePrefixes 加速 InvalidatePrefix/InvalidateAccount，O(k) 直删。
+	prefixIndex map[string]map[string]struct{}
 	maxItems int
 	memLimit int64 // 字节软上限，<=0 不限
 	curMem   int64
@@ -68,8 +70,9 @@ func NewService(opts Options) *Service {
 		opts.GCInterval = time.Minute
 	}
 	s := &Service{
-		ll:       list.New(),
-		items:    make(map[string]*list.Element),
+		ll:          list.New(),
+		items:       make(map[string]*list.Element),
+		prefixIndex: make(map[string]map[string]struct{}),
 		maxItems: opts.MaxItems,
 		memLimit: opts.MemLimit,
 		stop:     make(chan struct{}),
@@ -117,6 +120,7 @@ func (s *Service) Set(key string, val any, ttl time.Duration) {
 	}
 	el := s.ll.PushFront(&entry{key: key, value: val, size: size, expiresAt: exp})
 	s.items[key] = el
+	s.indexKeyLocked(key)
 	s.curMem += size
 	s.ensureCapacity()
 }
@@ -179,10 +183,19 @@ func (s *Service) InvalidateKey(key string) {
 	}
 }
 
-// InvalidatePrefix 失效所有以 prefix 开头的键。
+// InvalidatePrefix 失效所有以 prefix 开头的键。命中前缀索引时 O(k) 直删，未命中回退全表扫描。
 func (s *Service) InvalidatePrefix(prefix string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if keys, ok := s.prefixIndex[prefix]; ok {
+		for k := range keys {
+			if el, exists := s.items[k]; exists {
+				s.removeElement(el)
+			}
+		}
+		return
+	}
+	// 未建索引的前缀（如 DownloadURLPrefix 带 fileID 的细粒度前缀），回退扫描并同步清理索引。
 	var rm []*list.Element
 	for k, el := range s.items {
 		if strings.HasPrefix(k, prefix) {
@@ -212,6 +225,7 @@ func (s *Service) ClearAll() int {
 	defer s.mu.Unlock()
 	n := len(s.items)
 	s.items = make(map[string]*list.Element)
+	s.prefixIndex = make(map[string]map[string]struct{})
 	s.ll = list.New()
 	s.curMem = 0
 	return n
@@ -342,7 +356,57 @@ func (s *Service) removeElement(el *list.Element) {
 	en := el.Value.(*entry)
 	s.ll.Remove(el)
 	delete(s.items, en.key)
+	s.deindexKeyLocked(en.key)
 	s.curMem -= en.size
+}
+
+func (s *Service) indexKeyLocked(key string) {
+	for _, p := range accountTypePrefixesFromKey(key) {
+		if p == "" {
+			continue
+		}
+		bucket, ok := s.prefixIndex[p]
+		if !ok {
+			bucket = make(map[string]struct{})
+			s.prefixIndex[p] = bucket
+		}
+		bucket[key] = struct{}{}
+	}
+}
+
+func (s *Service) deindexKeyLocked(key string) {
+	for _, p := range accountTypePrefixesFromKey(key) {
+		if p == "" {
+			continue
+		}
+		if bucket, ok := s.prefixIndex[p]; ok {
+			delete(bucket, key)
+			if len(bucket) == 0 {
+				delete(s.prefixIndex, p)
+			}
+		}
+	}
+}
+
+func accountTypePrefixesFromKey(key string) []string {
+	// key 形如 <type>:<accountID>:<rest>，仅对已知的 5 类前缀建索引，返回 <type>:<accountID>:。
+	first := strings.IndexByte(key, ':')
+	if first < 0 {
+		return nil
+	}
+	typePrefix := key[:first+1]
+	switch typePrefix {
+	case prefixDir + sep, prefixFileInfo + sep, prefixDownloadURL + sep, prefixPathMap + sep, prefixWebDAVMeta + sep:
+		rest := key[first+1:]
+		second := strings.IndexByte(rest, ':')
+		if second < 0 {
+			return nil
+		}
+		accountID := rest[:second]
+		return []string{typePrefix + accountID + sep}
+	default:
+		return nil
+	}
 }
 
 func (s *Service) gcLoop(interval time.Duration) {

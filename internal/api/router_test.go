@@ -91,6 +91,62 @@ func TestSPAHandlerCompressedAsset(t *testing.T) {
 	})
 }
 
+func TestSPAHandlerCacheHeaders(t *testing.T) {
+	source := []byte("console.log('litepan')")
+	var compressed bytes.Buffer
+	writer := gzip.NewWriter(&compressed)
+	if _, err := writer.Write(source); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	fsys := fstest.MapFS{
+		"index.html":       {Data: []byte("<main>LitePan</main>")},
+		"assets/app.js.gz": {Data: compressed.Bytes()},
+		"assets/style.css": {Data: []byte("body{color:red}")},
+	}
+	handler := spaHandler(fsys)
+
+	t.Run("gzip q=0 不返回 gzip", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodGet, "/assets/app.js", nil)
+		request.Header.Set("Accept-Encoding", "gzip;q=0")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if got := response.Header().Get("Content-Encoding"); got != "" {
+			t.Fatalf("Content-Encoding = %q, want empty when q=0", got)
+		}
+		if !bytes.Equal(response.Body.Bytes(), source) {
+			t.Fatalf("body = %q, want %q", response.Body.Bytes(), source)
+		}
+	})
+
+	t.Run("HEAD 请求不写 body", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodHead, "/assets/app.js", nil)
+		request.Header.Set("Accept-Encoding", "gzip")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if got := response.Header().Get("Content-Encoding"); got != "gzip" {
+			t.Fatalf("Content-Encoding = %q, want gzip", got)
+		}
+		if response.Body.Len() != 0 {
+			t.Fatalf("HEAD body len = %d, want 0", response.Body.Len())
+		}
+	})
+
+	t.Run("非压缩资源走 immutable + Vary", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodGet, "/assets/style.css", nil)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if got := response.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
+			t.Fatalf("Cache-Control = %q", got)
+		}
+		if got := response.Header().Get("Vary"); got != "Accept-Encoding" {
+			t.Fatalf("Vary = %q, want Accept-Encoding", got)
+		}
+	})
+}
+
 func TestAcceptsGzip(t *testing.T) {
 	tests := map[string]bool{
 		"gzip":            true,
