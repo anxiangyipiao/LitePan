@@ -844,6 +844,12 @@ onUnmounted(() => {
           @move="store.moveFavorite"
         />
       </div>
+      <div v-if="auth.sessionAdmin" class="mobile-sidebar__logout">
+        <button type="button" class="mobile-sidebar__logout-btn" @click="handleLogout">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+          <span>退出登录</span>
+        </button>
+      </div>
     </MobileSidebar>
 
     <!-- File operation bottom sheet -->
@@ -901,19 +907,6 @@ onUnmounted(() => {
             <line x1="3" y1="6" x2="21" y2="6" />
             <line x1="3" y1="12" x2="21" y2="12" />
             <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
-        <button
-          v-if="auth.sessionAdmin"
-          type="button"
-          class="browser__mobile-logout"
-          aria-label="退出登录"
-          @click="handleLogout"
-        >
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
         </button>
         <BreadcrumbNav class="browser__breadcrumb" :items="breadcrumb" @navigate="store.goTo" />
@@ -1349,27 +1342,6 @@ onUnmounted(() => {
   .browser__hamburger {
     display: inline-flex;
   }
-  .browser__mobile-logout {
-    display: inline-flex;
-  }
-}
-
-/* ---- Mobile: logout button ---- */
-.browser__mobile-logout {
-  display: none;
-  width: 38px;
-  height: 38px;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: none;
-  border-radius: 8px;
-  color: var(--text-primary, #1f2937);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.browser__mobile-logout:active {
-  background: var(--bg-secondary, #f3f4f6);
 }
 
 /* ---- Mobile: sidebar content ---- */
@@ -1379,6 +1351,31 @@ onUnmounted(() => {
 .mobile-sidebar__favorites {
   border-top: 1px solid var(--border-soft, #e5e7eb);
   padding: 8px 0;
+}
+.mobile-sidebar__logout {
+  margin-top: auto;
+  padding: 12px 16px 18px;
+  border-top: 1px solid var(--border-soft, #e5e7eb);
+}
+.mobile-sidebar__logout-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-soft, #e5e7eb);
+  border-radius: 10px;
+  background: var(--surface, #ffffff);
+  color: var(--text-muted, #6b7280);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition, 0.16s ease);
+}
+.mobile-sidebar__logout-btn:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
 }
 
 /* ---- Mobile: bottom sheet actions grid ---- */
