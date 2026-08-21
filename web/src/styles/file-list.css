@@ -267,6 +267,7 @@
 @media (max-width: 768px) {
   .file-list .file-table {
     min-width: 0;
+    table-layout: fixed;
   }
 
   .file-list .file-table th,
@@ -281,11 +282,25 @@
 
   .file-list .name-col {
     min-width: 0;
+    width: auto;
+  }
+
+  /* 名称超长时必须让中间列可收缩，否则会把右侧操作列挤出可视区（overflow-x:hidden 下直接看不见） */
+  .file-list .name-col .file-name,
+  .file-list .name-col .file-text {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .file-list .checkbox-col {
     width: 38px;
+    min-width: 38px;
     padding-right: 4px;
+  }
+
+  .file-list .actions-col {
+    width: 102px;
+    min-width: 102px;
   }
 }
 
@@ -402,9 +417,12 @@
     width: 40px;
     height: 40px;
   }
+}
 
+/* 移动端触屏：操作列固定宽度，避免 3×40px 按钮被挤压/裁切 */
+@media (max-width: 768px) and (hover: none) {
   .file-list .actions-col {
-    width: auto;
-    min-width: 0;
+    width: 128px;
+    min-width: 128px;
   }
 }

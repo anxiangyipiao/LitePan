@@ -1208,6 +1208,14 @@ function handleHeaderMenuKeydown(event: KeyboardEvent) {
     align-items: flex-start;
   }
 
+  /* 列表行：名称区可压缩，长标题省略，不挤占右侧操作列 */
+  .file-name .file-text,
+  .file-name .file-label,
+  .file-name .file-mobile-meta {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .file-mobile-meta {
     display: block;
   }
