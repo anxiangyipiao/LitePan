@@ -8,6 +8,7 @@ import { addToQB } from "@/api/qb";
 import { getApiErrorMessage } from "@/api/client";
 import { formatSize } from "@/utils/format";
 import { toast, copyTextToClipboard } from "@/composables/useToast";
+import MagnetOfflineModal from "@/components/common/MagnetOfflineModal.vue";
 
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: [] }>();
@@ -18,6 +19,9 @@ const loading = ref(false);
 const error = ref("");
 const searched = ref(false);
 const qbPushing = ref<Record<number, boolean>>({});
+const offlineOpen = ref(false);
+const offlineMagnet = ref("");
+const offlineName = ref("");
 
 watch(
   () => props.open,
@@ -73,6 +77,16 @@ async function pushToQB(r: MagnetSearchResult) {
   } finally {
     qbPushing.value[trackKey] = false;
   }
+}
+
+function openOffline(r: MagnetSearchResult) {
+  if (!r.magnet) {
+    toast.warning("该结果没有磁力链");
+    return;
+  }
+  offlineMagnet.value = r.magnet;
+  offlineName.value = r.name;
+  offlineOpen.value = true;
 }
 
 function formatDate(unix: number): string {
@@ -142,6 +156,9 @@ function formatDate(unix: number): string {
             >
               {{ qbPushing[r.id] ? "推送中…" : "下载到 qB" }}
             </AppButton>
+          <AppButton type="button" variant="secondary" size="sm" @click="openOffline(r)">
+            离线到网盘
+          </AppButton>
             <a
               v-if="r.view_url"
               :href="r.view_url"
@@ -156,6 +173,7 @@ function formatDate(unix: number): string {
       </ul>
     </div>
   </AppModal>
+    <MagnetOfflineModal :open="offlineOpen" :magnet="offlineMagnet" :magnet-name="offlineName" @close="offlineOpen = false" />
 </template>
 
 <style scoped>

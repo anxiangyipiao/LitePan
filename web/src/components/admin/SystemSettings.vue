@@ -25,6 +25,7 @@ import SectionTabBar from "@/components/admin/SectionTabBar.vue";
 import SettingsCard from "@/components/admin/SettingsCard.vue";
 import SettingsRow from "@/components/admin/SettingsRow.vue";
 import SettingsHelpTooltip from "@/components/admin/SettingsHelpTooltip.vue";
+import QbSettingsCard from "@/components/admin/QbSettingsCard.vue";
 import ApiKeySettings from "@/components/admin/ApiKeySettings.vue";
 import { isCacheSettingKey } from "@/constants/cacheSettings";
 import "@/styles/admin-shared.css";
@@ -88,7 +89,10 @@ const tabs = computed(() => [
   { key: API_KEYS_TAB, label: "API 秘钥", disabled: props.forcePasswordChange },
 ]);
 
+const QB_KEYS = new Set(["qb_url", "qb_username", "qb_password", "qb_save_path", "qb_category"]);
 const systemItems = computed(() => items.value.filter((it) => it.category === "system"));
+const qbItems = computed(() => systemItems.value.filter((it) => QB_KEYS.has(it.key)));
+const otherSystemItems = computed(() => systemItems.value.filter((it) => !QB_KEYS.has(it.key)));
 const systemChangedKeys = computed(() => systemItems.value.filter((it) => isChanged(it)).map((it) => it.key));
 const systemChangedCount = computed(() => systemChangedKeys.value.length);
 
@@ -177,8 +181,9 @@ const canSave = computed(() => {
   return false;
 });
 
-function isChanged(it: SettingItem): boolean {
-  return form[it.key] !== original[it.key];
+function isChanged(it: SettingItem | string): boolean {
+  const key = typeof it === "string" ? it : it.key;
+  return form[key] !== original[key];
 }
 
 function displayLabel(it: SettingItem): string {
@@ -509,9 +514,10 @@ async function submit() {
 
 
       <template v-else-if="isServicesTab">
+        <QbSettingsCard v-if="qbItems.length" :form="form" :is-changed="isChanged" :accent="accentColor" />
         <SettingsCard v-if="systemItems.length" title="授权与日志" :accent="accentColor">
           <SettingsRow
-            v-for="it in systemItems"
+            v-for="it in otherSystemItems"
             :key="it.key"
             :show-changed-badge="true"
             :changed="isChanged(it)"

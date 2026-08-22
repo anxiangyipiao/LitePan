@@ -14,6 +14,9 @@ const loading = ref(false);
 const error = ref("");
 const searched = ref(false);
 const qbPushing = ref<Record<number, boolean>>({});
+const offlineOpen = ref(false);
+const offlineMagnet = ref("");
+const offlineName = ref("");
 
 async function search() {
   const q = keyword.value.trim();
@@ -57,6 +60,16 @@ async function pushToQB(r: MagnetSearchResult) {
   } finally {
     qbPushing.value[trackKey] = false;
   }
+}
+
+function openOffline(r: MagnetSearchResult) {
+  if (!r.magnet) {
+    toast.warning("该结果没有磁力链");
+    return;
+  }
+  offlineMagnet.value = r.magnet;
+  offlineName.value = r.name;
+  offlineOpen.value = true;
 }
 
 function formatDate(unix: number): string {
@@ -130,6 +143,9 @@ function formatDate(unix: number): string {
           >
             {{ qbPushing[r.id] ? "推送中…" : "下载到 qB" }}
           </AppButton>
+          <AppButton type="button" variant="secondary" size="sm" @click="openOffline(r)">
+            离线到网盘
+          </AppButton>
           <a
             v-if="r.view_url"
             :href="r.view_url"
@@ -142,6 +158,7 @@ function formatDate(unix: number): string {
         </div>
       </li>
     </ul>
+    <MagnetOfflineModal :open="offlineOpen" :magnet="offlineMagnet" :magnet-name="offlineName" @close="offlineOpen = false" />
   </div>
 </template>
 
