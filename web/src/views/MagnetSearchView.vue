@@ -7,6 +7,7 @@ import { addToQB } from "@/api/qb";
 import { getApiErrorMessage } from "@/api/client";
 import { formatSize } from "@/utils/format";
 import { toast, copyTextToClipboard } from "@/composables/useToast";
+import MagnetOfflineModal from "@/components/common/MagnetOfflineModal.vue";
 
 const keyword = ref("");
 const results = ref<MagnetSearchResult[]>([]);
