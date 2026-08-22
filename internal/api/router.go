@@ -45,7 +45,7 @@ import (
 //go:embed web
 var webFS embed.FS
 
-// Deps 是 API 层所需依赖（只依赖接口/服务，不感知具体存储实现）。
+// Deps �?API 层所需依赖（只依赖接口/服务，不感知具体存储实现）�?
 type Deps struct {
 	Logs              *logx.Manager
 	AccountSvc        *account.Service
@@ -78,7 +78,7 @@ type Deps struct {
 	OnSettingsUpdated func(map[string]string)
 }
 
-// Handler 持有处理请求所需的依赖。
+// Handler 持有处理请求所需的依赖�?
 type Handler struct {
 	logs              *logx.Manager
 	log               *slog.Logger
@@ -109,7 +109,7 @@ type Handler struct {
 	onSettingsUpdated func(map[string]string)
 }
 
-// NewRouter 装配并返回 HTTP 路由（含内嵌管理页面）。
+// NewRouter 装配并返�?HTTP 路由（含内嵌管理页面）�?
 func NewRouter(d Deps) http.Handler {
 	apiLog := slog.Default()
 	if d.Logs != nil {
@@ -161,6 +161,8 @@ func NewRouter(d Deps) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(h.requireUser)
 			r.Get("/magnet-search", h.magnetSearch)
+			r.Post("/qb/add", h.qbAdd)
+			r.Post("/qb/test", h.qbTest)
 		})
 		r.Get("/strm/play/{account_id}/{file_key}/t/{token}/n/{filename}", h.strmPlay)
 		r.Head("/strm/play/{account_id}/{file_key}/t/{token}/n/{filename}", h.strmPlay)
@@ -407,14 +409,14 @@ func NewRouter(d Deps) http.Handler {
 
 	sub, err := fs.Sub(webFS, "web")
 	if err != nil {
-		panic(err) // 编译期内嵌，理论上不会失败
+		panic(err) // 编译期内嵌，理论上不会失�?
 	}
 	r.Handle("/*", spaHandler(sub))
 
 	return davBypass(davSrv, r)
 }
 
-// chi 不认 WebDAV 方法，/dav 须在外层旁路
+// chi 不认 WebDAV 方法�?dav 须在外层旁路
 func davBypass(dav http.Handler, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/dav" || strings.HasPrefix(r.URL.Path, "/dav/") {
@@ -425,8 +427,8 @@ func davBypass(dav http.Handler, next http.Handler) http.Handler {
 	})
 }
 
-// spaHandler 负责内嵌前端资源与 SPA 回退：/api 侧的 chimw.Compress 仅作用于 /api 路由，
-// 此处的 assets/*.gz 由 serveCompressedAsset 按 Accept-Encoding 直传 gzip，不再二次压缩。
+// spaHandler 负责内嵌前端资源�?SPA 回退�?api 侧的 chimw.Compress 仅作用于 /api 路由�?
+// 此处�?assets/*.gz �?serveCompressedAsset �?Accept-Encoding 直传 gzip，不再二次压缩�?
 func spaHandler(fsys fs.FS) http.Handler {
 	fileServer := http.FileServer(http.FS(fsys))
 	index, _ := fs.ReadFile(fsys, "index.html")
@@ -461,7 +463,7 @@ func serveCompressedAsset(w http.ResponseWriter, r *http.Request, fsys fs.FS, up
 	defer compressed.Close()
 	info, err := compressed.Stat()
 	if err != nil {
-		http.Error(w, "静态资源读取失败", http.StatusInternalServerError)
+		http.Error(w, "静态资源读取失�?, http.StatusInternalServerError)
 		return
 	}
 
@@ -482,7 +484,7 @@ func serveCompressedAsset(w http.ResponseWriter, r *http.Request, fsys fs.FS, up
 	}
 	reader, err := gzip.NewReader(compressed)
 	if err != nil {
-		http.Error(w, "静态资源解压失败", http.StatusInternalServerError)
+		http.Error(w, "静态资源解压失�?, http.StatusInternalServerError)
 		return
 	}
 	defer reader.Close()
@@ -492,7 +494,7 @@ func serveCompressedAsset(w http.ResponseWriter, r *http.Request, fsys fs.FS, up
 func setStaticCacheHeader(w http.ResponseWriter, upath string) {
 	if strings.HasPrefix(upath, "assets/") {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-		// 配合 serveCompressedAsset 的 Vary: Accept-Encoding，避免 CDN 误用错误编码。
+		// 配合 serveCompressedAsset �?Vary: Accept-Encoding，避�?CDN 误用错误编码�?
 		w.Header().Set("Vary", "Accept-Encoding")
 		return
 	}

@@ -4,6 +4,7 @@ import AppModal from "@/components/base/AppModal.vue";
 import AppButton from "@/components/base/AppButton.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
 import { searchMagnet, type MagnetSearchResult } from "@/api/magnetSearch";
+import { addToQB } from "@/api/qb";
 import { getApiErrorMessage } from "@/api/client";
 import { formatSize } from "@/utils/format";
 import { toast, copyTextToClipboard } from "@/composables/useToast";
@@ -16,6 +17,7 @@ const results = ref<MagnetSearchResult[]>([]);
 const loading = ref(false);
 const error = ref("");
 const searched = ref(false);
+const qbPushing = ref<Record<number, boolean>>({});
 
 watch(
   () => props.open,
@@ -53,8 +55,24 @@ async function copyMagnet(r: MagnetSearchResult) {
     toast.warning("该结果没有磁力链");
     return;
   }
-  await copyTextToClipboard(r.magnet);
-  toast.success("磁力链已复制");
+  await copyTextToClipboard(r.magnet, { successMessage: "磁力链已复制" });
+}
+
+async function pushToQB(r: MagnetSearchResult) {
+  if (!r.magnet) {
+    toast.warning("该结果没有磁力链");
+    return;
+  }
+  const trackKey = r.id || 0;
+  qbPushing.value[trackKey] = true;
+  try {
+    await addToQB(r.magnet);
+    toast.success("已推送到 qBittorrent");
+  } catch (e) {
+    toast.error(getApiErrorMessage(e, "推送到 qB 失败，请检查 qB 地址与账号配置"));
+  } finally {
+    qbPushing.value[trackKey] = false;
+  }
 }
 
 function formatDate(unix: number): string {
@@ -113,7 +131,16 @@ function formatDate(unix: number): string {
           </div>
           <div class="magnet-search__actions">
             <AppButton type="button" variant="secondary" size="sm" @click="copyMagnet(r)">
-              复制磁力链
+              复制
+            </AppButton>
+            <AppButton
+              type="button"
+              variant="primary"
+              size="sm"
+              :disabled="!!qbPushing[r.id]"
+              @click="pushToQB(r)"
+            >
+              {{ qbPushing[r.id] ? "推送中…" : "下载到 qB" }}
             </AppButton>
             <a
               v-if="r.view_url"

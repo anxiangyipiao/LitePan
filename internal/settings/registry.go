@@ -54,6 +54,12 @@ const (
 	KeyMagnetSearchProxyUsername = "magnet_search_proxy_username"
 	KeyMagnetSearchProxyPassword = "magnet_search_proxy_password"
 
+	KeyQBURL      = "qb_url"
+	KeyQBUsername = "qb_username"
+	KeyQBPassword = "qb_password"
+	KeyQBSavePath = "qb_save_path"
+	KeyQBCategory = "qb_category"
+
 	KeyMOProxyEnabled          = "mo_proxy_enabled"
 	KeyMOProxyURL              = "mo_proxy_url"
 	KeyMOProxyUsername         = "mo_proxy_username"
@@ -309,6 +315,47 @@ func defaultSpecs() []Spec {
 			Description: "代理认证密码。",
 			Default:     "",
 			Sensitive:   true,
+		},
+		{
+			Key:         KeyQBURL,
+			Type:        TypeString,
+			Category:    "system",
+			Label:       "qBittorrent WebUI 地址",
+			Description: "本地 qB 的 WebUI 根地址，例如 http://192.168.1.10:8080；留空则不启用一键下载到 qB。",
+			Default:     "",
+		},
+		{
+			Key:         KeyQBUsername,
+			Type:        TypeString,
+			Category:    "system",
+			Label:       "qB 用户名",
+			Description: "qB WebUI 登录用户名，无鉴权可留空。",
+			Default:     "",
+		},
+		{
+			Key:         KeyQBPassword,
+			Type:        TypeString,
+			Category:    "system",
+			Label:       "qB 密码",
+			Description: "qB WebUI 登录密码。",
+			Default:     "",
+			Sensitive:   true,
+		},
+		{
+			Key:         KeyQBSavePath,
+			Type:        TypeString,
+			Category:    "system",
+			Label:       "qB 默认保存路径",
+			Description: "推送磁力时默认保存目录，留空使用 qB 默认。例：/downloads",
+			Default:     "",
+		},
+		{
+			Key:         KeyQBCategory,
+			Type:        TypeString,
+			Category:    "system",
+			Label:       "qB 默认分类",
+			Description: "推送磁力时默认分类，留空不分类。",
+			Default:     "",
 		},
 		{
 			Key:     KeyLogErrorAckAt,
