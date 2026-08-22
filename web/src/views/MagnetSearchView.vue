@@ -47,9 +47,6 @@ async function pushToQB(r: MagnetSearchResult) {
     toast.warning("该结果没有磁力链");
     return;
   }
-  const key = r.id || r.hash || r.magnet;
-  const id = typeof key === "number" ? key : 0;
-  // 用 hash/magnet 兜底时无法按 id 追踪 loading，简单用全局 loading 语义
   const trackKey = r.id || 0;
   qbPushing.value[trackKey] = true;
   try {
