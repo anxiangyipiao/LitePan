@@ -1847,6 +1847,137 @@ func TestMovePlanToleratesTMDBSearchFailureWhenOrganizedIDPreserved(t *testing.T
 	}
 }
 
+func TestGroupScatteredMoviesInDifferentParentsIsolate(t *testing.T) {
+	p := planner.New(
+		context.Background(), nil, 1,
+		planner.TaskConfig{
+			TargetDirectoryID:   "root",
+			ActionType:          "move",
+			MediaType:           "auto",
+			UseTMDB:             false,
+			Recursive:           true,
+			ScatterMoviePerFile: true,
+		},
+		planner.Settings{}, "task-test", nil, func(string) {}, nil, func() error { return nil },
+	)
+	entries := []planner.BatchEntryForTest{
+		{Item: domain.FileItem{ID: "f1", Name: "STARS-182-C.mp4"}, Ancestors: []rules.Ancestor{{ID: "dirA", Name: "A"}}},
+		{Item: domain.FileItem{ID: "f2", Name: "SONE-817-C.mp4"}, Ancestors: []rules.Ancestor{{ID: "dirA", Name: "A"}}},
+		{Item: domain.FileItem{ID: "f3", Name: "SIVR-498.CD1 CD1.mp4"}, Ancestors: []rules.Ancestor{{ID: "dirA", Name: "A"}}},
+		{Item: domain.FileItem{ID: "f4", Name: "SIVR-498.CD2 CD2.mp4"}, Ancestors: []rules.Ancestor{{ID: "dirA", Name: "A"}}},
+	}
+	groups, pending := planner.GroupEntriesForTestExport(p, entries)
+	if len(pending) != 0 {
+		t.Fatalf("pending = %+v", pending)
+	}
+	if len(groups) != 3 {
+		t.Fatalf("want 3 groups (STARS-182-C / SONE-817-C / SIVR-498 merged), got %d: %+v", len(groups), groups)
+	}
+	has := func(title string, count int) bool {
+		for k, n := range groups {
+			if k.Title == title && n == count {
+				return true
+			}
+		}
+		return false
+	}
+	// 标题解析会剥离 -C 尾缀，STARS-182-C → STARS-182；SONE-817-C → SONE-817
+	if !has("STARS-182", 1) {
+		t.Fatalf("missing STARS-182 group: %+v", groups)
+	}
+	if !has("SONE-817", 1) {
+		t.Fatalf("missing SONE-817 group: %+v", groups)
+	}
+	if !has("SIVR-498", 2) {
+		t.Fatalf("missing SIVR-498 merged group (2 files), got %+v", groups)
+	}
+	for k := range groups {
+		if k.DirID != "" {
+			t.Fatalf("scattered group dirID should be empty, got %+v", k)
+		}
+	}
+}
+
+func TestGroupScatteredMoviesAcrossDifferentParents(t *testing.T) {
+	fs := &mockFS{dirs: map[string][]domain.FileItem{
+		"root": {
+			{ID: "dirA", Name: "A", IsDir: true},
+			{ID: "dirB", Name: "B", IsDir: true},
+		},
+		"dirA": {{ID: "f1", Name: "STARS-182-C.mp4"}},
+		"dirB": {{ID: "f2", Name: "SONE-817-C.mp4"}},
+	}}
+	p := planner.New(
+		context.Background(), fs, 1,
+		planner.TaskConfig{
+			TargetDirectoryID:   "root",
+			ActionType:          "move",
+			MediaType:           "auto",
+			UseTMDB:             false,
+			Recursive:           true,
+			ScatterMoviePerFile: true,
+		},
+		planner.Settings{}, "task-test", nil, func(string) {}, nil, func() error { return nil },
+	)
+	plan, err := p.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A 与 B 各建一个不同 parent 的工作目录，不应被合并为 1 个
+	workDirs := map[string]int{}
+	for _, a := range plan.Actions {
+		if a.Kind == moplan.ActionKindEnsureDir {
+			if isWork, _ := a.Metadata["is_work_dir"].(bool); isWork {
+				key := a.TargetParentID + "\x00" + a.TargetName
+				workDirs[key]++
+			}
+		}
+	}
+	if len(workDirs) != 2 {
+		t.Fatalf("want 2 scattered work dirs (A->STARS-182-C, B->SONE-817-C), got %v actions=%+v", workDirs, plan.Actions)
+	}
+	moves := 0
+	for _, a := range plan.Actions {
+		if a.Kind == moplan.ActionKindRelocate && (a.SourceID == "f1" || a.SourceID == "f2") {
+			moves++
+		}
+	}
+	if moves != 2 {
+		t.Fatalf("want 2 file relocates, got %d actions=%+v", moves, plan.Actions)
+	}
+}
+
+func TestGroupContainerDirIsNotBoundAsWorkDir(t *testing.T) {
+	p := planner.New(
+		context.Background(), nil, 1,
+		planner.TaskConfig{
+			TargetDirectoryID:   "root",
+			ActionType:          "move",
+			MediaType:           "auto",
+			UseTMDB:             false,
+			Recursive:           true,
+			ScatterMoviePerFile: true,
+		},
+		planner.Settings{}, "task-test", nil, func(string) {}, nil, func() error { return nil },
+	)
+	entries := []planner.BatchEntryForTest{
+		{Item: domain.FileItem{ID: "f1", Name: "STARS-182-C.mp4"}, Ancestors: []rules.Ancestor{{ID: "cat", Name: "Cat"}}},
+		{Item: domain.FileItem{ID: "f2", Name: "SONE-817-C.mp4"}, Ancestors: []rules.Ancestor{{ID: "cat", Name: "Cat"}}},
+	}
+	groups, pending := planner.GroupEntriesForTestExport(p, entries)
+	if len(pending) != 0 {
+		t.Fatalf("pending = %+v", pending)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("container Cat 含两部不同番号应分 2 组，实际 %d: %+v", len(groups), groups)
+	}
+	for k := range groups {
+		if k.DirID != "" {
+			t.Fatalf("container dir should not be bound, got DirID=%q for %+v", k.DirID, k)
+		}
+	}
+}
+
 func TestDirSeasonFallbackFromDirName(t *testing.T) {
 	fs := &mockFS{dirs: map[string][]domain.FileItem{
 		"root": {{ID: "d1", Name: "灵笼 第2季", IsDir: true}},

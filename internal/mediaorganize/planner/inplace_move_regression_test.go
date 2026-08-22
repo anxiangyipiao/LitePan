@@ -25,7 +25,7 @@ func TestMovePlanSkipsInDirMoviesInPlace(t *testing.T) {
 		"d2": {{ID: "f2", Name: "SIVR-498.CD2 CD2.mp4"}},
 		"d3": {{ID: "f3", Name: "SONE-817-C.mp4"}},
 		"d4": {{ID: "f4", Name: "STARS-182-C.mp4"}},
-		"d5": {{ID: "f5", Name: "abc.mp4"}},
+		"d5": {{ID: "f5", Name: "abc-123.mp4"}},
 	}}
 	p := planner.New(
 		context.Background(),
