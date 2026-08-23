@@ -288,6 +288,7 @@ function formatDate(unix: number): string {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .magnet-page__link {
@@ -295,5 +296,45 @@ function formatDate(unix: number): string {
   font-size: 13px;
   text-decoration: none;
   white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .magnet-page {
+    padding: 16px 12px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .magnet-page__row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .magnet-page__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .magnet-page__actions .btn {
+    width: 100%;
+  }
+
+  .magnet-page__link {
+    grid-column: 1 / -1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    padding: 4px 9px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    font-size: 13px;
+  }
+
+  .magnet-page__link:active {
+    background: var(--surface-sunken);
+  }
 }
 </style>
