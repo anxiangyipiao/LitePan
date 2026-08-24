@@ -249,13 +249,13 @@ func (s *Service) rebuildSubForHistory(ctx context.Context, rec *domain.RSSDownl
 // ---------- 预览（保存前先看命中结果） ----------
 
 type PreviewInput struct {
-	FeedURL         string
-	TitleKeyword    string
-	ExcludeKeywords string
-	EpisodeMin      int
-	EpisodeMax      int
-	QualityKeyword  string
-	Limit           int
+	FeedURL         string `json:"feed_url"`
+	TitleKeyword    string `json:"title_keyword"`
+	ExcludeKeywords string `json:"exclude_keywords"`
+	EpisodeMin      int    `json:"episode_min"`
+	EpisodeMax      int    `json:"episode_max"`
+	QualityKeyword  string `json:"quality_keyword"`
+	Limit           int    `json:"limit"`
 }
 
 type PreviewItem struct {
