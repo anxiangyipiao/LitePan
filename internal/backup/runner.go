@@ -148,12 +148,13 @@ func (s *Service) scanSource(ctx context.Context, job *domain.BackupJob) ([]sour
 	return out, nil
 }
 
-// unchanged 判定文件是否与上次备份一致：本地源用 size+mtime（免重读），云盘源用 size+hash（来自元数据）。
+// unchanged 判定文件是否与上次备份一致：
+// 本地源优先 size+mtime（免重读）；云盘源有哈希比 size+hash，无哈希（如不秒传模式）退回 size+mtime。
 func (s *Service) unchanged(f *sourceScanFile, st *domain.BackupFileState) bool {
 	if f.Size != st.Size {
 		return false
 	}
-	if f.IsLocal && !f.ModTime.IsZero() && !st.MTime.IsZero() {
+	if !f.ModTime.IsZero() && !st.MTime.IsZero() && (f.IsLocal || st.Hash == "" || f.Hash == "") {
 		return st.MTime.Equal(f.ModTime)
 	}
 	if st.Hash != "" && f.Hash != "" {
@@ -293,33 +294,39 @@ type fileBackupResult struct {
 	errMsg string
 }
 
-// backupFile 把源文件推送到目标网盘：先秒传，未命中再本地直传或下载转传。
+// backupFile 把源文件推送到目标网盘。
+// 秒传模式（sha1/md5）：先秒传，未命中再本地直传或下载转传；
+// 不秒传模式（none）：不计算哈希、不走秒传，直接上传（目标网盘不支持秒传时避免重复读文件/流式下载）。
 func (s *Service) backupFile(ctx context.Context, job *domain.BackupJob, f *sourceScanFile, dirCache map[string]string) fileBackupResult {
 	folderID, err := crosstransfer.EnsureTargetDir(ctx, s.files, job.TargetAccountID, job.TargetParentID, f.RelDir, dirCache, nil)
 	if err != nil {
 		return fileBackupResult{mode: "error", errMsg: "创建目标目录失败：" + err.Error()}
 	}
 
+	useRapid := job.Method != domain.BackupMethodNone
+
 	// 解析哈希（秒传与指纹用）：本地文件直接读盘，云盘取元数据或流式解析。
 	hash := f.Hash
-	if f.IsLocal {
-		md5, sha1, herr := uploadutil.HashMD5SHA1(ctx, f.ID)
-		if herr != nil {
-			return fileBackupResult{mode: "error", errMsg: "计算文件指纹失败：" + herr.Error()}
+	if useRapid {
+		if f.IsLocal {
+			md5, sha1, herr := uploadutil.HashMD5SHA1(ctx, f.ID)
+			if herr != nil {
+				return fileBackupResult{mode: "error", errMsg: "计算文件指纹失败：" + herr.Error()}
+			}
+			if job.Method == "md5" {
+				hash = md5
+			} else {
+				hash = sha1
+			}
+		} else if hash == "" {
+			hash = s.resolveCloudHash(ctx, job.SourceAccountID, f, job.Method)
 		}
-		if job.Method == "md5" {
-			hash = md5
-		} else {
-			hash = sha1
-		}
-	} else if hash == "" {
-		hash = s.resolveCloudHash(ctx, job.SourceAccountID, f, job.Method)
 	}
 
 	// 优先秒传：目标网盘已存在同内容文件则免传输。
 	rapidID := ""
 	rapidHit := false
-	if hash != "" {
+	if useRapid && hash != "" {
 		rapidErr := s.exec.Run(ctx, job.TargetAccountID, func(drv driver.Driver) error {
 			rap, ok := drv.(driver.RapidUploader)
 			if !ok {
@@ -362,7 +369,7 @@ func (s *Service) backupFile(ctx context.Context, job *domain.BackupJob, f *sour
 		}
 		return fileBackupResult{mode: "upload", hash: hash}
 	}
-	return s.relayUpload(ctx, job, f, folderID, hash)
+	return s.relayUpload(ctx, job, f, folderID, hash, useRapid)
 }
 
 // resolveCloudHash 云盘源文件哈希为空时，尝试驱动流式解析或元数据。
@@ -387,8 +394,8 @@ func (s *Service) resolveCloudHash(ctx context.Context, accountID int64, f *sour
 	return hash
 }
 
-// relayUpload 云盘源：下载到临时目录 → 上传目标，并补算哈希用于指纹。
-func (s *Service) relayUpload(ctx context.Context, job *domain.BackupJob, f *sourceScanFile, folderID, knownHash string) fileBackupResult {
+// relayUpload 云盘源：下载到临时目录 → 上传目标。秒传模式下补算哈希用于指纹。
+func (s *Service) relayUpload(ctx context.Context, job *domain.BackupJob, f *sourceScanFile, folderID, knownHash string, wantHash bool) fileBackupResult {
 	tempPath, downloaded, err := s.downloadToTemp(ctx, job.SourceAccountID, f.ID, f.Name)
 	if err != nil {
 		return fileBackupResult{mode: "error", errMsg: "下载源文件失败：" + err.Error()}
@@ -399,7 +406,7 @@ func (s *Service) relayUpload(ctx context.Context, job *domain.BackupJob, f *sou
 	}
 
 	hash := knownHash
-	if hash == "" {
+	if wantHash && hash == "" {
 		md5, sha1, herr := uploadutil.HashMD5SHA1(ctx, tempPath)
 		if herr == nil {
 			if job.Method == "md5" {

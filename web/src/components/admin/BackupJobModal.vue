@@ -237,14 +237,18 @@ async function save() {
         </div>
 
         <label class="backup-modal__field">
-          <span class="backup-modal__label">哈希方法（秒传）</span>
+          <span class="backup-modal__label">秒传方式</span>
           <AppSelect
             v-model="form.method"
             :options="[
               { value: 'sha1', label: 'SHA1 秒传' },
               { value: 'md5', label: 'MD5 秒传' },
+              { value: 'none', label: '不秒传（直接上传）' },
             ]"
           />
+          <small class="backup-modal__hint">
+            目标网盘不支持秒传时选「不秒传」，可避免额外计算哈希。
+          </small>
         </label>
 
         <label class="backup-modal__field backup-modal__field--span">
@@ -284,7 +288,7 @@ async function save() {
         </label>
 
         <p class="backup-modal__note backup-modal__field--span">
-          增量备份说明：重复运行时跳过内容未变化的文件（本地源按大小+修改时间，云盘源按大小+哈希），只上传新增/修改的文件；目标网盘已存在同内容文件时走秒传免传输，云盘源未命中秒传时下载转传。
+          增量备份说明：重复运行时跳过内容未变化的文件（本地源按大小+修改时间，云盘源按大小+哈希），只上传新增/修改的文件。秒传模式下目标网盘已存在同内容文件时免传输；「不秒传」则直接上传，适合不支持秒传的网盘。
         </p>
       </div>
     </div>

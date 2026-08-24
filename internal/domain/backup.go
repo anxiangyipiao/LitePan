@@ -22,6 +22,9 @@ const (
 	// BackupFileStatus 单文件备份结果状态。
 	BackupFileUploaded = "uploaded"
 	BackupFileFailed   = "failed"
+
+	// BackupMethodNone 不秒传：直接上传（部分网盘不支持秒传，算哈希反而更慢）。
+	BackupMethodNone = "none"
 )
 
 // BackupJob 一条备份任务：把源网盘账号的目录增量备份到目标网盘账号的目标目录（跨盘备份）。

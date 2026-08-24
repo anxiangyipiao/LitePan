@@ -13,7 +13,7 @@ export interface BackupJob {
   target_account_id: number;
   target_parent_id: string;
   target_display_path: string;
-  method: "sha1" | "md5";
+  method: "sha1" | "md5" | "none";
   schedule_mode: BackupScheduleMode;
   time: string;
   start_time: string;

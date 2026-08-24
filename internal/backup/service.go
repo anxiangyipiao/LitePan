@@ -221,7 +221,7 @@ func (s *Service) normalizeJob(ctx context.Context, job *domain.BackupJob) error
 		job.Method = "sha1"
 	}
 	switch job.Method {
-	case "sha1", "md5":
+	case "sha1", "md5", domain.BackupMethodNone:
 	default:
 		return domain.Errorf(domain.CodeValidation, "未知的哈希方法：%s", job.Method)
 	}
