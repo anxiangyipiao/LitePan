@@ -26,6 +26,7 @@ import { getApiErrorMessage } from "@/api/client";
 import { toast } from "@/composables/useToast";
 import { confirm } from "@/composables/useConfirm";
 import { formatTimeShort, formatTime } from "@/utils/format";
+import "@/styles/admin-table.css";
 
 const subscriptions = ref<RSSSubscription[]>([]);
 const loading = ref(false);
