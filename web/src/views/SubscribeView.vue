@@ -100,6 +100,10 @@ function ruleLabel(sub: RSSSubscription): string {
   return parts.join(" · ") || "不限";
 }
 
+function intervalLabel(sub: RSSSubscription): string {
+  return sub.fetch_interval_minutes > 0 ? `${sub.fetch_interval_minutes}m` : "默认";
+}
+
 function openCreate() {
   editing.value = null;
   modalOpen.value = true;
@@ -287,16 +291,20 @@ onDeactivated(stopPolling);
         </thead>
         <tbody>
           <tr v-for="sub in subscriptions" :key="sub.id">
-            <td>
+            <td class="subscribe-page__td-name">
               <div class="subscribe-page__name" :title="sub.name">{{ sub.name }}</div>
               <div class="subscribe-page__feed" :title="sub.feed_url">{{ sub.feed_url }}</div>
             </td>
-            <td><span class="subscribe-page__cell">{{ ruleLabel(sub) }}</span></td>
-            <td>
-              <span class="subscribe-page__cell" :title="targetLabel(sub)">{{ targetLabel(sub) }}</span>
+            <td class="subscribe-page__td-trunc" :title="ruleLabel(sub)">
+              <span class="subscribe-page__cell">{{ ruleLabel(sub) }}</span>
             </td>
-            <td><span class="subscribe-page__cell">{{ sub.fetch_interval_minutes || "默认" }}m</span></td>
-            <td>
+            <td class="subscribe-page__td-trunc" :title="targetLabel(sub)">
+              <span class="subscribe-page__cell">{{ targetLabel(sub) }}</span>
+            </td>
+            <td class="subscribe-page__td-nowrap">
+              <span class="subscribe-page__cell">{{ intervalLabel(sub) }}</span>
+            </td>
+            <td class="subscribe-page__td-nowrap">
               <div class="subscribe-page__fetch">
                 <AdminStatusPill :tone="statusTone[sub.last_fetch_status] ?? 'muted'">
                   {{ sub.last_fetch_status === "ok" ? "正常" : sub.last_fetch_status === "error" ? "异常" : "未抓取" }}
@@ -310,7 +318,7 @@ onDeactivated(stopPolling);
                 </span>
               </div>
             </td>
-            <td>
+            <td class="subscribe-page__td-nowrap subscribe-page__td-actions">
               <div class="subscribe-page__actions">
                 <AdminEnableToggle :enabled="sub.enabled" :aria-label="sub.name" @enable="(v) => toggle(sub, v)" />
                 <AdminTableActionBtn icon="play" title="立即抓取" @click="fetchNow(sub)" />
@@ -435,13 +443,17 @@ onDeactivated(stopPolling);
   padding: 48px 0;
 }
 
+.subscribe-page__td-name {
+  white-space: nowrap;
+}
+
 .subscribe-page__name {
   color: var(--text);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 220px;
+  max-width: 190px;
 }
 
 .subscribe-page__feed {
@@ -450,12 +462,34 @@ onDeactivated(stopPolling);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 220px;
+  max-width: 190px;
 }
 
 .subscribe-page__cell {
   color: var(--text);
   font-size: 13px;
+}
+
+/* 规则 / 目标：超长截断，避免把表撑出容器 */
+.subscribe-page__td-trunc {
+  white-space: nowrap;
+}
+
+.subscribe-page__td-trunc .subscribe-page__cell {
+  display: block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 间隔 / 上次抓取 / 操作：禁止换行 */
+.subscribe-page__td-nowrap {
+  white-space: nowrap;
+}
+
+.subscribe-page__td-actions {
+  text-align: right;
 }
 
 .subscribe-page__th-actions {
@@ -478,7 +512,8 @@ onDeactivated(stopPolling);
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 4px;
 }
 
 /* 抓取记录抽屉 */
