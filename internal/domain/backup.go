@@ -51,19 +51,27 @@ type BackupJob struct {
 	UpdatedAt         time.Time `json:"updated_at"`
 }
 
+// BackupRunFailure 单个失败文件的记录（rel_path + 失败原因）。
+type BackupRunFailure struct {
+	RelPath string `json:"rel_path"`
+	Name    string `json:"name"`
+	Error   string `json:"error"`
+}
+
 // BackupRun 一次备份执行的记录。
 type BackupRun struct {
-	ID         int64     `json:"id"`
-	JobID      int64     `json:"job_id"`
-	StartedAt  time.Time `json:"started_at"`
-	FinishedAt time.Time `json:"finished_at"`
-	Status     string    `json:"status"` // running | success | partial | failed
-	Total      int       `json:"total"`
-	Skipped    int       `json:"skipped"`
-	Uploaded   int       `json:"uploaded"`
-	Rapid      int       `json:"rapid"`
-	Failed     int       `json:"failed"`
-	Message    string    `json:"message"`
+	ID          int64              `json:"id"`
+	JobID       int64              `json:"job_id"`
+	StartedAt   time.Time          `json:"started_at"`
+	FinishedAt  time.Time          `json:"finished_at"`
+	Status      string             `json:"status"` // running | success | partial | failed
+	Total       int                `json:"total"`
+	Skipped     int                `json:"skipped"`
+	Uploaded    int                `json:"uploaded"`
+	Rapid       int                `json:"rapid"`
+	Failed      int                `json:"failed"`
+	Message     string             `json:"message"`
+	FailedFiles []BackupRunFailure `json:"failed_files,omitempty"` // 失败文件及原因（最多保留前 100 条）
 }
 
 // BackupFileState 单文件指纹，增量跳过的依据：(job_id, rel_path) 唯一。

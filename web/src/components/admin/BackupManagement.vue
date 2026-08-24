@@ -37,6 +37,21 @@ const drawerOpen = ref(false);
 const drawerJob = ref<BackupJob | null>(null);
 const runs = ref<BackupRun[]>([]);
 const runsLoading = ref(false);
+const expandedRunIds = ref<Set<number>>(new Set());
+
+function toggleRunFailures(runId: number) {
+  const next = new Set(expandedRunIds.value);
+  if (next.has(runId)) {
+    next.delete(runId);
+  } else {
+    next.add(runId);
+  }
+  expandedRunIds.value = next;
+}
+
+function isRunFailuresExpanded(runId: number): boolean {
+  return expandedRunIds.value.has(runId);
+}
 
 const livePhase = ref<"idle" | "streaming" | "done">("idle");
 const liveCounters = reactive({ total: 0, skipped: 0, uploaded: 0, rapid: 0, failed: 0 });
@@ -499,6 +514,32 @@ onBeforeUnmount(() => {
                   <span>秒传 {{ run.rapid }}</span>
                   <span>失败 {{ run.failed }}</span>
                 </div>
+                <div
+                  v-if="run.failed_files && run.failed_files.length"
+                  class="runs-item-failures"
+                >
+                  <button
+                    type="button"
+                    class="runs-failures-toggle"
+                    @click="toggleRunFailures(run.id)"
+                  >
+                    <span>失败原因（{{ run.failed_files.length }} 条）</span>
+                    <i
+                      class="fas fa-chevron-down runs-failures-ico"
+                      :class="{ open: isRunFailuresExpanded(run.id) }"
+                    ></i>
+                  </button>
+                  <ul v-if="isRunFailuresExpanded(run.id)" class="runs-failures-list">
+                    <li
+                      v-for="(fl, idx) in run.failed_files"
+                      :key="idx"
+                      class="runs-failure"
+                    >
+                      <span class="runs-failure__path" :title="fl.rel_path">{{ fl.rel_path }}</span>
+                      <span class="runs-failure__error" :title="fl.error">{{ fl.error }}</span>
+                    </li>
+                  </ul>
+                </div>
               </li>
             </ul>
           </div>
@@ -913,5 +954,58 @@ onBeforeUnmount(() => {
   margin-top: 8px;
   font-size: 11.5px;
   color: var(--muted2);
+}
+.runs-item-failures {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.runs-failures-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bad) 10%, transparent);
+  color: var(--bad);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.runs-failures-ico {
+  font-size: 10px;
+  transition: transform 0.18s ease;
+}
+.runs-failures-ico.open {
+  transform: rotate(180deg);
+}
+.runs-failures-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.runs-failure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--soft);
+}
+.runs-failure__path {
+  font-size: 12px;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+}
+.runs-failure__error {
+  font-size: 11.5px;
+  color: var(--bad);
+  line-height: 1.45;
+  word-break: break-all;
 }
 </style>

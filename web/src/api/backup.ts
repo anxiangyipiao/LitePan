@@ -38,6 +38,12 @@ export type BackupJobInput = Omit<
   | "updated_at"
 >;
 
+export interface BackupRunFailure {
+  rel_path: string;
+  name: string;
+  error: string;
+}
+
 export interface BackupRun {
   id: number;
   job_id: number;
@@ -50,6 +56,7 @@ export interface BackupRun {
   rapid: number;
   failed: number;
   message: string;
+  failed_files?: BackupRunFailure[];
 }
 
 export interface BackupStreamEvent {

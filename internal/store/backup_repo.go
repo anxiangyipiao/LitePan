@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"strings"
 	"time"
 
 	"litepan/internal/domain"
@@ -150,9 +152,10 @@ func (r *backupRunRepo) Create(ctx context.Context, run *domain.BackupRun) (int6
 func (r *backupRunRepo) Update(ctx context.Context, run *domain.BackupRun) error {
 	_, err := r.db.write.ExecContext(ctx,
 		`UPDATE backup_runs
-		 SET finished_at=?, status=?, total=?, skipped=?, uploaded=?, rapid=?, failed=?, message=?
+		 SET finished_at=?, status=?, total=?, skipped=?, uploaded=?, rapid=?, failed=?, message=?, failed_files=?
 		 WHERE id=?`,
-		tsValue(run.FinishedAt), run.Status, run.Total, run.Skipped, run.Uploaded, run.Rapid, run.Failed, run.Message, run.ID)
+		tsValue(run.FinishedAt), run.Status, run.Total, run.Skipped, run.Uploaded, run.Rapid, run.Failed,
+		run.Message, marshalRunFailures(run.FailedFiles), run.ID)
 	return wrapDB(err)
 }
 
@@ -184,7 +187,7 @@ func (r *backupRunRepo) DeleteByJob(ctx context.Context, jobID int64) error {
 	return wrapDB(err)
 }
 
-const selectBackupRunCols = `SELECT id, job_id, started_at, finished_at, status, total, skipped, uploaded, rapid, failed, message
+const selectBackupRunCols = `SELECT id, job_id, started_at, finished_at, status, total, skipped, uploaded, rapid, failed, message, failed_files
 FROM backup_runs`
 
 func scanBackupRun(s rowScanner) (*domain.BackupRun, error) {
@@ -192,16 +195,38 @@ func scanBackupRun(s rowScanner) (*domain.BackupRun, error) {
 		run        domain.BackupRun
 		startedAt  sql.NullString
 		finishedAt sql.NullString
+		failedFile sql.NullString
 	)
 	err := s.Scan(
 		&run.ID, &run.JobID, &startedAt, &finishedAt, &run.Status,
-		&run.Total, &run.Skipped, &run.Uploaded, &run.Rapid, &run.Failed, &run.Message)
+		&run.Total, &run.Skipped, &run.Uploaded, &run.Rapid, &run.Failed, &run.Message, &failedFile)
 	if err != nil {
 		return nil, wrapDB(err)
 	}
 	run.StartedAt = parseTS(startedAt)
 	run.FinishedAt = parseTS(finishedAt)
+	run.FailedFiles = unmarshalRunFailures(failedFile)
 	return &run, nil
+}
+
+func marshalRunFailures(failures []domain.BackupRunFailure) string {
+	if len(failures) == 0 {
+		return "[]"
+	}
+	b, err := json.Marshal(failures)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
+func unmarshalRunFailures(ns sql.NullString) []domain.BackupRunFailure {
+	var out []domain.BackupRunFailure
+	if !ns.Valid || strings.TrimSpace(ns.String) == "" {
+		return out
+	}
+	_ = json.Unmarshal([]byte(ns.String), &out)
+	return out
 }
 
 type backupFileStateRepo struct{ db *DB }

@@ -22,6 +22,9 @@ import (
 // StreamEvent 运行进度事件，API 层以 NDJSON 逐行推送。
 type StreamEvent map[string]any
 
+// maxStoredRunFailures 运行记录里最多持久化的失败明细条数，避免单次大量失败撑爆记录。
+const maxStoredRunFailures = 100
+
 // runBroadcaster 向订阅者广播当前运行的事件（仿 crosstransfer.RelayManager 订阅模式）。
 type runBroadcaster struct {
 	mu   sync.Mutex
@@ -206,6 +209,7 @@ func (s *Service) runBackup(job *domain.BackupJob, emit func(StreamEvent)) {
 
 	total := len(files)
 	var skipped, uploaded, rapid, failed int
+	var runFailures []domain.BackupRunFailure // 失败文件明细（持久化供运行记录展示）
 	dirCache := map[string]string{"": job.TargetParentID}
 	emitCounters := func() StreamEvent {
 		return StreamEvent{
@@ -234,6 +238,13 @@ func (s *Service) runBackup(job *domain.BackupJob, emit func(StreamEvent)) {
 			uploaded++
 		case "error":
 			failed++
+			if len(runFailures) < maxStoredRunFailures {
+				runFailures = append(runFailures, domain.BackupRunFailure{
+					RelPath: f.RelPath,
+					Name:    f.Name,
+					Error:   res.errMsg,
+				})
+			}
 		}
 		if res.mode == "rapid" || res.mode == "upload" {
 			hash := res.hash
@@ -254,6 +265,9 @@ func (s *Service) runBackup(job *domain.BackupJob, emit func(StreamEvent)) {
 	}
 
 	status, msg := finalizeRunSummary(total, skipped, uploaded, rapid, failed)
+	if len(runFailures) >= maxStoredRunFailures && failed > maxStoredRunFailures {
+		msg += fmt.Sprintf("（失败明细过多，仅记录前 %d 条）", maxStoredRunFailures)
+	}
 	if ctx.Err() != nil {
 		// 服务停止/取消：避免把中断的半成品标成成功。
 		if status == domain.BackupRunSuccess {
@@ -261,6 +275,7 @@ func (s *Service) runBackup(job *domain.BackupJob, emit func(StreamEvent)) {
 		}
 		msg += "；服务停止，备份中断"
 	}
+	run.FailedFiles = runFailures
 	s.finalizeRun(ctx, job, run, status, msg, total, skipped, uploaded, rapid, failed)
 	emit(StreamEvent{
 		"event": "end", "run_id": runID, "status": status, "message": msg,

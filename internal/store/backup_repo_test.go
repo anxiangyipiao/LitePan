@@ -103,6 +103,16 @@ func TestBackupRunAndStateLifecycle(t *testing.T) {
 		t.Fatalf("run update not persisted: %+v", got2[0])
 	}
 
+	// 失败明细 JSON 往返
+	run.FailedFiles = []domain.BackupRunFailure{{RelPath: "a/b.txt", Name: "b.txt", Error: "上传失败：boom"}}
+	if err := s.BackupRuns.Update(ctx, run); err != nil {
+		t.Fatalf("update run with failures: %v", err)
+	}
+	got3, _ := s.BackupRuns.ListByJob(ctx, jobID, 10)
+	if len(got3[0].FailedFiles) != 1 || got3[0].FailedFiles[0].Error != "上传失败：boom" || got3[0].FailedFiles[0].RelPath != "a/b.txt" {
+		t.Fatalf("failed_files not persisted: %+v", got3[0].FailedFiles)
+	}
+
 	// 文件指纹 upsert 与覆盖
 	st := &domain.BackupFileState{
 		JobID: jobID, RelPath: "a/b.txt", Size: 100,
