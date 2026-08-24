@@ -526,15 +526,15 @@ onBeforeUnmount(() => {
 }
 
 .backup-table {
-  min-width: 1000px;
+  min-width: 1080px;
   table-layout: fixed;
 }
-.col-name { width: 16%; }
-.col-source { width: 24%; }
-.col-target { width: 24%; }
-.col-schedule { width: 12%; }
-.col-last { width: 12%; }
-.col-op { width: 12%; }
+.col-name { width: 13%; }
+.col-source { width: 19%; }
+.col-target { width: 21%; }
+.col-schedule { width: 10%; }
+.col-last { width: 15%; }
+.col-op { width: 22%; }
 
 .backup-table th.col-op {
   text-align: center;
