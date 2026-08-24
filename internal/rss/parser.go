@@ -109,6 +109,7 @@ type rssItem struct {
 	Link        string    `xml:"link"`
 	PubDate     string    `xml:"pubDate"`
 	Enclosure   rssEncl   `xml:"enclosure"`
+	MagnetURI   string    `xml:"magnetURI"` // nyaa/sukebei 的 torrent:magnetURI
 	Description rawXML    `xml:"description"`
 }
 
@@ -190,7 +191,7 @@ func parseRSS(data []byte) (string, []FeedItem, error) {
 	}
 	items := make([]FeedItem, 0, len(feed.Channel.Items))
 	for _, it := range feed.Channel.Items {
-		torrentURL := pickTorrentURL(it.Enclosure.URL, it.Link, it.Description.Data)
+		torrentURL := pickTorrentURL(it.Enclosure.URL, it.Link, it.MagnetURI, it.Description.Data)
 		items = append(items, FeedItem{
 			GUID:       itemGUID(it.GUID.Value, it.Link, it.Title, it.PubDate),
 			Title:      strings.TrimSpace(it.Title),
@@ -215,7 +216,7 @@ func parseAtom(data []byte) (string, []FeedItem, error) {
 	items := make([]FeedItem, 0, len(feed.Entries))
 	for _, e := range feed.Entries {
 		altLink, encLink := atomLinks(e.Link)
-		torrentURL := pickTorrentURL(encLink, altLink, e.Summary.Data+e.Content.Data)
+		torrentURL := pickTorrentURL(encLink, altLink, "", e.Summary.Data+e.Content.Data)
 		date := strings.TrimSpace(e.Published)
 		if date == "" {
 			date = strings.TrimSpace(e.Updated)
@@ -251,28 +252,38 @@ func atomLinks(links []atomLnk) (alternate, enclosure string) {
 }
 
 // pickTorrentURL 按优先级选择可用的种子链接：
-// enclosure 磁力 → enclosure http(s).torrent → 描述内嵌 magnet → link 本身。
-func pickTorrentURL(enclosureURL, link, description string) string {
+// enclosure 磁力 → 描述内嵌 magnet → torrent:magnetURI（nyaa/sukebei）→ link 磁力 → enclosure/link http。
+func pickTorrentURL(enclosureURL, link, magnetURI, description string) string {
 	enc := strings.TrimSpace(enclosureURL)
 	lnk := strings.TrimSpace(link)
-	if enc != "" {
-		if isMagnet(enc) {
-			return enc
-		}
-		if isTorrentHTTP(enc) {
-			return enc
-		}
+	if isMagnet(enc) {
+		return enc
 	}
 	if m := findMagnetInText(description); m != "" {
 		return m
 	}
+	if uri := strings.TrimSpace(magnetURI); isMagnet(uri) {
+		return uri
+	}
 	if isMagnet(lnk) {
 		return lnk
+	}
+	if isTorrentHTTP(enc) {
+		return enc
 	}
 	if isTorrentHTTP(lnk) {
 		return lnk
 	}
 	return ""
+}
+
+// isHttpTorrentURL 判断是否为 http(s) 的 .torrent 文件链接。
+func isHttpTorrentURL(s string) bool {
+	lower := strings.ToLower(strings.TrimSpace(s))
+	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
+		return false
+	}
+	return strings.HasSuffix(lower, ".torrent")
 }
 
 func isMagnet(s string) bool {

@@ -208,6 +208,11 @@ func (s *Service) pushToOffline(ctx context.Context, sub *domain.RSSSubscription
 		s.markHistory(ctx, rec, domain.RSSStatusSkipped, "无可用种子链接", "")
 		return
 	}
+	// http .torrent 链接直接离线只会把种子文件本体下载下来，需先转磁力链。
+	if isHttpTorrentURL(torrentURL) {
+		s.markHistory(ctx, rec, domain.RSSStatusSkipped, "HTTP 种子链接需转磁力链，暂不支持直接离线", "")
+		return
+	}
 	if sub.AccountID <= 0 {
 		s.markHistory(ctx, rec, domain.RSSStatusFailed, "", "未配置目标网盘账号")
 		return

@@ -141,6 +141,50 @@ func TestParseFeedErrors(t *testing.T) {
 	}
 }
 
+func TestParseFeedNyaaStyleMagnetURI(t *testing.T) {
+	feed := `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:torrent="http://xmlns.ezrss.it/0.1/">
+<channel><title>Nyaa - Torrents</title>
+<item>
+  <title>My Anime - 01 [1080p]</title>
+  <guid isPermaLink="true">https://sukebei.nyaa.si/view/12345</guid>
+  <link>https://sukebei.nyaa.si/download/12345.torrent</link>
+  <pubDate>Fri, 24 Aug 2026 05:00:00 +0000</pubDate>
+  <torrent:magnetURI>magnet:?xt=urn:btih:AABBCCDDEEFF00112233445566778899AABBCCDD&amp;dn=My+Anime</torrent:magnetURI>
+</item>
+</channel></rss>`
+
+	title, items, err := ParseFeed([]byte(feed))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if title != "Nyaa - Torrents" {
+		t.Fatalf("title: %q", title)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	it := items[0]
+	if it.GUID != "https://sukebei.nyaa.si/view/12345" {
+		t.Errorf("guid: %q", it.GUID)
+	}
+	if !isMagnet(it.TorrentURL) {
+		t.Errorf("expected magnet from torrent:magnetURI, got %q", it.TorrentURL)
+	}
+	if it.InfoHash != "AABBCCDDEEFF00112233445566778899AABBCCDD" {
+		t.Errorf("infohash: %q", it.InfoHash)
+	}
+	if isHttpTorrentURL(it.TorrentURL) {
+		t.Errorf("magnet should not be classified as http torrent: %q", it.TorrentURL)
+	}
+	if !isHttpTorrentURL("https://sukebei.nyaa.si/download/1.torrent") {
+		t.Error("http .torrent URL should be detected")
+	}
+	if isHttpTorrentURL("magnet:?xt=urn:btih:ABC") {
+		t.Error("magnet should not be http torrent")
+	}
+}
+
 func TestParseFeedGBK(t *testing.T) {
 	// "测试源" 的 GBK 字节
 	gbkTitle := string([]byte{0xB2, 0xE2, 0xCA, 0xD4, 0xD4, 0xB4})
