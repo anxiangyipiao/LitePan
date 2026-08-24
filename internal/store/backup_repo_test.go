@@ -14,7 +14,9 @@ func TestBackupJobCRUD(t *testing.T) {
 
 	id, err := s.BackupJobs.Create(ctx, &domain.BackupJob{
 		Name:              "照片备份",
-		SourcePath:        "/mnt/disk1/photos",
+		SourceAccountID:   1,
+		SourceParentID:    "dir_src",
+		SourceDisplayPath: "/photos",
 		TargetAccountID:   3,
 		TargetParentID:    "dir_1",
 		TargetDisplayPath: "/backup/photos",
@@ -35,7 +37,7 @@ func TestBackupJobCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if got.Name != "照片备份" || !got.Enabled || got.Time != "03:00" || got.TargetAccountID != 3 {
+	if got.Name != "照片备份" || !got.Enabled || got.Time != "03:00" || got.SourceAccountID != 1 || got.TargetAccountID != 3 {
 		t.Fatalf("unexpected job: %+v", got)
 	}
 	if got.NextRunAt.IsZero() {
@@ -76,7 +78,7 @@ func TestBackupRunAndStateLifecycle(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
 
-	jobID, _ := s.BackupJobs.Create(ctx, &domain.BackupJob{Name: "J", SourcePath: "/mnt/a", TargetAccountID: 1, TargetParentID: "p"})
+	jobID, _ := s.BackupJobs.Create(ctx, &domain.BackupJob{Name: "J", SourceAccountID: 2, SourceParentID: "src", TargetAccountID: 1, TargetParentID: "p"})
 
 	_, err := s.BackupRuns.Create(ctx, &domain.BackupRun{
 		JobID: jobID, Status: domain.BackupRunRunning, StartedAt: time.Now().Truncate(time.Second),

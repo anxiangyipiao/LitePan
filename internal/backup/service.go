@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -13,35 +11,41 @@ import (
 	"litepan/internal/core/driverexec"
 	"litepan/internal/domain"
 	"litepan/internal/file"
+	"litepan/internal/playback"
 )
 
-// Service 管理定时备份：本地文件夹 → 目标网盘（增量秒级同步）。
-// 每次运行遍历源目录，跳过 size+mtime 未变的文件，变化文件优先秒传、未命中再真实上传。
+// Service 管理定时备份：源网盘账号目录 → 目标网盘账号目录（跨盘增量备份）。
+// 每次运行通过驱动列目录，跳过未变化的文件（本地源按 size+mtime，云盘源按 size+hash），
+// 变化文件优先秒传、未命中再本地直传或下载转传。
 type Service struct {
-	exec   *driverexec.Executor
-	files  *file.Service
-	jobs   domain.BackupJobRepository
-	runs   domain.BackupRunRepository
-	states domain.BackupFileStateRepository
-	log    *slog.Logger
+	exec     *driverexec.Executor
+	files    *file.Service
+	playback *playback.Service
+	jobs     domain.BackupJobRepository
+	runs     domain.BackupRunRepository
+	states   domain.BackupFileStateRepository
+	dataDir  string
+	log      *slog.Logger
 
 	mu      sync.Mutex
 	started bool
 	appCtx  context.Context
 
-	runMu    sync.Mutex
+	runMu     sync.Mutex
 	runActive bool
 	runJobID  int64
 	runBroad  *runBroadcaster
 }
 
 type Options struct {
-	Exec   *driverexec.Executor
-	Files  *file.Service
-	Jobs   domain.BackupJobRepository
-	Runs   domain.BackupRunRepository
-	States domain.BackupFileStateRepository
-	Log    *slog.Logger
+	Exec     *driverexec.Executor
+	Files    *file.Service
+	Playback *playback.Service
+	DataDir  string
+	Jobs     domain.BackupJobRepository
+	Runs     domain.BackupRunRepository
+	States   domain.BackupFileStateRepository
+	Log      *slog.Logger
 }
 
 func New(opts Options) *Service {
@@ -50,12 +54,14 @@ func New(opts Options) *Service {
 		log = slog.Default()
 	}
 	return &Service{
-		exec:   opts.Exec,
-		files:  opts.Files,
-		jobs:   opts.Jobs,
-		runs:   opts.Runs,
-		states: opts.States,
-		log:    log,
+		exec:     opts.Exec,
+		files:    opts.Files,
+		playback: opts.Playback,
+		jobs:     opts.Jobs,
+		runs:     opts.Runs,
+		states:   opts.States,
+		dataDir:  opts.DataDir,
+		log:      log,
 	}
 }
 
@@ -187,21 +193,17 @@ func (s *Service) ListRuns(ctx context.Context, jobID int64, limit int) ([]*doma
 
 func (s *Service) normalizeJob(ctx context.Context, job *domain.BackupJob) error {
 	job.Name = strings.TrimSpace(job.Name)
-	job.SourcePath = strings.TrimSpace(job.SourcePath)
 	if job.Name == "" {
-		job.Name = job.SourcePath
+		return domain.Errorf(domain.CodeValidation, "请填写任务名称")
 	}
-	if job.SourcePath == "" {
-		return domain.Errorf(domain.CodeValidation, "请选择本地源目录")
+	if job.SourceAccountID <= 0 {
+		return domain.Errorf(domain.CodeValidation, "请选择源网盘账号")
 	}
-	abs, err := filepath.Abs(job.SourcePath)
-	if err != nil {
-		return domain.Errorf(domain.CodeValidation, "源目录路径非法：%s", job.SourcePath)
+	if strings.TrimSpace(job.SourceParentID) == "" {
+		return domain.Errorf(domain.CodeValidation, "请选择源目录（要备份的文件夹）")
 	}
-	job.SourcePath = abs
-	info, err := os.Stat(job.SourcePath)
-	if err != nil || !info.IsDir() {
-		return domain.Errorf(domain.CodeValidation, "源目录不存在或不是文件夹：%s", job.SourcePath)
+	if strings.TrimSpace(job.SourceDisplayPath) == "" {
+		job.SourceDisplayPath = "/"
 	}
 	if job.TargetAccountID <= 0 {
 		return domain.Errorf(domain.CodeValidation, "请选择目标网盘账号")
@@ -211,6 +213,9 @@ func (s *Service) normalizeJob(ctx context.Context, job *domain.BackupJob) error
 	}
 	if strings.TrimSpace(job.TargetDisplayPath) == "" {
 		job.TargetDisplayPath = "/"
+	}
+	if job.SourceAccountID == job.TargetAccountID && job.SourceParentID == job.TargetParentID {
+		return domain.Errorf(domain.CodeValidation, "源目录与目标目录相同")
 	}
 	if job.Method == "" {
 		job.Method = "sha1"

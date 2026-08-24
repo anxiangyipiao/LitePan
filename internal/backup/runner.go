@@ -3,7 +3,9 @@ package backup
 import (
 	"context"
 	"fmt"
-	"io/fs"
+	"io"
+	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -14,6 +16,7 @@ import (
 	"litepan/internal/domain"
 	"litepan/internal/driver"
 	"litepan/internal/driver/uploadutil"
+	"litepan/internal/upload"
 )
 
 // StreamEvent 运行进度事件，API 层以 NDJSON 逐行推送。
@@ -80,9 +83,8 @@ func (s *Service) execute(job *domain.BackupJob, bc *runBroadcaster) {
 	bc.broadcast(StreamEvent{
 		"event":              "start",
 		"job_id":             job.ID,
-		"source_path":        job.SourcePath,
+		"source_display_path": job.SourceDisplayPath,
 		"target_display_path": job.TargetDisplayPath,
-		"target_account_id":  job.TargetAccountID,
 	})
 	s.runBackup(job, bc.broadcast)
 
@@ -92,6 +94,72 @@ func (s *Service) execute(job *domain.BackupJob, bc *runBroadcaster) {
 	s.runBroad = nil
 	s.runMu.Unlock()
 	bc.close()
+}
+
+// sourceScanFile 源目录扫描出的单个文件。
+type sourceScanFile struct {
+	ID      string // 源文件 file_id；IsLocal 时即本地绝对路径
+	RelPath string
+	RelDir  string
+	Name    string
+	Size    int64
+	ModTime time.Time
+	Hash    string // 驱动元数据提供的哈希，可能为空
+	IsLocal bool   // IDKind == IDPath：文件在本机，可直读直传
+}
+
+type scanNode struct {
+	id        string
+	relPrefix string
+}
+
+// scanSource 通过源网盘驱动递归列目录，构建相对路径文件清单。
+func (s *Service) scanSource(ctx context.Context, job *domain.BackupJob) ([]sourceScanFile, error) {
+	var out []sourceScanFile
+	queue := []scanNode{{id: job.SourceParentID, relPrefix: ""}}
+	for len(queue) > 0 {
+		if ctx.Err() != nil {
+			return out, ctx.Err()
+		}
+		node := queue[0]
+		queue = queue[1:]
+		// forceRefresh=true：备份需要拿到目录最新状态，不能吃缓存。
+		items, err := s.files.List(ctx, job.SourceAccountID, node.id, true)
+		if err != nil {
+			return out, fmt.Errorf("扫描目录失败: %w", err)
+		}
+		for _, item := range items {
+			if item.IsDir {
+				queue = append(queue, scanNode{id: item.ID, relPrefix: node.relPrefix + item.Name + "/"})
+				continue
+			}
+			out = append(out, sourceScanFile{
+				ID:      item.ID,
+				Name:    item.Name,
+				RelPath: node.relPrefix + item.Name,
+				RelDir:  strings.Trim(node.relPrefix, "/"),
+				Size:    item.Size,
+				ModTime: item.ModTime,
+				Hash:    driver.HashFromItem(&item, job.Method),
+				IsLocal: item.IDKind == domain.IDPath,
+			})
+		}
+	}
+	return out, nil
+}
+
+// unchanged 判定文件是否与上次备份一致：本地源用 size+mtime（免重读），云盘源用 size+hash（来自元数据）。
+func (s *Service) unchanged(f *sourceScanFile, st *domain.BackupFileState) bool {
+	if f.Size != st.Size {
+		return false
+	}
+	if f.IsLocal && !f.ModTime.IsZero() && !st.MTime.IsZero() {
+		return st.MTime.Equal(f.ModTime)
+	}
+	if st.Hash != "" && f.Hash != "" {
+		return st.Hash == f.Hash
+	}
+	return false
 }
 
 func (s *Service) runBackup(job *domain.BackupJob, emit func(StreamEvent)) {
@@ -123,8 +191,20 @@ func (s *Service) runBackup(job *domain.BackupJob, emit func(StreamEvent)) {
 		stateByPath[st.RelPath] = st
 	}
 
-	var total, skipped, uploaded, rapid, failed int
-	var walkFailMsg string
+	files, scanErr := s.scanSource(ctx, job)
+	if scanErr != nil {
+		status := domain.BackupRunFailed
+		msg := "备份失败：扫描源目录失败：" + scanErr.Error()
+		if ctx.Err() != nil {
+			msg += "；服务停止，备份中断"
+		}
+		s.finalizeRun(ctx, job, run, status, msg, 0, 0, 0, 0, 0)
+		emit(StreamEvent{"event": "end", "run_id": runID, "status": status, "message": msg})
+		return
+	}
+
+	total := len(files)
+	var skipped, uploaded, rapid, failed int
 	dirCache := map[string]string{"": job.TargetParentID}
 	emitCounters := func() StreamEvent {
 		return StreamEvent{
@@ -132,52 +212,20 @@ func (s *Service) runBackup(job *domain.BackupJob, emit func(StreamEvent)) {
 		}
 	}
 
-	walkErr := filepath.WalkDir(job.SourcePath, func(path string, d fs.DirEntry, err error) error {
+	for i := range files {
+		f := &files[i]
 		if ctx.Err() != nil {
-			return ctx.Err()
+			break
 		}
-		if err != nil {
-			if walkFailMsg == "" {
-				walkFailMsg = err.Error()
-			}
-			failed++
-			emit(StreamEvent{
-				"event": "file", "path": path, "mode": "error", "error": err.Error(),
-			}.Merge(emitCounters()))
-			return nil
-		}
-		if d.IsDir() {
-			return nil
-		}
-		rel, relErr := filepath.Rel(job.SourcePath, path)
-		if relErr != nil {
-			failed++
-			emit(StreamEvent{
-				"event": "file", "path": path, "mode": "error", "error": relErr.Error(),
-			}.Merge(emitCounters()))
-			return nil
-		}
-		rel = filepath.ToSlash(rel)
-		info, infoErr := d.Info()
-		if infoErr != nil {
-			failed++
-			emit(StreamEvent{
-				"event": "file", "rel_path": rel, "mode": "error", "error": infoErr.Error(),
-			}.Merge(emitCounters()))
-			return nil
-		}
-		total++
-
-		// 快速跳过：size+mtime 均未变即认为已备份，不产生网络请求。
-		if st, ok := stateByPath[rel]; ok && st.Size == info.Size() && st.MTime.Equal(info.ModTime()) {
+		if st, ok := stateByPath[f.RelPath]; ok && s.unchanged(f, st) {
 			skipped++
 			emit(StreamEvent{
-				"event": "file", "rel_path": rel, "name": d.Name(), "size": info.Size(), "mode": "skip",
+				"event": "file", "rel_path": f.RelPath, "name": f.Name, "size": f.Size, "mode": "skip",
 			}.Merge(emitCounters()))
-			return nil
+			continue
 		}
 
-		res := s.backupFile(ctx, job, rel, path, info, dirCache)
+		res := s.backupFile(ctx, job, f, dirCache)
 		switch res.mode {
 		case "rapid":
 			rapid++
@@ -187,32 +235,24 @@ func (s *Service) runBackup(job *domain.BackupJob, emit func(StreamEvent)) {
 			failed++
 		}
 		if res.mode == "rapid" || res.mode == "upload" {
+			hash := res.hash
+			if hash == "" {
+				hash = f.Hash
+			}
 			st := &domain.BackupFileState{
-				JobID: job.ID, RelPath: rel, Size: info.Size(), MTime: info.ModTime(),
-				Hash: res.hash, Status: domain.BackupFileUploaded,
+				JobID: job.ID, RelPath: f.RelPath, Size: f.Size, MTime: f.ModTime,
+				Hash: hash, Status: domain.BackupFileUploaded,
 			}
 			if err := s.states.UpsertByRelPath(ctx, st); err != nil {
-				s.log.Warn("backup upsert state failed", "job_id", job.ID, "rel", rel, "err", err)
+				s.log.Warn("backup upsert state failed", "job_id", job.ID, "rel", f.RelPath, "err", err)
 			}
 		}
 		emit(StreamEvent{
-			"event": "file", "rel_path": rel, "name": d.Name(), "size": info.Size(), "mode": res.mode, "error": res.errMsg,
+			"event": "file", "rel_path": f.RelPath, "name": f.Name, "size": f.Size, "mode": res.mode, "error": res.errMsg,
 		}.Merge(emitCounters()))
-		return nil
-	})
-	if walkErr != nil && walkErr != context.Canceled {
-		s.log.Warn("backup walk aborted", "job_id", job.ID, "err", walkErr)
 	}
 
 	status, msg := finalizeRunSummary(total, skipped, uploaded, rapid, failed)
-	if total == 0 && failed > 0 {
-		// 源目录缺失/不可读等：整体视为失败，而不是误报「空目录」成功。
-		status = domain.BackupRunFailed
-		msg = "备份失败：无法读取源目录"
-		if walkFailMsg != "" {
-			msg += "：" + walkFailMsg
-		}
-	}
 	if ctx.Err() != nil {
 		// 服务停止/取消：避免把中断的半成品标成成功。
 		if status == domain.BackupRunSuccess {
@@ -220,6 +260,15 @@ func (s *Service) runBackup(job *domain.BackupJob, emit func(StreamEvent)) {
 		}
 		msg += "；服务停止，备份中断"
 	}
+	s.finalizeRun(ctx, job, run, status, msg, total, skipped, uploaded, rapid, failed)
+	emit(StreamEvent{
+		"event": "end", "run_id": runID, "status": status, "message": msg,
+		"total": total, "skipped": skipped, "uploaded": uploaded, "rapid": rapid, "failed": failed,
+	})
+}
+
+// finalizeRun 收尾一次运行：写运行记录 + 更新任务最近运行状态。
+func (s *Service) finalizeRun(ctx context.Context, job *domain.BackupJob, run *domain.BackupRun, status, msg string, total, skipped, uploaded, rapid, failed int) {
 	finishedAt := time.Now()
 	run.Status = status
 	run.FinishedAt = finishedAt
@@ -230,15 +279,11 @@ func (s *Service) runBackup(job *domain.BackupJob, emit func(StreamEvent)) {
 	run.Failed = failed
 	run.Message = msg
 	if err := s.runs.Update(ctx, run); err != nil {
-		s.log.Error("backup finalize run failed", "run_id", runID, "err", err)
+		s.log.Error("backup finalize run failed", "run_id", run.ID, "err", err)
 	}
 	if err := s.jobs.UpdateLastRun(ctx, job.ID, status, msg, finishedAt); err != nil {
 		s.log.Error("backup update job last run failed", "job_id", job.ID, "err", err)
 	}
-	emit(StreamEvent{
-		"event": "end", "run_id": runID, "status": status, "message": msg,
-		"total": total, "skipped": skipped, "uploaded": uploaded, "rapid": rapid, "failed": failed,
-	})
 }
 
 // fileBackupResult 单文件备份结果。
@@ -248,85 +293,222 @@ type fileBackupResult struct {
 	errMsg string
 }
 
-// backupFile 把单个本地文件推送到目标网盘：先秒传，未命中再真实上传（overwrite 覆盖）。
-func (s *Service) backupFile(ctx context.Context, job *domain.BackupJob, rel, localPath string, info fs.FileInfo, dirCache map[string]string) fileBackupResult {
-	relDir := strings.TrimSuffix(filepath.ToSlash(filepath.Dir(rel)), ".")
-	relDir = strings.Trim(relDir, "/")
-	folderID, err := crosstransfer.EnsureTargetDir(ctx, s.files, job.TargetAccountID, job.TargetParentID, relDir, dirCache, nil)
+// backupFile 把源文件推送到目标网盘：先秒传，未命中再本地直传或下载转传。
+func (s *Service) backupFile(ctx context.Context, job *domain.BackupJob, f *sourceScanFile, dirCache map[string]string) fileBackupResult {
+	folderID, err := crosstransfer.EnsureTargetDir(ctx, s.files, job.TargetAccountID, job.TargetParentID, f.RelDir, dirCache, nil)
 	if err != nil {
 		return fileBackupResult{mode: "error", errMsg: "创建目标目录失败：" + err.Error()}
 	}
 
-	md5, sha1, err := uploadutil.HashMD5SHA1(ctx, localPath)
-	if err != nil {
-		return fileBackupResult{mode: "error", errMsg: "计算文件指纹失败：" + err.Error()}
-	}
-	hash := sha1
-	if job.Method == "md5" {
-		hash = md5
+	// 解析哈希（秒传与指纹用）：本地文件直接读盘，云盘取元数据或流式解析。
+	hash := f.Hash
+	if f.IsLocal {
+		md5, sha1, herr := uploadutil.HashMD5SHA1(ctx, f.ID)
+		if herr != nil {
+			return fileBackupResult{mode: "error", errMsg: "计算文件指纹失败：" + herr.Error()}
+		}
+		if job.Method == "md5" {
+			hash = md5
+		} else {
+			hash = sha1
+		}
+	} else if hash == "" {
+		hash = s.resolveCloudHash(ctx, job.SourceAccountID, f, job.Method)
 	}
 
-	// 优先秒传：目标网盘已存在同内容文件则免上传。
-	var rapidID string
+	// 优先秒传：目标网盘已存在同内容文件则免传输。
+	rapidID := ""
 	rapidHit := false
-	rapidErr := s.exec.Run(ctx, job.TargetAccountID, func(drv driver.Driver) error {
-		rap, ok := drv.(driver.RapidUploader)
-		if !ok {
+	if hash != "" {
+		rapidErr := s.exec.Run(ctx, job.TargetAccountID, func(drv driver.Driver) error {
+			rap, ok := drv.(driver.RapidUploader)
+			if !ok {
+				return nil
+			}
+			res, err := rap.RapidUploadByHash(ctx, driver.RapidUploadRequest{
+				ParentID:  folderID,
+				FileName:  f.Name,
+				Method:    job.Method,
+				Hash:      hash,
+				Size:      f.Size,
+				Duplicate: 2, // 覆盖同名
+			})
+			if err != nil {
+				return err
+			}
+			rapidHit = res.Reuse
+			rapidID = res.FileID
 			return nil
-		}
-		res, err := rap.RapidUploadByHash(ctx, driver.RapidUploadRequest{
-			ParentID:  folderID,
-			FileName:  info.Name(),
-			Method:    job.Method,
-			Hash:      hash,
-			Size:      info.Size(),
-			Duplicate: 2, // 覆盖同名
 		})
-		if err != nil {
-			return err
+		if rapidErr != nil {
+			s.log.Warn("backup rapid upload failed", "rel", f.RelPath, "err", rapidErr)
 		}
-		rapidHit = res.Reuse
-		rapidID = res.FileID
-		return nil
-	})
-	if rapidErr != nil {
-		// 秒传失败（如目标不支持/网络抖动）不中断备份，退回真实上传。
-		s.log.Warn("backup rapid upload failed", "rel", rel, "err", rapidErr)
 	}
 	if rapidHit {
 		if rapidID != "" {
-			s.files.NotifyCreated(ctx, job.TargetAccountID, folderID, rapidID, info.Name(), info.Size(), false)
+			s.files.NotifyCreated(ctx, job.TargetAccountID, folderID, rapidID, f.Name, f.Size, false)
 		}
 		return fileBackupResult{mode: "rapid", hash: hash}
 	}
 
-	var uploadRes *driver.LocalUploadResult
-	mt := info.ModTime()
-	err = s.exec.Run(ctx, job.TargetAccountID, func(drv driver.Driver) error {
+	// 兜底：本地源直接传本地路径，云盘源下载到临时目录再传。
+	if f.IsLocal {
+		up, uerr := s.uploadLocal(ctx, job.TargetAccountID, folderID, f.Name, f.ID, f.ModTime)
+		if uerr != nil {
+			return fileBackupResult{mode: "error", errMsg: "上传失败：" + uerr.Error()}
+		}
+		if up != nil && up.FileID != "" {
+			s.files.NotifyCreated(ctx, job.TargetAccountID, folderID, up.FileID, up.FileName, up.Size, false)
+		}
+		return fileBackupResult{mode: "upload", hash: hash}
+	}
+	return s.relayUpload(ctx, job, f, folderID, hash)
+}
+
+// resolveCloudHash 云盘源文件哈希为空时，尝试驱动流式解析或元数据。
+func (s *Service) resolveCloudHash(ctx context.Context, accountID int64, f *sourceScanFile, method string) string {
+	hash := ""
+	_ = s.exec.Run(ctx, accountID, func(drv driver.Driver) error {
+		if resolver, ok := drv.(driver.TransferHashResolver); ok {
+			got, err := resolver.ResolveTransferHash(ctx, &domain.FileItem{ID: f.ID, Name: f.Name, Size: f.Size}, method, true)
+			if err == nil && got != "" {
+				hash = got
+				return nil
+			}
+		}
+		if info, ok := drv.(driver.InfoGetter); ok {
+			it, err := info.GetFileInfo(ctx, f.ID)
+			if err == nil {
+				hash = driver.HashFromItem(it, method)
+			}
+		}
+		return nil
+	})
+	return hash
+}
+
+// relayUpload 云盘源：下载到临时目录 → 上传目标，并补算哈希用于指纹。
+func (s *Service) relayUpload(ctx context.Context, job *domain.BackupJob, f *sourceScanFile, folderID, knownHash string) fileBackupResult {
+	tempPath, downloaded, err := s.downloadToTemp(ctx, job.SourceAccountID, f.ID, f.Name)
+	if err != nil {
+		return fileBackupResult{mode: "error", errMsg: "下载源文件失败：" + err.Error()}
+	}
+	defer os.Remove(tempPath)
+	if downloaded <= 0 {
+		return fileBackupResult{mode: "error", errMsg: "源文件下载为空"}
+	}
+
+	hash := knownHash
+	if hash == "" {
+		md5, sha1, herr := uploadutil.HashMD5SHA1(ctx, tempPath)
+		if herr == nil {
+			if job.Method == "md5" {
+				hash = md5
+			} else {
+				hash = sha1
+			}
+		}
+	}
+
+	up, uerr := s.uploadLocal(ctx, job.TargetAccountID, folderID, f.Name, tempPath, time.Time{})
+	if uerr != nil {
+		return fileBackupResult{mode: "error", errMsg: "上传失败：" + uerr.Error()}
+	}
+	if up != nil && up.FileID != "" {
+		s.files.NotifyCreated(ctx, job.TargetAccountID, folderID, up.FileID, up.FileName, up.Size, false)
+	}
+	return fileBackupResult{mode: "upload", hash: hash}
+}
+
+// uploadLocal 经目标驱动上传本地文件（本地路径或临时文件），overwrite 覆盖同名。
+func (s *Service) uploadLocal(ctx context.Context, accountID int64, folderID, name, localPath string, modTime time.Time) (*driver.LocalUploadResult, error) {
+	var res *driver.LocalUploadResult
+	err := s.exec.Run(ctx, accountID, func(drv driver.Driver) error {
 		up, err := driverexec.Require[driver.LocalUploader](drv)
 		if err != nil {
 			return err
 		}
-		res, err := up.UploadLocalFile(ctx, driver.LocalUploadRequest{
+		req := driver.LocalUploadRequest{
 			LocalPath:      localPath,
-			FileName:       info.Name(),
+			FileName:       name,
 			ParentID:       folderID,
 			ConflictPolicy: "overwrite",
-			ModTime:        &mt,
-		})
+		}
+		if !modTime.IsZero() {
+			req.ModTime = &modTime
+		}
+		got, err := up.UploadLocalFile(ctx, req)
 		if err != nil {
 			return err
 		}
-		uploadRes = res
+		res = got
 		return nil
 	})
+	return res, err
+}
+
+// downloadToTemp 把源网盘文件下载到临时目录（解析成本地文件时直接读盘拷贝）。
+func (s *Service) downloadToTemp(ctx context.Context, accountID int64, fileID, name string) (string, int64, error) {
+	if s.playback == nil {
+		return "", 0, domain.Errorf(domain.CodeInternal, "播放服务未就绪")
+	}
+	res, err := s.playback.Resolve(ctx, accountID, fileID, "", false)
 	if err != nil {
-		return fileBackupResult{mode: "error", errMsg: "上传失败：" + err.Error()}
+		return "", 0, err
 	}
-	if uploadRes != nil && uploadRes.FileID != "" {
-		s.files.NotifyCreated(ctx, job.TargetAccountID, folderID, uploadRes.FileID, uploadRes.FileName, uploadRes.Size, false)
+
+	var reader io.Reader
+	var closer io.Closer
+	switch {
+	case res.Link.LocalPath != "":
+		f, ferr := os.Open(res.Link.LocalPath)
+		if ferr != nil {
+			return "", 0, domain.Wrap(domain.CodeDriverError, ferr)
+		}
+		reader = f
+		closer = f
+	case res.Link.URL != "":
+		req, rerr := http.NewRequestWithContext(ctx, http.MethodGet, res.Link.URL, nil)
+		if rerr != nil {
+			return "", 0, domain.Wrap(domain.CodeInternal, rerr)
+		}
+		for k, vals := range res.Link.Headers {
+			for _, v := range vals {
+				req.Header.Add(k, v)
+			}
+		}
+		client := &http.Client{Timeout: 0}
+		resp, derr := client.Do(req)
+		if derr != nil {
+			return "", 0, domain.Wrap(domain.CodeDriverError, derr)
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			_ = resp.Body.Close()
+			return "", 0, domain.Errorf(domain.CodeDriverError, "源盘下载 HTTP %d", resp.StatusCode)
+		}
+		reader = resp.Body
+		closer = resp.Body
+	default:
+		return "", 0, domain.Errorf(domain.CodeDriverError, "无法解析源盘下载地址")
 	}
-	return fileBackupResult{mode: "upload", hash: hash}
+	defer closer.Close()
+
+	tempDir := upload.TempDir(s.dataDir)
+	if err := os.MkdirAll(tempDir, 0o755); err != nil {
+		return "", 0, domain.Wrap(domain.CodeInternal, err)
+	}
+	tmp, err := os.CreateTemp(tempDir, "backup-*"+filepath.Ext(name))
+	if err != nil {
+		return "", 0, domain.Wrap(domain.CodeInternal, err)
+	}
+	path := tmp.Name()
+	defer tmp.Close()
+	n, copyErr := io.Copy(tmp, reader)
+	if copyErr != nil {
+		_ = os.Remove(path)
+		return "", 0, domain.Wrap(domain.CodeDriverError, copyErr)
+	}
+	return path, n, nil
 }
 
 func finalizeRunSummary(total, skipped, uploaded, rapid, failed int) (string, string) {

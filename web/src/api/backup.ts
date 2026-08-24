@@ -7,7 +7,9 @@ export type BackupRunStatus = "running" | "success" | "partial" | "failed";
 export interface BackupJob {
   id: number;
   name: string;
-  source_path: string;
+  source_account_id: number;
+  source_parent_id: string;
+  source_display_path: string;
   target_account_id: number;
   target_parent_id: string;
   target_display_path: string;

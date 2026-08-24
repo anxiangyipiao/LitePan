@@ -167,12 +167,14 @@ func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *
 	automationSvc.Register(core.bus)
 	strmSvc.SetAutomationManagedChecker(automationSvc.IsStrmTaskManaged)
 	backupSvc := backup.New(backup.Options{
-		Exec:   core.exec,
-		Files:  fileSvc,
-		Jobs:   st.store.BackupJobs,
-		Runs:   st.store.BackupRuns,
-		States: st.store.BackupFileStates,
-		Log:    logs.For(logx.ModuleSystem),
+		Exec:     core.exec,
+		Files:    fileSvc,
+		Playback: playbackSvc,
+		DataDir:  cfg.DataDir,
+		Jobs:     st.store.BackupJobs,
+		Runs:     st.store.BackupRuns,
+		States:   st.store.BackupFileStates,
+		Log:      logs.For(logx.ModuleSystem),
 	})
 	return &servicesBundle{
 		files:            fileSvc,

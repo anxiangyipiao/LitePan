@@ -24,14 +24,16 @@ const (
 	BackupFileFailed   = "failed"
 )
 
-// BackupJob 一条备份任务：把 SourcePath（本地绝对路径）增量备份到目标网盘账号的目标目录。
+// BackupJob 一条备份任务：把源网盘账号的目录增量备份到目标网盘账号的目标目录（跨盘备份）。
 type BackupJob struct {
-	ID                int64     `json:"id"`
-	Name              string    `json:"name"`
-	SourcePath        string    `json:"source_path"`         // 本地源目录绝对路径
-	TargetAccountID   int64     `json:"target_account_id"`   // 目标网盘账号
-	TargetParentID    string    `json:"target_parent_id"`    // 目标目录 file_id
-	TargetDisplayPath string    `json:"target_display_path"` // 目标目录展示路径
+	ID                 int64     `json:"id"`
+	Name               string    `json:"name"`
+	SourceAccountID    int64     `json:"source_account_id"`    // 源网盘账号
+	SourceParentID     string    `json:"source_parent_id"`     // 源目录 file_id
+	SourceDisplayPath  string    `json:"source_display_path"`  // 源目录展示路径
+	TargetAccountID    int64     `json:"target_account_id"`    // 目标网盘账号
+	TargetParentID     string    `json:"target_parent_id"`     // 目标目录 file_id
+	TargetDisplayPath  string    `json:"target_display_path"`  // 目标目录展示路径
 	Method            string    `json:"method"`              // sha1 | md5（秒传哈希方法）
 	ScheduleMode      string    `json:"schedule_mode"`       // manual | daily | interval
 	Time              string    `json:"time"`                // daily: "HH:MM"

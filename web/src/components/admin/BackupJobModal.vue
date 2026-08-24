@@ -16,7 +16,6 @@ import AppButton from "@/components/base/AppButton.vue";
 import AppInput from "@/components/base/AppInput.vue";
 import AppSelect from "@/components/base/AppSelect.vue";
 import SettingsBoolSegment from "@/components/admin/SettingsBoolSegment.vue";
-import LocalDirBrowserModal from "@/components/common/LocalDirBrowserModal.vue";
 import FolderPickerModal from "@/components/file/FolderPickerModal.vue";
 
 const props = defineProps<{
@@ -31,7 +30,9 @@ const emit = defineEmits<{
 
 const form = reactive<BackupJobInput>({
   name: "",
-  source_path: "",
+  source_account_id: 0,
+  source_parent_id: "",
+  source_display_path: "/",
   target_account_id: 0,
   target_parent_id: "",
   target_display_path: "/",
@@ -46,8 +47,8 @@ const form = reactive<BackupJobInput>({
 const saving = ref(false);
 const accounts = ref<Account[]>([]);
 const accountsLoading = ref(false);
-const localPickerOpen = ref(false);
-const folderPickerOpen = ref(false);
+const sourceFolderPickerOpen = ref(false);
+const targetFolderPickerOpen = ref(false);
 
 const isEdit = computed(() => props.job != null);
 
@@ -58,7 +59,16 @@ const accountOptions = computed(() =>
   })),
 );
 
-const accountValue = computed({
+const sourceAccountValue = computed({
+  get: () => (form.source_account_id ? String(form.source_account_id) : ""),
+  set: (v: string) => {
+    form.source_account_id = v ? Number(v) : 0;
+    form.source_parent_id = "";
+    form.source_display_path = "/";
+  },
+});
+
+const targetAccountValue = computed({
   get: () => (form.target_account_id ? String(form.target_account_id) : ""),
   set: (v: string) => {
     form.target_account_id = v ? Number(v) : 0;
@@ -70,10 +80,16 @@ const accountValue = computed({
 const saveDisabled = computed(() => {
   if (saving.value) return true;
   if (!form.name.trim()) return true;
-  if (!form.source_path.trim()) return true;
+  if (!form.source_account_id || !form.source_parent_id) return true;
   if (!form.target_account_id || !form.target_parent_id) return true;
+  if (
+    form.source_account_id === form.target_account_id &&
+    form.source_parent_id === form.target_parent_id
+  )
+    return true;
   if (form.schedule_mode === "daily" && !/^\d{1,2}:\d{2}$/.test(form.time.trim())) return true;
-  if (form.schedule_mode === "interval" && !/^\d{1,2}:\d{2}$/.test(form.start_time.trim())) return true;
+  if (form.schedule_mode === "interval" && !/^\d{1,2}:\d{2}$/.test(form.start_time.trim()))
+    return true;
   return false;
 });
 
@@ -95,7 +111,9 @@ watch(
 function resetForm() {
   const j = props.job;
   form.name = j?.name ?? "";
-  form.source_path = j?.source_path ?? "";
+  form.source_account_id = j?.source_account_id ?? 0;
+  form.source_parent_id = j?.source_parent_id ?? "";
+  form.source_display_path = j?.source_display_path ?? "/";
   form.target_account_id = j?.target_account_id ?? 0;
   form.target_parent_id = j?.target_parent_id ?? "";
   form.target_display_path = j?.target_display_path ?? "/";
@@ -118,13 +136,14 @@ async function loadAccounts() {
   }
 }
 
-function pickSourcePath(path: string) {
-  form.source_path = path;
-  localPickerOpen.value = false;
+function sourceFolderResolved(payload: { parentId: string; path: string }) {
+  sourceFolderPickerOpen.value = false;
+  form.source_parent_id = payload.parentId;
+  form.source_display_path = payload.path || "/";
 }
 
-function targetResolved(payload: { parentId: string; path: string }) {
-  folderPickerOpen.value = false;
+function targetFolderResolved(payload: { parentId: string; path: string }) {
+  targetFolderPickerOpen.value = false;
   form.target_parent_id = payload.parentId;
   form.target_display_path = payload.path || "/";
 }
@@ -162,40 +181,58 @@ async function save() {
           <AppInput v-model="form.name" placeholder="如：照片备份到百度网盘" />
         </label>
 
-        <label class="backup-modal__field backup-modal__field--span">
-          <span class="backup-modal__label">本地源目录（要备份的文件夹）</span>
-          <div class="backup-modal__row">
-            <AppInput
-              v-model="form.source_path"
-              placeholder="如 /mnt/disk1/photos 或 D:\photos"
-              class="backup-modal__grow"
+        <!-- 源 -->
+        <div class="backup-modal__field backup-modal__field--span backup-modal__group">
+          <span class="backup-modal__group-title">源目录（要备份的文件夹）</span>
+          <label class="backup-modal__field backup-modal__field--span">
+            <span class="backup-modal__label">源网盘账号</span>
+            <AppSelect
+              v-if="!accountsLoading"
+              v-model="sourceAccountValue"
+              :options="accountOptions"
+              placeholder="选择源网盘"
             />
-            <AppButton size="sm" variant="secondary" @click="localPickerOpen = true">浏览</AppButton>
+            <div v-else class="backup-modal__hint">正在加载网盘…</div>
+            <small v-if="!accountsLoading && !accounts.length" class="backup-modal__hint">
+              暂无网盘账号，请先到「存储管理」添加账号。
+            </small>
+          </label>
+          <div v-if="form.source_account_id" class="backup-modal__field backup-modal__field--span">
+            <span class="backup-modal__label">源文件夹</span>
+            <div class="backup-modal__row">
+              <span class="backup-modal__path" :title="form.source_display_path">
+                {{ form.source_display_path || "/" }}
+              </span>
+              <AppButton size="sm" variant="secondary" @click="sourceFolderPickerOpen = true">
+                选择文件夹
+              </AppButton>
+            </div>
           </div>
-          <small class="backup-modal__hint">LitePan 所在机器上的绝对路径，支持容器挂载目录（/mnt、/media 等）与本地盘符。</small>
-        </label>
+        </div>
 
-        <label class="backup-modal__field backup-modal__field--span">
-          <span class="backup-modal__label">目标网盘账号</span>
-          <AppSelect
-            v-if="!accountsLoading"
-            v-model="accountValue"
-            :options="accountOptions"
-            placeholder="选择目标网盘"
-          />
-          <div v-else class="backup-modal__hint">正在加载网盘…</div>
-          <small v-if="!accountsLoading && !accounts.length" class="backup-modal__hint">
-            暂无网盘账号，请先到「存储管理」添加账号。
-          </small>
-        </label>
-
-        <div v-if="form.target_account_id" class="backup-modal__field backup-modal__field--span">
-          <span class="backup-modal__label">目标目录（备份存放位置）</span>
-          <div class="backup-modal__row">
-            <span class="backup-modal__path" :title="form.target_display_path">
-              {{ form.target_display_path || "/" }}
-            </span>
-            <AppButton size="sm" variant="secondary" @click="folderPickerOpen = true">更改目录</AppButton>
+        <!-- 目标 -->
+        <div class="backup-modal__field backup-modal__field--span backup-modal__group">
+          <span class="backup-modal__group-title">目标目录（备份存放位置）</span>
+          <label class="backup-modal__field backup-modal__field--span">
+            <span class="backup-modal__label">目标网盘账号</span>
+            <AppSelect
+              v-if="!accountsLoading"
+              v-model="targetAccountValue"
+              :options="accountOptions"
+              placeholder="选择目标网盘"
+            />
+            <div v-else class="backup-modal__hint">正在加载网盘…</div>
+          </label>
+          <div v-if="form.target_account_id" class="backup-modal__field backup-modal__field--span">
+            <span class="backup-modal__label">目标文件夹</span>
+            <div class="backup-modal__row">
+              <span class="backup-modal__path" :title="form.target_display_path">
+                {{ form.target_display_path || "/" }}
+              </span>
+              <AppButton size="sm" variant="secondary" @click="targetFolderPickerOpen = true">
+                更改目录
+              </AppButton>
+            </div>
           </div>
         </div>
 
@@ -247,7 +284,7 @@ async function save() {
         </label>
 
         <p class="backup-modal__note backup-modal__field--span">
-          增量备份说明：重复运行时跳过内容未变化的文件（按大小+修改时间），只上传新增/修改的文件；目标网盘已存在同内容文件时走秒传免上传。
+          增量备份说明：重复运行时跳过内容未变化的文件（本地源按大小+修改时间，云盘源按大小+哈希），只上传新增/修改的文件；目标网盘已存在同内容文件时走秒传免传输，云盘源未命中秒传时下载转传。
         </p>
       </div>
     </div>
@@ -260,23 +297,25 @@ async function save() {
     </template>
   </AppModal>
 
-  <LocalDirBrowserModal
-    :open="localPickerOpen"
-    :initial-path="form.source_path"
-    title="选择本地源目录"
+  <FolderPickerModal
+    :open="sourceFolderPickerOpen"
+    title="选择源目录（要备份的文件夹）"
     confirm-text="选择当前目录"
-    @select="pickSourcePath"
-    @close="localPickerOpen = false"
+    :account-id="form.source_account_id"
+    :allow-create-folder="false"
+    :show-refresh="true"
+    @resolve="sourceFolderResolved"
+    @close="sourceFolderPickerOpen = false"
   />
   <FolderPickerModal
-    :open="folderPickerOpen"
+    :open="targetFolderPickerOpen"
     title="选择备份目标目录"
     confirm-text="保存到当前目录"
     :account-id="form.target_account_id"
     :allow-create-folder="true"
     :show-refresh="false"
-    @resolve="targetResolved"
-    @close="folderPickerOpen = false"
+    @resolve="targetFolderResolved"
+    @close="targetFolderPickerOpen = false"
   />
 </template>
 
@@ -303,6 +342,18 @@ async function save() {
   font-size: 13px;
   font-weight: 600;
 }
+.backup-modal__group {
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-sunken);
+  gap: 10px;
+}
+.backup-modal__group-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-strong, var(--brand));
+}
 .backup-modal__hint {
   color: var(--text-muted);
   font-size: 12px;
@@ -312,9 +363,6 @@ async function save() {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-.backup-modal__grow {
-  flex: 1;
 }
 .backup-modal__path {
   flex: 1;
@@ -327,7 +375,7 @@ async function save() {
   padding: 8px 10px;
   border: 1px solid var(--border-soft);
   border-radius: 8px;
-  background: var(--surface-sunken);
+  background: var(--surface);
 }
 .backup-modal__note {
   margin: 0;

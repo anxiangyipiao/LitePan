@@ -13,10 +13,12 @@ type backupJobRepo struct{ db *DB }
 func (r *backupJobRepo) Create(ctx context.Context, job *domain.BackupJob) (int64, error) {
 	res, err := r.db.write.ExecContext(ctx,
 		`INSERT INTO backup_jobs
-		  (name, source_path, target_account_id, target_parent_id, target_display_path, method,
+		  (name, source_account_id, source_parent_id, source_display_path,
+		   target_account_id, target_parent_id, target_display_path, method,
 		   schedule_mode, time, start_time, interval_hours, enabled, next_run_at, last_run_at, last_run_status, last_run_message)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		job.Name, job.SourcePath, job.TargetAccountID, job.TargetParentID, job.TargetDisplayPath, job.Method,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		job.Name, job.SourceAccountID, job.SourceParentID, job.SourceDisplayPath,
+		job.TargetAccountID, job.TargetParentID, job.TargetDisplayPath, job.Method,
 		job.ScheduleMode, job.Time, job.StartTime, job.IntervalHours, boolToInt(job.Enabled),
 		tsValue(job.NextRunAt), tsValue(job.LastRunAt), job.LastRunStatus, job.LastRunMessage)
 	if err != nil {
@@ -32,10 +34,12 @@ func (r *backupJobRepo) Create(ctx context.Context, job *domain.BackupJob) (int6
 func (r *backupJobRepo) Update(ctx context.Context, job *domain.BackupJob) error {
 	_, err := r.db.write.ExecContext(ctx,
 		`UPDATE backup_jobs
-		 SET name=?, source_path=?, target_account_id=?, target_parent_id=?, target_display_path=?, method=?,
+		 SET name=?, source_account_id=?, source_parent_id=?, source_display_path=?,
+		     target_account_id=?, target_parent_id=?, target_display_path=?, method=?,
 		     schedule_mode=?, time=?, start_time=?, interval_hours=?, enabled=?, next_run_at=?, updated_at=CURRENT_TIMESTAMP
 		 WHERE id=?`,
-		job.Name, job.SourcePath, job.TargetAccountID, job.TargetParentID, job.TargetDisplayPath, job.Method,
+		job.Name, job.SourceAccountID, job.SourceParentID, job.SourceDisplayPath,
+		job.TargetAccountID, job.TargetParentID, job.TargetDisplayPath, job.Method,
 		job.ScheduleMode, job.Time, job.StartTime, job.IntervalHours, boolToInt(job.Enabled),
 		tsValue(job.NextRunAt), job.ID)
 	return wrapDB(err)
@@ -94,7 +98,8 @@ func (r *backupJobRepo) UpdateLastRun(ctx context.Context, id int64, status, mes
 	return wrapDB(err)
 }
 
-const selectBackupJobCols = `SELECT id, name, source_path, target_account_id, target_parent_id, target_display_path, method,
+const selectBackupJobCols = `SELECT id, name, source_account_id, source_parent_id, source_display_path,
+  target_account_id, target_parent_id, target_display_path, method,
   schedule_mode, time, start_time, interval_hours, enabled, next_run_at, last_run_at, last_run_status, last_run_message, created_at, updated_at
 FROM backup_jobs`
 
@@ -108,7 +113,8 @@ func scanBackupJob(s rowScanner) (*domain.BackupJob, error) {
 		updatedAt sql.NullString
 	)
 	err := s.Scan(
-		&job.ID, &job.Name, &job.SourcePath, &job.TargetAccountID, &job.TargetParentID, &job.TargetDisplayPath, &job.Method,
+		&job.ID, &job.Name, &job.SourceAccountID, &job.SourceParentID, &job.SourceDisplayPath,
+		&job.TargetAccountID, &job.TargetParentID, &job.TargetDisplayPath, &job.Method,
 		&job.ScheduleMode, &job.Time, &job.StartTime, &job.IntervalHours, &enabled, &nextRunAt, &lastRunAt,
 		&job.LastRunStatus, &job.LastRunMessage, &createdAt, &updatedAt)
 	if err != nil {

@@ -329,7 +329,7 @@ onBeforeUnmount(() => {
           <thead>
             <tr>
               <th class="col-name">任务</th>
-              <th class="col-source">源目录</th>
+              <th class="col-source">源（账号·目录）</th>
               <th class="col-target">目标</th>
               <th class="col-schedule">调度</th>
               <th class="col-last">上次运行</th>
@@ -351,7 +351,12 @@ onBeforeUnmount(() => {
                   <span v-if="job.last_run_status === 'running'" class="job-running-dot"></span>
                 </div>
               </td>
-              <td class="job-path-cell" :title="job.source_path">{{ job.source_path }}</td>
+              <td
+                class="job-path-cell"
+                :title="`${accountName(job.source_account_id)} · ${job.source_display_path || '/'}`"
+              >
+                {{ accountName(job.source_account_id) }} · {{ job.source_display_path || "/" }}
+              </td>
               <td class="job-path-cell" :title="`${accountName(job.target_account_id)} · ${job.target_display_path || '/'}`">
                 {{ accountName(job.target_account_id) }} · {{ job.target_display_path || "/" }}
               </td>
