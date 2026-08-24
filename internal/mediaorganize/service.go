@@ -311,6 +311,15 @@ func (s *Service) RunTask(ctx context.Context, taskID string) (map[string]any, e
 
 		task.Status = domain.MediaOrganizeStatusPlanning
 		_ = s.repo.Update(runCtx, task)
+		defer func() {
+			if r := recover(); r != nil {
+				// 仅复位任务状态；崩溃日志与 running 清理由 startRunner 的 recover 兜底
+				task.Status = domain.MediaOrganizeStatusIdle
+				task.LastRunAt = time.Now()
+				_ = s.repo.Update(context.Background(), task)
+				panic(r)
+			}
+		}()
 		plan, buildErr := s.buildPlan(runCtx, taskID, task, settingsDict)
 		if buildErr != nil {
 			if errors.Is(buildErr, ErrTaskAborted) {
@@ -620,6 +629,26 @@ func (s *Service) applyPlanRunner(ctx context.Context, taskID string, plan *Plan
 	task.Status = domain.MediaOrganizeStatusRunning
 	_ = s.repo.Update(ctx, task)
 
+	// 执行结束（含 panic）统一收尾：复位状态、写 summary、删计划文件。
+	// panic 仍会向上抛出，由 startRunner 的 recover 记录并清理 running。
+	defer func() {
+		s.discardStop(taskID)
+		summary := summarizePlan(plan, aborted)
+		summaryBytes, _ := json.Marshal(summary)
+		task.Status = domain.MediaOrganizeStatusIdle
+		task.LastRunAt = time.Now()
+		task.LastRunResult = summaryBytes
+		_ = s.repo.Update(context.Background(), task)
+		_ = s.deletePlanFile(taskID)
+		s.appendLog(taskID, "[MediaOrganize] 任务完成："+formatSummaryZh(summary))
+		s.log.Info("整理任务执行完成",
+			"task_id", taskID,
+			"task_name", task.TaskName,
+			"account_id", accountID,
+			"result", formatSummaryZh(summary),
+		)
+	}()
+
 	err := s.executor.Apply(ctx, plan, taskID, accountID, cfg, settingsDict, ExecutorHooks{
 		Log:       func(msg string) { s.appendLog(taskID, msg) },
 		CheckStop: func() error { return s.checkStop(taskID) },
@@ -630,22 +659,6 @@ func (s *Service) applyPlanRunner(ctx context.Context, taskID string, plan *Plan
 	} else if err != nil {
 		s.appendLog(taskID, fmt.Sprintf("[MediaOrganize] 任务异常: %v", err))
 	}
-
-	s.discardStop(taskID)
-	summary := summarizePlan(plan, aborted)
-	summaryBytes, _ := json.Marshal(summary)
-	task.Status = domain.MediaOrganizeStatusIdle
-	task.LastRunAt = time.Now()
-	task.LastRunResult = summaryBytes
-	_ = s.repo.Update(context.Background(), task)
-	_ = s.deletePlanFile(taskID)
-	s.appendLog(taskID, "[MediaOrganize] 任务完成："+formatSummaryZh(summary))
-	s.log.Info("整理任务执行完成",
-		"task_id", taskID,
-		"task_name", task.TaskName,
-		"account_id", accountID,
-		"result", formatSummaryZh(summary),
-	)
 }
 
 func (s *Service) startRunner(taskID string, accountID int64, fn func(context.Context)) {
@@ -662,6 +675,10 @@ func (s *Service) startRunner(taskID string, accountID int64, fn func(context.Co
 
 	go func() {
 		defer func() {
+			if r := recover(); r != nil {
+				s.log.Error("整理任务异常崩溃", "task_id", taskID, "account_id", accountID, "panic", fmt.Sprint(r))
+				s.appendLog(taskID, fmt.Sprintf("[MediaOrganize] 任务异常崩溃: %v", r))
+			}
 			s.mu.Lock()
 			delete(s.running, taskID)
 			delete(s.runningAccounts, taskID)

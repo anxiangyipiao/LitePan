@@ -546,11 +546,28 @@ func (p *Planner) isLowConfidenceGroup(key groupKey, items []batchEntry) bool {
 		return false
 	}
 	if shortTitleRe.MatchString(title) {
+		// 短标题但文件名携带发行标签（分辨率/编码/音轨等）时，视为正式影视资源，
+		// 不再按低置信度跳过（避免「IT.1080p」「Up.2160p.x265」这类正经影片扫不出来）。
+		if p.groupHasReleaseTags(items) {
+			return false
+		}
 		return true
 	}
 	switch strings.ToLower(title) {
 	case "video", "movie", "new folder", "未命名", "未分类", "新建文件夹":
 		return true
+	}
+	return false
+}
+
+// groupHasReleaseTags 判断分组内是否有文件携带发行标签（分辨率/编码/音轨/帧率）。
+// 带发行标签的短标题更可能是正式影视资源，而非随意命名的文件。
+func (p *Planner) groupHasReleaseTags(items []batchEntry) bool {
+	for _, entry := range items {
+		fp := entry.fileParsed
+		if fp.ScreenSize != "" || fp.VideoCodec != "" || fp.AudioCodec != "" || fp.AudioChannels != "" || fp.FrameRate != "" {
+			return true
+		}
 	}
 	return false
 }

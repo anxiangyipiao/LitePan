@@ -213,9 +213,6 @@ func (e *Executor) executeRelocates(relocateActions []*moplan.PlanAction) error 
 			pending = append(pending, a)
 		}
 	}
-	if err := e.execOverwriteDeletions(pending); err != nil {
-		return err
-	}
 
 	sameDir := make([]*moplan.PlanAction, 0)
 	groups := map[string][]*moplan.PlanAction{}
@@ -271,45 +268,44 @@ func (e *Executor) executeRelocates(relocateActions []*moplan.PlanAction) error 
 	return nil
 }
 
-func (e *Executor) execOverwriteDeletions(actions []*moplan.PlanAction) error {
-	byDir := map[string][]string{}
+// deleteOverwriteTargets 删除指定父目录内即将被覆盖的目标同名文件
+// （跳过同时是本次计划移动源的条目）。紧邻移动调用，缩小"删除→移动"之间的数据窗口，
+// 避免批量预删除后进程中断导致目标文件永久丢失。
+func (e *Executor) deleteOverwriteTargets(actions []*moplan.PlanAction, parentID string) {
 	plannedSources := map[string]struct{}{}
-	for _, action := range actions {
-		if action.SourceID != "" {
-			plannedSources[action.SourceID] = struct{}{}
+	for _, a := range e.plan.Actions {
+		if a.SourceID != "" {
+			plannedSources[a.SourceID] = struct{}{}
 		}
 	}
+	ids := make([]string, 0, len(actions))
 	for _, action := range actions {
-		targetID := metaStr(action.Metadata, "_overwrite_target_id")
-		if targetID == "" {
+		id := metaStr(action.Metadata, "_overwrite_target_id")
+		if id == "" {
 			continue
 		}
-		if _, ok := plannedSources[targetID]; ok {
+		if _, ok := plannedSources[id]; ok {
 			continue
 		}
-		parentID := metaStr(action.Metadata, "_resolved_target_parent_id")
-		if parentID == "" {
-			continue
-		}
-		byDir[parentID] = append(byDir[parentID], targetID)
+		ids = append(ids, id)
 	}
-	for parentID, ids := range byDir {
-		if err := e.checkStop(); err != nil {
-			return err
-		}
-		ids = e.existingIDsInDir(parentID, ids)
-		if len(ids) == 0 {
-			e.invalidateDirCache(parentID)
-			continue
-		}
-		if err := e.files.DeleteFiles(e.ctx, e.accountID, ids, parentID); err != nil {
-			e.log(fmt.Sprintf("[覆盖] 删除失败: %v", err))
-		} else {
-			e.stats["overwritten"] = metaInt(e.stats["overwritten"]) + len(ids)
-		}
+	if len(ids) == 0 {
+		return
+	}
+	if err := e.checkStop(); err != nil {
+		return
+	}
+	ids = e.existingIDsInDir(parentID, ids)
+	if len(ids) == 0 {
 		e.invalidateDirCache(parentID)
+		return
 	}
-	return nil
+	if err := e.files.DeleteFiles(e.ctx, e.accountID, ids, parentID); err != nil {
+		e.log(fmt.Sprintf("[覆盖] 删除目标失败: %v", err))
+	} else {
+		e.stats["overwritten"] = metaInt(e.stats["overwritten"]) + len(ids)
+	}
+	e.invalidateDirCache(parentID)
 }
 
 func (e *Executor) existingIDsInDir(parentID string, ids []string) []string {
@@ -343,6 +339,7 @@ func (e *Executor) existingIDsInDir(parentID string, ids []string) []string {
 }
 
 func (e *Executor) execSameDirRename(action *moplan.PlanAction) error {
+	e.deleteOverwriteTargets([]*moplan.PlanAction{action}, action.SourceParentID)
 	current, err := e.findItemInDir(action.SourceParentID, action.SourceID, action.SourceName, "")
 	if err != nil || current == nil {
 		action.Status = "failed"
@@ -411,6 +408,9 @@ func (e *Executor) execBatchMove(actions []*moplan.PlanAction, currentParent, ta
 		return nil
 	}
 
+	// 覆盖目标：紧邻批量移动前删除目标同名文件（若目标同时是本次移动源则跳过）
+	e.deleteOverwriteTargets(valid, targetParentID)
+
 	batchOK := false
 	if len(ids) > 0 {
 		if err := e.files.MoveFiles(e.ctx, e.accountID, ids, targetParentID, currentParent); err != nil {
@@ -439,6 +439,7 @@ func (e *Executor) execBatchMove(actions []*moplan.PlanAction, currentParent, ta
 		if err := e.checkStop(); err != nil {
 			return err
 		}
+		e.deleteOverwriteTargets([]*moplan.PlanAction{action}, targetParentID)
 		nameHint := action.SourceName
 		if nameHint == "" {
 			nameHint = pathBasename(action.SourceID)
