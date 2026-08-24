@@ -663,6 +663,16 @@ function hitPosterURL(hit: MediaOrganizeTmdbSearchHit, size: "w154" | "w500" = "
   return `https://image.tmdb.org/t/p/${size}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+// originalName 返回条目的原始名称：优先原始文件夹名/文件名，其次识别标题。
+function originalName(item: StrmScrapeItem) {
+  return (
+    item.folder_name ||
+    item.strm_name?.replace(/\.strm$/i, "") ||
+    item.title ||
+    "未命名"
+  );
+}
+
 async function searchCandidates() {
   const q = matchQuery.value.trim();
   if (!q) {
@@ -1285,6 +1295,25 @@ defineExpose({
 
     <AppModal :open="matchOpen" title="重新匹配元数据" size="account" @close="closeRematch">
       <div v-if="matchItem" class="scrape-match">
+        <div class="scrape-match__current">
+          <div class="scrape-match__current-row">
+            <span class="scrape-match__current-label">原始信息</span>
+            <span class="scrape-match__current-value" :title="originalName(matchItem)">
+              {{ originalName(matchItem) }}
+            </span>
+          </div>
+          <div v-if="matchItem.rel_dir" class="scrape-match__current-path" :title="matchItem.rel_dir">
+            {{ matchItem.rel_dir }}
+          </div>
+          <div class="scrape-match__current-meta">
+            <span>{{ matchItem.media_type === "tv" ? "剧集" : "电影" }}</span>
+            <span v-if="matchItem.year">{{ matchItem.year }} 年</span>
+            <span v-if="matchItem.title && matchItem.title !== originalName(matchItem)">
+              识别为「{{ matchItem.title }}」
+            </span>
+            <span v-if="matchItem.tmdb_id">TMDB {{ matchItem.tmdb_id }}</span>
+          </div>
+        </div>
         <div class="scrape-match__row">
           <div class="scrape-match__type">
             <AppSelect v-model="matchSearchType" :options="matchTypeOptions" />
@@ -2061,6 +2090,51 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+.scrape-match__current {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-sunken);
+}
+.scrape-match__current-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.scrape-match__current-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.scrape-match__current-value {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scrape-match__current-path {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scrape-match__current-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 .scrape-match__row {
   display: flex;
