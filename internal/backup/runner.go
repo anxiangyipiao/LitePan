@@ -109,6 +109,10 @@ func (s *Service) runBackup(job *domain.BackupJob, emit func(StreamEvent)) {
 		return
 	}
 	run.ID = runID
+	// 先把任务标记为进行中，前端据此显示「备份中」并禁用重复触发。
+	if err := s.jobs.UpdateLastRun(ctx, job.ID, domain.BackupRunRunning, "备份进行中", now); err != nil {
+		s.log.Warn("backup mark running failed", "job_id", job.ID, "err", err)
+	}
 
 	states, err := s.states.ListByJob(ctx, job.ID)
 	if err != nil {
@@ -120,6 +124,7 @@ func (s *Service) runBackup(job *domain.BackupJob, emit func(StreamEvent)) {
 	}
 
 	var total, skipped, uploaded, rapid, failed int
+	var walkFailMsg string
 	dirCache := map[string]string{"": job.TargetParentID}
 	emitCounters := func() StreamEvent {
 		return StreamEvent{
@@ -132,6 +137,9 @@ func (s *Service) runBackup(job *domain.BackupJob, emit func(StreamEvent)) {
 			return ctx.Err()
 		}
 		if err != nil {
+			if walkFailMsg == "" {
+				walkFailMsg = err.Error()
+			}
 			failed++
 			emit(StreamEvent{
 				"event": "file", "path": path, "mode": "error", "error": err.Error(),
@@ -197,6 +205,21 @@ func (s *Service) runBackup(job *domain.BackupJob, emit func(StreamEvent)) {
 	}
 
 	status, msg := finalizeRunSummary(total, skipped, uploaded, rapid, failed)
+	if total == 0 && failed > 0 {
+		// 源目录缺失/不可读等：整体视为失败，而不是误报「空目录」成功。
+		status = domain.BackupRunFailed
+		msg = "备份失败：无法读取源目录"
+		if walkFailMsg != "" {
+			msg += "：" + walkFailMsg
+		}
+	}
+	if ctx.Err() != nil {
+		// 服务停止/取消：避免把中断的半成品标成成功。
+		if status == domain.BackupRunSuccess {
+			status = domain.BackupRunPartial
+		}
+		msg += "；服务停止，备份中断"
+	}
 	finishedAt := time.Now()
 	run.Status = status
 	run.FinishedAt = finishedAt
@@ -307,13 +330,13 @@ func (s *Service) backupFile(ctx context.Context, job *domain.BackupJob, rel, lo
 }
 
 func finalizeRunSummary(total, skipped, uploaded, rapid, failed int) (string, string) {
-	if total == 0 {
-		return domain.BackupRunSuccess, "源目录为空或没有文件"
-	}
 	done := uploaded + rapid
 	switch {
 	case failed > 0 && done == 0:
+		// 全部失败（含源目录缺失/不可读：此时 total 可能为 0）。
 		return domain.BackupRunFailed, fmt.Sprintf("备份失败：共 %d 个文件，全部失败", total)
+	case total == 0:
+		return domain.BackupRunSuccess, "源目录为空或没有文件"
 	case failed > 0:
 		return domain.BackupRunPartial, fmt.Sprintf("备份部分完成：共 %d 个文件，跳过 %d，新增/更新 %d（秒传 %d），失败 %d", total, skipped, done, rapid, failed)
 	default:
