@@ -206,7 +206,14 @@ func (r *historyRepo) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *historyRepo) Clear(ctx context.Context, subscriptionID int64) (int, error) {
-	res, err := r.db.write.ExecContext(ctx, `DELETE FROM rss_download_history WHERE subscription_id=?`, subscriptionID)
+	// subscriptionID<=0 时清空全部；否则只清该订阅。
+	query := `DELETE FROM rss_download_history`
+	args := []any{}
+	if subscriptionID > 0 {
+		query += ` WHERE subscription_id=?`
+		args = append(args, subscriptionID)
+	}
+	res, err := r.db.write.ExecContext(ctx, query, args...)
 	if err != nil {
 		return 0, wrapDB(err)
 	}

@@ -49,7 +49,7 @@ const form = reactive<RSSSubscriptionInput>({
   account_id: 0,
   target_parent_id: "",
   target_display_path: "/",
-  convert_torrent_to_magnet: true,
+  convert_torrent_to_magnet: false,
   fetch_interval_minutes: 0,
 });
 
@@ -122,7 +122,7 @@ function resetForm() {
   form.account_id = s?.account_id ?? 0;
   form.target_parent_id = s?.target_parent_id ?? "";
   form.target_display_path = s?.target_display_path ?? "/";
-  form.convert_torrent_to_magnet = s?.convert_torrent_to_magnet ?? true;
+  form.convert_torrent_to_magnet = s?.convert_torrent_to_magnet ?? false;
   form.fetch_interval_minutes = s?.fetch_interval_minutes ?? 0;
   previewResult.value = null;
   previewError.value = "";

@@ -136,6 +136,39 @@ func TestRSSHistoryListSkipsSkipped(t *testing.T) {
 	}
 }
 
+func TestRSSHistoryClearAllAndBySub(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	subA, _ := s.RSSSubscriptions.Create(ctx, &domain.RSSSubscription{Name: "A", FeedURL: "https://e.com/a"})
+	subB, _ := s.RSSSubscriptions.Create(ctx, &domain.RSSSubscription{Name: "B", FeedURL: "https://e.com/b"})
+	for _, p := range []struct {
+		sub int64
+		gid string
+	}{{subA, "a1"}, {subA, "a2"}, {subB, "b1"}} {
+		if _, err := s.RSSDownloadHistory.Create(ctx, &domain.RSSDownloadHistory{SubscriptionID: p.sub, FeedGUID: p.gid, Status: domain.RSSStatusPushed}); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+	}
+	// 只清订阅 A
+	n, err := s.RSSDownloadHistory.Clear(ctx, subA)
+	if err != nil || n != 2 {
+		t.Fatalf("clear subA: n=%d err=%v", n, err)
+	}
+	recent, _ := s.RSSDownloadHistory.ListRecent(ctx, 10)
+	if len(recent) != 1 || recent[0].FeedGUID != "b1" {
+		t.Fatalf("after clear subA, expected only b1, got %+v", recent)
+	}
+	// subscriptionID=0 清空全部（对应前端「清空」不带订阅）
+	n2, err := s.RSSDownloadHistory.Clear(ctx, 0)
+	if err != nil || n2 != 1 {
+		t.Fatalf("clear all: n=%d err=%v", n2, err)
+	}
+	recent2, _ := s.RSSDownloadHistory.ListRecent(ctx, 10)
+	if len(recent2) != 0 {
+		t.Fatalf("clear all should empty history, got %d", len(recent2))
+	}
+}
+
 func TestRSSHistoryCascadeDelete(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)

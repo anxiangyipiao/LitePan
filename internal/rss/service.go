@@ -234,11 +234,13 @@ func (s *Service) RetryHistory(ctx context.Context, historyID int64) (*domain.RS
 
 func (s *Service) rebuildSubForHistory(ctx context.Context, rec *domain.RSSDownloadHistory) (*domain.RSSSubscription, error) {
 	sub := &domain.RSSSubscription{TargetType: rec.TargetType}
+	real, err := s.subs.Get(ctx, rec.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	sub.QBSavePath = real.QBSavePath
+	sub.QBCategory = real.QBCategory
 	if rec.TargetType == domain.RSSTargetOffline {
-		real, err := s.subs.Get(ctx, rec.SubscriptionID)
-		if err != nil {
-			return nil, err
-		}
 		sub.AccountID = real.AccountID
 		sub.TargetParentID = real.TargetParentID
 		sub.TargetDisplayPath = real.TargetDisplayPath
