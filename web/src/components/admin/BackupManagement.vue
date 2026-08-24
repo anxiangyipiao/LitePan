@@ -621,8 +621,19 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-/* 抽屉 */
+/* 抽屉（Teleport 到 body，脱离 .backup-page 作用域，需在此重新声明局部变量） */
 .backup-drawer-overlay {
+  --panel: var(--surface);
+  --soft: var(--surface-sunken);
+  --line: var(--border);
+  --line2: color-mix(in srgb, var(--border) 82%, var(--text-muted));
+  --ink: var(--text);
+  --muted: var(--text-muted);
+  --muted2: color-mix(in srgb, var(--text-muted) 72%, transparent);
+  --blue: var(--brand);
+  --ok: var(--success);
+  --warn: var(--warning);
+  --bad: var(--danger);
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.42);
