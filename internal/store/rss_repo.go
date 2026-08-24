@@ -162,8 +162,9 @@ func (r *historyRepo) Get(ctx context.Context, id int64) (*domain.RSSDownloadHis
 }
 
 func (r *historyRepo) ListBySubscription(ctx context.Context, subscriptionID int64, limit, offset int) ([]*domain.RSSDownloadHistory, error) {
-	query := selectRSSHistoryCols + ` WHERE subscription_id=? ORDER BY id DESC LIMIT ? OFFSET ?`
-	rows, err := r.db.read.QueryContext(ctx, query, subscriptionID, limit, offset)
+	// 跳过项（去重/链接不支持）会大量占满记录，默认不展示，去重查询不受影响。
+	query := selectRSSHistoryCols + ` WHERE subscription_id=? AND status<>? ORDER BY id DESC LIMIT ? OFFSET ?`
+	rows, err := r.db.read.QueryContext(ctx, query, subscriptionID, domain.RSSStatusSkipped, limit, offset)
 	if err != nil {
 		return nil, wrapDB(err)
 	}
@@ -180,7 +181,8 @@ func (r *historyRepo) ListBySubscription(ctx context.Context, subscriptionID int
 }
 
 func (r *historyRepo) ListRecent(ctx context.Context, limit int) ([]*domain.RSSDownloadHistory, error) {
-	rows, err := r.db.read.QueryContext(ctx, selectRSSHistoryCols+` ORDER BY id DESC LIMIT ?`, limit)
+	query := selectRSSHistoryCols + ` WHERE status<>? ORDER BY id DESC LIMIT ?`
+	rows, err := r.db.read.QueryContext(ctx, query, domain.RSSStatusSkipped, limit)
 	if err != nil {
 		return nil, wrapDB(err)
 	}

@@ -101,6 +101,41 @@ func TestRSSHistoryDedup(t *testing.T) {
 	}
 }
 
+func TestRSSHistoryListSkipsSkipped(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	subID, _ := s.RSSSubscriptions.Create(ctx, &domain.RSSSubscription{Name: "订阅", FeedURL: "https://e.com/feed"})
+	mk := func(guid, status string) *domain.RSSDownloadHistory {
+		return &domain.RSSDownloadHistory{SubscriptionID: subID, FeedGUID: guid, Status: status}
+	}
+	for i, st := range []string{domain.RSSStatusPushed, domain.RSSStatusSkipped, domain.RSSStatusQueued, domain.RSSStatusSkipped, domain.RSSStatusFailed} {
+		if _, err := s.RSSDownloadHistory.Create(ctx, mk("g"+string(rune('a'+i)), st)); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+	}
+	recent, err := s.RSSDownloadHistory.ListRecent(ctx, 10)
+	if err != nil {
+		t.Fatalf("list recent: %v", err)
+	}
+	if len(recent) != 3 {
+		t.Fatalf("ListRecent should exclude skipped, got %d rows: %+v", len(recent), recent)
+	}
+	for _, r := range recent {
+		if r.Status == domain.RSSStatusSkipped {
+			t.Fatalf("skipped row leaked into ListRecent: %+v", r)
+		}
+	}
+	bySub, err := s.RSSDownloadHistory.ListBySubscription(ctx, subID, 10, 0)
+	if err != nil || len(bySub) != 3 {
+		t.Fatalf("ListBySubscription should exclude skipped, got %d rows, err=%v", len(bySub), err)
+	}
+	// 去重查询仍能看到 skipped 行（占 GUID 槽）
+	ok, _ := s.RSSDownloadHistory.ExistsByGUID(ctx, subID, "gb")
+	if !ok {
+		t.Fatal("ExistsByGUID should still see skipped rows")
+	}
+}
+
 func TestRSSHistoryCascadeDelete(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
