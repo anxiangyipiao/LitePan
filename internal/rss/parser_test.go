@@ -185,6 +185,43 @@ func TestParseFeedNyaaStyleMagnetURI(t *testing.T) {
 	}
 }
 
+func TestParseFeedNyaaInfoHashOnly(t *testing.T) {
+	feed := `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:nyaa="https://nyaa.si/xmlns/nyaa">
+<channel><title>Nyaa - Torrents</title>
+<item>
+  <title>某片 01</title>
+  <link>https://sukebei.nyaa.si/download/4692080.torrent</link>
+  <guid isPermaLink="true">https://sukebei.nyaa.si/view/4692080</guid>
+  <pubDate>Mon, 24 Aug 2026 07:43:28 -0000</pubDate>
+  <nyaa:seeders>3</nyaa:seeders>
+  <nyaa:infoHash>ca118254d9785de4e6de9764c75193326b08b2b7</nyaa:infoHash>
+  <nyaa:categoryId>2_2</nyaa:categoryId>
+  <nyaa:size>2.0 GiB</nyaa:size>
+  <description><![CDATA[ <a href="https://sukebei.nyaa.si/view/4692080">某片 01</a> | 2.0 GiB ]]></description>
+</item>
+</channel></rss>`
+
+	_, items, err := ParseFeed([]byte(feed))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	it := items[0]
+	if !isMagnet(it.TorrentURL) {
+		t.Fatalf("expected magnet built from infoHash, got %q", it.TorrentURL)
+	}
+	if it.InfoHash != "CA118254D9785DE4E6DE9764C75193326B08B2B7" {
+		t.Errorf("infohash: %q", it.InfoHash)
+	}
+	// 构造的磁力链应带 dn=标题（URL 编码）
+	if !strings.Contains(it.TorrentURL, "&dn=%E6%9F%90%E7%89%87") {
+		t.Errorf("magnet should carry encoded dn, got %q", it.TorrentURL)
+	}
+}
+
 func TestParseFeedGBK(t *testing.T) {
 	// "测试源" 的 GBK 字节
 	gbkTitle := string([]byte{0xB2, 0xE2, 0xCA, 0xD4, 0xD4, 0xB4})

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -110,6 +111,7 @@ type rssItem struct {
 	PubDate     string    `xml:"pubDate"`
 	Enclosure   rssEncl   `xml:"enclosure"`
 	MagnetURI   string    `xml:"magnetURI"` // nyaa/sukebei 的 torrent:magnetURI
+	InfoHash    string    `xml:"infoHash"`  // nyaa/sukebei 的 nyaa:infoHash
 	Description rawXML    `xml:"description"`
 }
 
@@ -191,7 +193,14 @@ func parseRSS(data []byte) (string, []FeedItem, error) {
 	}
 	items := make([]FeedItem, 0, len(feed.Channel.Items))
 	for _, it := range feed.Channel.Items {
-		torrentURL := pickTorrentURL(it.Enclosure.URL, it.Link, it.MagnetURI, it.Description.Data)
+		torrentURL := pickTorrentURL(torrentSources{
+			enclosureURL: it.Enclosure.URL,
+			link:         it.Link,
+			magnetURI:    it.MagnetURI,
+			infoHash:     it.InfoHash,
+			description:  it.Description.Data,
+			title:        it.Title,
+		})
 		items = append(items, FeedItem{
 			GUID:       itemGUID(it.GUID.Value, it.Link, it.Title, it.PubDate),
 			Title:      strings.TrimSpace(it.Title),
@@ -216,7 +225,12 @@ func parseAtom(data []byte) (string, []FeedItem, error) {
 	items := make([]FeedItem, 0, len(feed.Entries))
 	for _, e := range feed.Entries {
 		altLink, encLink := atomLinks(e.Link)
-		torrentURL := pickTorrentURL(encLink, altLink, "", e.Summary.Data+e.Content.Data)
+		torrentURL := pickTorrentURL(torrentSources{
+			enclosureURL: encLink,
+			link:         altLink,
+			description:  e.Summary.Data + e.Content.Data,
+			title:        e.Title.Data,
+		})
 		date := strings.TrimSpace(e.Published)
 		if date == "" {
 			date = strings.TrimSpace(e.Updated)
@@ -251,22 +265,36 @@ func atomLinks(links []atomLnk) (alternate, enclosure string) {
 	return alternate, enclosure
 }
 
+// torrentSources 聚合从一条 feed 条目里抽取种子的各种候选来源。
+type torrentSources struct {
+	enclosureURL string // <enclosure url>
+	link         string // <link>
+	magnetURI    string // torrent:magnetURI（nyaa/sukebei）
+	infoHash     string // nyaa:infoHash（仅 infohash 的源）
+	description  string // <description>/<summary>/<content> 原文
+	title        string // 用于构造磁力链的 dn 参数
+}
+
 // pickTorrentURL 按优先级选择可用的种子链接：
-// enclosure 磁力 → 描述内嵌 magnet → torrent:magnetURI（nyaa/sukebei）→ link 磁力 → enclosure/link http。
-func pickTorrentURL(enclosureURL, link, magnetURI, description string) string {
-	enc := strings.TrimSpace(enclosureURL)
-	lnk := strings.TrimSpace(link)
+// enclosure 磁力 → 描述内嵌 magnet → torrent:magnetURI → link 磁力
+// → 由 infohash 构造磁力链（覆盖仅 nyaa:infoHash 的源）→ enclosure/link http。
+func pickTorrentURL(src torrentSources) string {
+	enc := strings.TrimSpace(src.enclosureURL)
+	lnk := strings.TrimSpace(src.link)
 	if isMagnet(enc) {
 		return enc
 	}
-	if m := findMagnetInText(description); m != "" {
+	if m := findMagnetInText(src.description); m != "" {
 		return m
 	}
-	if uri := strings.TrimSpace(magnetURI); isMagnet(uri) {
+	if uri := strings.TrimSpace(src.magnetURI); isMagnet(uri) {
 		return uri
 	}
 	if isMagnet(lnk) {
 		return lnk
+	}
+	if m := buildMagnetFromHash(strings.TrimSpace(src.infoHash), src.title); m != "" {
+		return m
 	}
 	if isTorrentHTTP(enc) {
 		return enc
@@ -275,6 +303,40 @@ func pickTorrentURL(enclosureURL, link, magnetURI, description string) string {
 		return lnk
 	}
 	return ""
+}
+
+// buildMagnetFromHash 由纯 infohash 构造磁力链（nyaa:infoHash 只有 40 位 hex 或 32 位 base32）。
+func buildMagnetFromHash(hash, title string) string {
+	if !validInfoHash(hash) {
+		return ""
+	}
+	dn := strings.ReplaceAll(url.QueryEscape(truncateRunes(title, 200)), "+", "%20")
+	return "magnet:?xt=urn:btih:" + hash + "&dn=" + dn
+}
+
+func validInfoHash(h string) bool {
+	switch len(h) {
+	case 40:
+		_, err := hex.DecodeString(h)
+		return err == nil
+	case 32:
+		for _, c := range h {
+			if !(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '2' && c <= '7') {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+func truncateRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
 }
 
 // isHttpTorrentURL 判断是否为 http(s) 的 .torrent 文件链接。
