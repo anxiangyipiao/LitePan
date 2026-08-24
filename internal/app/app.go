@@ -11,6 +11,7 @@ import (
 
 	"litepan/internal/auth"
 	"litepan/internal/automation"
+	"litepan/internal/backup"
 	"litepan/internal/cache"
 	"litepan/internal/cacheretention"
 	"litepan/internal/config"
@@ -49,6 +50,7 @@ type App struct {
 	strm           *strm.Service
 	mediaOrganize  *mediaorganize.Service
 	automation     *automation.Service
+	backup         *backup.Service
 	fuse           *fusemount.Service
 	cacheRetention *cacheretention.Service
 	embyProxy      *embyproxy.Service
@@ -119,6 +121,7 @@ func New(ctx context.Context, opts Options) (*App, error) {
 		strm:           svc.strm,
 		mediaOrganize:  svc.mediaOrganize,
 		automation:     svc.automation,
+		backup:         svc.backup,
 		fuse:           svc.fuse,
 		cacheRetention: svc.cacheRetention,
 		embyProxy:      svc.embyProxy,
@@ -148,6 +151,9 @@ func (a *App) Run(ctx context.Context) error {
 	}
 	if a.rss != nil {
 		a.rss.Start(ctx)
+	}
+	if a.backup != nil {
+		a.backup.Start(ctx)
 	}
 	if a.fuse != nil {
 		a.fuse.Start(ctx)

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -24,6 +25,14 @@ type localBrowseResult struct {
 }
 
 func browseDefaultPath() string {
+	if runtime.GOOS == "windows" {
+		if dir, err := os.Getwd(); err == nil {
+			if vol := filepath.VolumeName(dir); vol != "" {
+				return vol + string(os.PathSeparator)
+			}
+		}
+		return `C:\`
+	}
 	for _, candidate := range []string{"/app/strm", "/app/data", "/app/mounts", "/app", "/data", "/mnt", "/media", "/"} {
 		info, err := os.Stat(candidate)
 		if err == nil && info.IsDir() {
@@ -38,10 +47,10 @@ func (h *Handler) browseLocalFS(w http.ResponseWriter, r *http.Request) {
 	if raw == "" {
 		raw = browseDefaultPath()
 	}
-	if !strings.HasPrefix(raw, "/") {
+	if !filepath.IsAbs(raw) {
 		writeJSON(w, http.StatusOK, Resp{
 			Success:   false,
-			Message:   "请使用绝对路径（以 / 开头）",
+			Message:   "请使用绝对路径（如 /mnt/disk 或 D:\\backup）",
 			ErrorType: string(domain.CodeValidation),
 		})
 		return

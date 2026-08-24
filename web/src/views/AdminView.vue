@@ -23,6 +23,7 @@ const adminPageLoaders = {
   tasks: () => import("@/components/admin/TaskManagement.vue"),
   tools: () => import("@/components/admin/AuxToolsManagement.vue"),
   "cross-transfer": () => import("@/components/admin/CrossDriveTransfer.vue"),
+  backup: () => import("@/components/admin/BackupManagement.vue"),
   share: () => import("@/components/admin/FileShareManagement.vue"),
 };
 import BusySpinner from "@/components/base/BusySpinner.vue";
@@ -42,6 +43,7 @@ const SystemSettings = withSpinner(adminPageLoaders.settings);
 const TaskManagement = withSpinner(adminPageLoaders.tasks);
 const AuxToolsManagement = withSpinner(adminPageLoaders.tools);
 const CrossDriveTransfer = withSpinner(adminPageLoaders["cross-transfer"]);
+const BackupManagement = withSpinner(adminPageLoaders["backup"]);
 const FileShareManagement = withSpinner(adminPageLoaders.share);
 
 const BROWSER_LOCATION_RESET_ONCE_KEY = "litepan:index:reset-once";
@@ -53,6 +55,7 @@ const nav = [
   { key: "tasks", label: "任务管理", icon: "fa-solid fa-list-check" },
   { key: "tools", label: "辅助工具", icon: "fa-solid fa-toolbox" },
   { key: "cross-transfer", label: "跨盘秒传", icon: "fa-solid fa-right-left" },
+  { key: "backup", label: "定时备份", icon: "fa-solid fa-clock-rotate-left" },
   { key: "share", label: "文件共享", icon: "fa-solid fa-share-nodes" },
 ];
 const navKeys = nav.map((n) => n.key);
@@ -194,7 +197,7 @@ onMounted(async () => {
     </header>
 
     <AdminEmptyState
-      v-if="!cachedPageComponent && !['settings', 'cross-transfer', 'share'].includes(page)"
+      v-if="!cachedPageComponent && !['settings', 'cross-transfer', 'backup', 'share'].includes(page)"
       icon="🚧"
       :title="`「${nav.find((n) => n.key === page)?.label}」功能开发中`"
     />
@@ -208,6 +211,7 @@ onMounted(async () => {
           @password-updated="handlePasswordUpdated"
         />
         <CrossDriveTransfer v-else-if="page === 'cross-transfer'" />
+        <BackupManagement v-else-if="page === 'backup'" />
         <FileShareManagement v-else-if="page === 'share'" />
         <component :is="cachedPageComponent" v-else-if="cachedPageComponent" :key="page" />
       </KeepAlive>

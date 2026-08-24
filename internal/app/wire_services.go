@@ -5,6 +5,7 @@ import (
 
 	"litepan/internal/account"
 	"litepan/internal/automation"
+	"litepan/internal/backup"
 	"litepan/internal/cacheretention"
 	"litepan/internal/config"
 	"litepan/internal/crosstransfer"
@@ -38,6 +39,7 @@ type servicesBundle struct {
 	strmScrape       *strmscrape.Service
 	mediaLibrary     *medialibrary.Service
 	automation       *automation.Service
+	backup           *backup.Service
 	fuse             *fusemount.Service
 	fuseReadCache    *fusereadcache.Service
 	cacheRetention   *cacheretention.Service
@@ -164,6 +166,14 @@ func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *
 	})
 	automationSvc.Register(core.bus)
 	strmSvc.SetAutomationManagedChecker(automationSvc.IsStrmTaskManaged)
+	backupSvc := backup.New(backup.Options{
+		Exec:   core.exec,
+		Files:  fileSvc,
+		Jobs:   st.store.BackupJobs,
+		Runs:   st.store.BackupRuns,
+		States: st.store.BackupFileStates,
+		Log:    logs.For(logx.ModuleSystem),
+	})
 	return &servicesBundle{
 		files:            fileSvc,
 		uploads:          uploadSvc,
@@ -175,6 +185,7 @@ func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *
 		strmScrape:       strmScrapeSvc,
 		mediaLibrary:     mediaLibrarySvc,
 		automation:       automationSvc,
+		backup:           backupSvc,
 		fuse:             fuseSvc,
 		fuseReadCache:    fuseReadCache,
 		cacheRetention:   retentionSvc,

@@ -20,6 +20,7 @@ import (
 	"litepan/internal/apikey"
 	"litepan/internal/auth"
 	"litepan/internal/automation"
+	"litepan/internal/backup"
 	"litepan/internal/cache"
 	"litepan/internal/cacheretention"
 	"litepan/internal/crosstransfer"
@@ -66,6 +67,7 @@ type Deps struct {
 	StrmScrape        *strmscrape.Service
 	MediaLibrary      *medialibrary.Service
 	Automation        *automation.Service
+	Backup            *backup.Service
 	Fuse              *fusemount.Service
 	CrossTransfer     *crosstransfer.Service
 	EmbyProxy         *embyproxy.Service
@@ -99,6 +101,7 @@ type Handler struct {
 	strmScrape        *strmscrape.Service
 	mediaLibrary      *medialibrary.Service
 	automation        *automation.Service
+	backup            *backup.Service
 	fuse              *fusemount.Service
 	crossTransfer     *crosstransfer.Service
 	embyProxy         *embyproxy.Service
@@ -136,6 +139,7 @@ func NewRouter(d Deps) http.Handler {
 		strmScrape:        d.StrmScrape,
 		mediaLibrary:      d.MediaLibrary,
 		automation:        d.Automation,
+		backup:            d.Backup,
 		fuse:              d.Fuse,
 		crossTransfer:     d.CrossTransfer,
 		embyProxy:         d.EmbyProxy,
@@ -344,6 +348,16 @@ func NewRouter(d Deps) http.Handler {
 					r.Post("/history/{id}/retry", h.retryRSSHistory)
 					r.Delete("/history/{id}", h.deleteRSSHistory)
 					r.Delete("/history", h.clearRSSHistory)
+				})
+				r.Route("/backup", func(r chi.Router) {
+					r.Get("/jobs", h.listBackupJobs)
+					r.Post("/jobs", h.createBackupJob)
+					r.Put("/jobs/{id}", h.updateBackupJob)
+					r.Delete("/jobs/{id}", h.deleteBackupJob)
+					r.Post("/jobs/{id}/toggle", h.toggleBackupJob)
+					r.Post("/jobs/{id}/run", h.runBackupJob)
+					r.Get("/jobs/{id}/runs", h.listBackupRuns)
+					r.Post("/jobs/{id}/run/stream", h.backupRunStream)
 				})
 				r.Route("/fuse", func(r chi.Router) {
 					r.Get("/status", h.fuseStatus)

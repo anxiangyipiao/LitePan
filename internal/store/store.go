@@ -21,6 +21,9 @@ type Store struct {
 	AutomationRuns      domain.AutomationRunRepository
 	RSSSubscriptions    domain.RSSSubscriptionRepository
 	RSSDownloadHistory  domain.RSSDownloadHistoryRepository
+	BackupJobs          domain.BackupJobRepository
+	BackupRuns          domain.BackupRunRepository
+	BackupFileStates    domain.BackupFileStateRepository
 }
 
 // New 基于已打开的 DB 构造仓储集合。
@@ -43,5 +46,8 @@ func New(db *DB) *Store {
 		AutomationRuns:      &automationRunRepo{db: db},
 		RSSSubscriptions:    &subscriptionRepo{db: db},
 		RSSDownloadHistory:  &historyRepo{db: db},
+		BackupJobs:          &backupJobRepo{db: db},
+		BackupRuns:          &backupRunRepo{db: db},
+		BackupFileStates:    &backupFileStateRepo{db: db},
 	}
 }
