@@ -175,8 +175,11 @@ func (s *Service) pushItem(ctx context.Context, sub *domain.RSSSubscription, rec
 }
 
 func (s *Service) pushToQB(ctx context.Context, sub *domain.RSSSubscription, rec *domain.RSSDownloadHistory, torrentURL string) {
-	if !isMagnet(torrentURL) {
-		s.markHistory(ctx, rec, domain.RSSStatusSkipped, "qB 目标仅支持磁力链，跳过 HTTP 种子链接", "")
+	lower := strings.ToLower(torrentURL)
+	if !isMagnet(torrentURL) &&
+		!strings.HasPrefix(lower, "http://") &&
+		!strings.HasPrefix(lower, "https://") {
+		s.markHistory(ctx, rec, domain.RSSStatusSkipped, "qB 目标仅支持磁力链或种子链接", "")
 		return
 	}
 	savePath := strings.TrimSpace(sub.QBSavePath)
@@ -208,10 +211,17 @@ func (s *Service) pushToOffline(ctx context.Context, sub *domain.RSSSubscription
 		s.markHistory(ctx, rec, domain.RSSStatusSkipped, "无可用种子链接", "")
 		return
 	}
-	// http .torrent 链接直接离线只会把种子文件本体下载下来，需先转磁力链。
+	// http .torrent 链接直接离线只会把种子文件本体下载下来：先下载并解析出 infohash，
+	// 转成磁力链再走正常离线流。
 	if isHttpTorrentURL(torrentURL) {
-		s.markHistory(ctx, rec, domain.RSSStatusSkipped, "HTTP 种子链接需转磁力链，暂不支持直接离线", "")
-		return
+		magnet, hash, err := s.downloadTorrentToMagnet(ctx, torrentURL, rec.Title)
+		if err != nil {
+			s.markHistory(ctx, rec, domain.RSSStatusFailed, "", "种子文件转磁力链失败："+err.Error())
+			return
+		}
+		rec.TorrentURL = magnet
+		rec.InfoHash = hash
+		torrentURL = magnet
 	}
 	if sub.AccountID <= 0 {
 		s.markHistory(ctx, rec, domain.RSSStatusFailed, "", "未配置目标网盘账号")
@@ -262,6 +272,24 @@ func (s *Service) pushToOffline(ctx context.Context, sub *domain.RSSSubscription
 	rec.TargetRef = accountName
 	s.markHistory(ctx, rec, domain.RSSStatusQueued, "已提交到网盘离线下载", "")
 	s.notify("info", "rss", "RSS 已推送", "《"+rec.Title+"》已提交网盘离线下载", rec.ID)
+}
+
+// downloadTorrentToMagnet 下载 http .torrent 文件并解析 infohash，返回构造的磁力链与大写 infohash。
+func (s *Service) downloadTorrentToMagnet(ctx context.Context, torrentURL, title string) (magnet, hash string, err error) {
+	body, err := s.newClient().Fetch(ctx, torrentURL)
+	if err != nil {
+		return "", "", err
+	}
+	h, err := torrentInfoHash(body)
+	if err != nil {
+		return "", "", err
+	}
+	hash = strings.ToUpper(h)
+	magnet = buildMagnetFromHash(h, title)
+	if magnet == "" {
+		return "", "", fmt.Errorf("构造磁力链失败")
+	}
+	return magnet, hash, nil
 }
 
 func (s *Service) markHistory(ctx context.Context, rec *domain.RSSDownloadHistory, status, message, errText string) {

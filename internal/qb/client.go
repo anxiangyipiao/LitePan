@@ -67,8 +67,11 @@ func (c *Client) AddMagnet(ctx context.Context, magnet, savePath, category strin
 	if magnet == "" {
 		return fmt.Errorf("磁力链为空")
 	}
-	if !strings.HasPrefix(magnet, "magnet:") {
-		return fmt.Errorf("不是有效的磁力链")
+	lower := strings.ToLower(magnet)
+	if !strings.HasPrefix(lower, "magnet:") &&
+		!strings.HasPrefix(lower, "http://") &&
+		!strings.HasPrefix(lower, "https://") {
+		return fmt.Errorf("不是有效的磁力链或种子链接")
 	}
 	cookie, err := c.login(ctx)
 	if err != nil {
