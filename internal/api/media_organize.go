@@ -343,7 +343,12 @@ func (h *Handler) getMediaOrganizeProgress(w http.ResponseWriter, r *http.Reques
 	if !ensureServiceReady(w, h.mediaOrganize != nil) {
 		return
 	}
-	writeOK(w, h.mediaOrganize.GetProgress(chi.URLParam(r, "id")))
+	taskID := chi.URLParam(r, "id")
+	prog := h.mediaOrganize.GetProgress(taskID)
+	if task, err := h.mediaOrganize.GetTask(r.Context(), taskID); err == nil && task != nil {
+		prog["status"] = task.Status
+	}
+	writeOK(w, prog)
 }
 
 func (h *Handler) getMediaOrganizeSettings(w http.ResponseWriter, r *http.Request) {

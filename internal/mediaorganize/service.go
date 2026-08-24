@@ -180,6 +180,8 @@ func (s *Service) DeleteTask(ctx context.Context, id string) (stopping bool, err
 	return wasRunning, nil
 }
 
+// PlanTask 在后台生成计划并立即返回；前端轮询 progress 的 stage（planning→done/error）直到完成。
+// 计划生成不再绑定 HTTP 请求上下文，避免大目录扫描被请求超时/断连中断。
 func (s *Service) PlanTask(ctx context.Context, taskID string) (map[string]any, error) {
 	task, err := s.requireTask(ctx, taskID)
 	if err != nil {
@@ -188,31 +190,57 @@ func (s *Service) PlanTask(ctx context.Context, taskID string) (map[string]any, 
 	if s.IsRunning(taskID) {
 		return nil, domain.Errorf(domain.CodeValidation, "任务正在执行中")
 	}
+	cfg, err := s.loadTaskConfig(task)
+	if err != nil {
+		return nil, err
+	}
+	accountID, err := s.resolveAccountID(task, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateTaskActionConfig(cfg); err != nil {
+		return nil, err
+	}
 
 	s.discardStop(taskID)
 	s.clearLogs(taskID)
 	s.resetProgress(taskID)
 	s.appendLog(taskID, "[MediaOrganize] 生成计划开始")
 
+	s.startRunner(taskID, accountID, func(runCtx context.Context) {
+		s.planTaskRunner(runCtx, taskID, task)
+	})
+	return map[string]any{"task_id": taskID, "submitted": true}, nil
+}
+
+// planTaskRunner 后台执行计划生成：buildPlan → savePlan，并更新进度与任务状态。
+func (s *Service) planTaskRunner(runCtx context.Context, taskID string, task *domain.MediaOrganizeTask) {
 	settingsDict := SettingsDict(s.settings)
 	delayMS := intFromAny(settingsDict["api_request_interval_ms"], 300)
-	ctx = driver.WithExtraAPIDelay(ctx, delayMS)
+	runCtx = driver.WithExtraAPIDelay(runCtx, delayMS)
 
 	task.Status = domain.MediaOrganizeStatusPlanning
-	_ = s.repo.Update(ctx, task)
-
-	var plan *Plan
+	_ = s.repo.Update(runCtx, task)
 	defer func() {
 		task.Status = domain.MediaOrganizeStatusIdle
+		task.LastRunAt = time.Now()
 		_ = s.repo.Update(context.Background(), task)
 	}()
 
-	plan, err = s.buildPlan(ctx, taskID, task, settingsDict)
-	if err != nil {
-		return nil, err
+	plan, buildErr := s.buildPlan(runCtx, taskID, task, settingsDict)
+	if buildErr != nil {
+		if errors.Is(buildErr, ErrTaskAborted) {
+			s.appendLog(taskID, "[MediaOrganize] 任务已停止")
+		} else {
+			s.appendLog(taskID, fmt.Sprintf("[MediaOrganize] 任务异常: %v", buildErr))
+		}
+		s.updateProgress(taskID, map[string]any{"stage": "error"})
+		return
 	}
 	if err := s.savePlan(taskID, plan); err != nil {
-		return nil, err
+		s.appendLog(taskID, fmt.Sprintf("[MediaOrganize] 任务异常: %v", err))
+		s.updateProgress(taskID, map[string]any{"stage": "error"})
+		return
 	}
 	s.appendLog(taskID, fmt.Sprintf("[MediaOrganize] 计划生成完成: %d 个动作, 跳过 %d 个", len(plan.Actions), len(plan.Skipped)))
 	s.updateProgress(taskID, map[string]any{
@@ -221,13 +249,6 @@ func (s *Service) PlanTask(ctx context.Context, taskID string) (map[string]any, 
 		"skipped":    len(plan.Skipped),
 		"updated_at": time.Now().Format("15:04:05"),
 	})
-	return map[string]any{
-		"plan": plan,
-		"summary": map[string]any{
-			"actions": len(plan.Actions),
-			"skipped": len(plan.Skipped),
-		},
-	}, nil
 }
 
 func (s *Service) ApplyTask(ctx context.Context, taskID string) (map[string]any, error) {

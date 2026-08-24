@@ -343,13 +343,32 @@ func (p *Planner) isCategoryDir(name string, items []domain.FileItem) bool {
 	return workDirs >= 2 && float64(workDirs)/float64(childDirs) >= 0.5
 }
 
+// listWithRetry 列举目录并对瞬时错误重试；请求取消时中止（避免静默产出残缺计划）。
 func (p *Planner) listWithRetry(dirID string) ([]domain.FileItem, error) {
 	if err := p.checkStop(); err != nil {
 		return nil, err
 	}
-	items, err := p.files.List(p.ctx, p.accountID, dirID, false)
-	if err != nil {
-		p.log(fmt.Sprintf("[计划] 目录扫描失败: %s - %v", dirID, err))
+	const maxAttempts = 3
+	var items []domain.FileItem
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if attempt > 1 {
+			if err := p.checkStop(); err != nil {
+				return nil, err
+			}
+			time.Sleep(time.Duration(attempt) * 300 * time.Millisecond)
+		}
+		items, lastErr = p.files.List(p.ctx, p.accountID, dirID, false)
+		if lastErr == nil {
+			break
+		}
+		if p.ctx.Err() != nil {
+			return nil, p.ctx.Err()
+		}
+		p.log(fmt.Sprintf("[计划] 目录扫描失败(第 %d 次): %s - %v", attempt, dirID, lastErr))
+	}
+	if lastErr != nil {
+		p.log(fmt.Sprintf("[计划] 目录扫描最终失败: %s - %v", dirID, lastErr))
 		return nil, nil
 	}
 	p.scannedDirs++

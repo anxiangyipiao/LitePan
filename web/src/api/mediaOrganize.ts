@@ -64,6 +64,7 @@ export interface MediaOrganizePlan {
 
 export interface MediaOrganizeProgress {
   stage?: string;
+  status?: string;
   scanned_dirs?: number;
   scanned_files?: number;
   groups?: number;
@@ -129,13 +130,14 @@ export function deleteMediaOrganizeTask(id: string) {
   return http.del<{ id: string; stopping?: boolean }>(`/admin/media-organize/tasks/${id}`);
 }
 
-export interface MediaOrganizePlanResult {
-  plan: MediaOrganizePlan;
-  summary?: { actions?: number; skipped?: number };
+// 计划改为后台生成：接口立即返回 submitted，前端轮询 progress.stage 直到 done/error 后再拉取计划。
+export interface MediaOrganizePlanSubmitResult {
+  task_id: string;
+  submitted: boolean;
 }
 
 export function planMediaOrganizeTask(id: string) {
-  return http.post<MediaOrganizePlanResult>(`/admin/media-organize/tasks/${id}/plan`);
+  return http.post<MediaOrganizePlanSubmitResult>(`/admin/media-organize/tasks/${id}/plan`);
 }
 
 export function fetchMediaOrganizePlan(id: string) {

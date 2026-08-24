@@ -475,16 +475,59 @@ function stopLogPolling() {
   }
 }
 
-function startPlanProgressPolling(taskId: string) {
+function startPlanProgressPolling(taskId: string, successMessage?: string) {
   stopPlanProgressPolling();
   planProgress.value = {};
+  let seenActivity = false;
   const tick = async () => {
     try {
       planProgress.value = await fetchMediaOrganizeProgress(taskId);
     } catch {}
+    const stage = planProgress.value.stage;
+    const status = planProgress.value.status;
+    if (stage === "done" || stage === "error") {
+      stopPlanProgressPolling();
+      planLoading.value = false;
+      if (stage === "done") {
+        void loadPlanAfterGenerate(taskId, successMessage);
+      } else {
+        toast.error("计划生成失败，请查看任务日志");
+      }
+      return;
+    }
+    if (stage === "planning" || (status && ["planning", "running", "stopping"].includes(status))) {
+      seenActivity = true;
+      return;
+    }
+    // 任务已结束但未产出 done/error（如后台执行任务结束、或生成被中止）：停止轮询，避免无限等待。
+    if (seenActivity && status && !["planning", "running", "stopping"].includes(status)) {
+      stopPlanProgressPolling();
+      planLoading.value = false;
+    }
   };
   void tick();
   planProgressTimer = window.setInterval(tick, 1200);
+}
+
+async function loadPlanAfterGenerate(taskId: string, successMessage?: string) {
+  try {
+    const plan = await fetchMediaOrganizePlan(taskId);
+    preview.loadPlan(plan);
+    if (successMessage) toast.success(successMessage);
+  } catch (e) {
+    toast.error(getApiErrorMessage(e, "读取计划失败"));
+  }
+}
+
+async function requestPlanAndPoll(taskId: string, successMessage?: string) {
+  try {
+    await planMediaOrganizeTask(taskId);
+  } catch (e) {
+    const msg = getApiErrorMessage(e, "");
+    // 已在后台生成/执行中：改为等待其结束，避免误报失败
+    if (!/正在执行/.test(msg)) throw e;
+  }
+  startPlanProgressPolling(taskId, successMessage);
 }
 
 function stopPlanProgressPolling() {
@@ -509,32 +552,26 @@ async function previewPlan(task: MediaOrganizeTask) {
     }
     if (existing && ((existing.actions?.length ?? 0) > 0 || (existing.skipped?.length ?? 0) > 0)) {
       preview.loadPlan(existing);
+      planLoading.value = false;
       return;
     }
-    startPlanProgressPolling(task.id);
-    const result = await planMediaOrganizeTask(task.id);
-    preview.loadPlan(result.plan);
+    await requestPlanAndPoll(task.id);
   } catch (e) {
-    toast.error(getApiErrorMessage(e, "计划生成失败"));
-  } finally {
     stopPlanProgressPolling();
     planLoading.value = false;
+    toast.error(getApiErrorMessage(e, "计划生成失败"));
   }
 }
 
 async function refreshPlan() {
   if (!planTaskId.value) return;
   planLoading.value = true;
-  startPlanProgressPolling(planTaskId.value);
   try {
-    const result = await planMediaOrganizeTask(planTaskId.value);
-    preview.loadPlan(result.plan);
-    toast.success("计划已重新生成");
+    await requestPlanAndPoll(planTaskId.value, "计划已重新生成");
   } catch (e) {
-    toast.error(getApiErrorMessage(e, "生成失败"));
-  } finally {
     stopPlanProgressPolling();
     planLoading.value = false;
+    toast.error(getApiErrorMessage(e, "生成失败"));
   }
 }
 
@@ -545,6 +582,7 @@ function closePlanDialog() {
   preview.loadPlan(null);
   planEditingId.value = null;
   planEditingName.value = "";
+  planLoading.value = false;
   stopPlanProgressPolling();
 }
 
