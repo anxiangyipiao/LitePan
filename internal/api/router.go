@@ -35,6 +35,7 @@ import (
 	"litepan/internal/notification"
 	"litepan/internal/offlinedownload"
 	"litepan/internal/playback"
+	"litepan/internal/rss"
 	"litepan/internal/settings"
 	"litepan/internal/share/dav"
 	"litepan/internal/strm"
@@ -69,6 +70,7 @@ type Deps struct {
 	CrossTransfer     *crosstransfer.Service
 	EmbyProxy         *embyproxy.Service
 	FnosProxy         *fnosproxy.Service
+	RSS               *rss.Service
 	ApiKeys           *apikey.Service
 	Auth              *auth.Service
 	AuthSched         *auth.Scheduler
@@ -101,6 +103,7 @@ type Handler struct {
 	crossTransfer     *crosstransfer.Service
 	embyProxy         *embyproxy.Service
 	fnosProxy         *fnosproxy.Service
+	rss               *rss.Service
 	apiKeys           *apikey.Service
 	auth              *auth.Service
 	authSched         *auth.Scheduler
@@ -137,6 +140,7 @@ func NewRouter(d Deps) http.Handler {
 		crossTransfer:     d.CrossTransfer,
 		embyProxy:         d.EmbyProxy,
 		fnosProxy:         d.FnosProxy,
+		rss:               d.RSS,
 		apiKeys:           d.ApiKeys,
 		auth:              d.Auth,
 		authSched:         d.AuthSched,
@@ -327,6 +331,19 @@ func NewRouter(d Deps) http.Handler {
 					r.Get("/runs", h.listAutomationRuns)
 					r.Post("/runs/clear", h.clearAutomationRuns)
 					r.Get("/options", h.automationOptions)
+				})
+				r.Route("/rss", func(r chi.Router) {
+					r.Get("/subscriptions", h.listRSSSubscriptions)
+					r.Post("/subscriptions", h.createRSSSubscription)
+					r.Put("/subscriptions/{id}", h.updateRSSSubscription)
+					r.Delete("/subscriptions/{id}", h.deleteRSSSubscription)
+					r.Post("/subscriptions/{id}/toggle", h.toggleRSSSubscription)
+					r.Post("/subscriptions/{id}/fetch", h.fetchRSSSubscription)
+					r.Post("/preview", h.previewRSSFeed)
+					r.Get("/history", h.listRSSHistory)
+					r.Post("/history/{id}/retry", h.retryRSSHistory)
+					r.Delete("/history/{id}", h.deleteRSSHistory)
+					r.Delete("/history", h.clearRSSHistory)
 				})
 				r.Route("/fuse", func(r chi.Router) {
 					r.Get("/status", h.fuseStatus)

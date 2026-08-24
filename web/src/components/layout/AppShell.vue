@@ -21,7 +21,7 @@ const router = useRouter();
 const auth = useAuthStore();
 
 // 仅缓存影视相关页面（返回保留状态）；网盘页 IndexView 不缓存，避免启动数据不刷新。
-const keepAlivePages = ["MediaLibraryView", "MovieDetailView", "MagnetSearchView", "AdminView"];
+const keepAlivePages = ["MediaLibraryView", "MovieDetailView", "MagnetSearchView", "SubscribeView", "AdminView"];
 
 // 管理后台子导航（对应 AdminView 的 nav 定义）
 const adminNav = [
@@ -110,6 +110,24 @@ async function handleLogout() {
             <path d="M18 4v4" />
           </svg>
           <span class="app-nav__label">磁力</span>
+        </RouterLink>
+
+        <!-- 订阅追番（登录态可用，独立页） -->
+        <RouterLink
+          v-if="auth.sessionAdmin"
+          to="/subscribe"
+          class="app-nav__btn"
+          :class="{ 'is-active': route.path === '/subscribe' }"
+          title="订阅追番"
+          aria-label="订阅追番"
+        >
+          <svg viewBox="0 0 24 24" class="app-nav__magnet" aria-hidden="true">
+            <path d="M4 11a9 9 0 0 1 18 0" />
+            <path d="M4 11v4a4 4 0 0 0 8 0v-4" />
+            <path d="M4 15h8" />
+            <path d="m16.5 15 3.5-2v6l-3.5-2" />
+          </svg>
+          <span class="app-nav__label">追番</span>
         </RouterLink>
 
         <RouterLink

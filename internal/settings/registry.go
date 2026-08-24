@@ -54,6 +54,8 @@ const (
 	KeyMagnetSearchProxyUsername = "magnet_search_proxy_username"
 	KeyMagnetSearchProxyPassword = "magnet_search_proxy_password"
 
+	KeyRSSDefaultFetchInterval = "rss_default_fetch_interval_minutes"
+
 	KeyQBURL      = "qb_url"
 	KeyQBUsername = "qb_username"
 	KeyQBPassword = "qb_password"
@@ -315,6 +317,17 @@ func defaultSpecs() []Spec {
 			Description: "代理认证密码。",
 			Default:     "",
 			Sensitive:   true,
+		},
+		{
+			Key:         KeyRSSDefaultFetchInterval,
+			Type:        TypeInt,
+			Category:    "rss",
+			Label:       "RSS 订阅默认抓取间隔",
+			Description: "订阅未单独指定抓取间隔时使用。抓取失败会自动退避（指数递增，上限 6 小时）。",
+			Default:     "30",
+			Unit:        "分钟",
+			Min:         intp(1),
+			Max:         intp(1440),
 		},
 		{
 			Key:         KeyQBURL,
@@ -717,5 +730,6 @@ func categories() []Category {
 		{ID: "performance", Label: "性能设置"},
 		{ID: "strm", Label: "STRM 设置"},
 		{ID: "media_organize", Label: "媒体整理设置"},
+		{ID: "rss", Label: "RSS 订阅"},
 	}
 }

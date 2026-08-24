@@ -23,6 +23,7 @@ import (
 	"litepan/internal/logx"
 	"litepan/internal/mediaorganize"
 	"litepan/internal/playback"
+	"litepan/internal/rss"
 	"litepan/internal/settings"
 	"litepan/internal/store"
 	"litepan/internal/strm"
@@ -52,6 +53,7 @@ type App struct {
 	cacheRetention *cacheretention.Service
 	embyProxy      *embyproxy.Service
 	fnosProxy      *fnosproxy.Service
+	rss            *rss.Service
 	httpSrv        *http.Server
 	httpBaseCancel context.CancelFunc
 }
@@ -121,6 +123,7 @@ func New(ctx context.Context, opts Options) (*App, error) {
 		cacheRetention: svc.cacheRetention,
 		embyProxy:      svc.embyProxy,
 		fnosProxy:      svc.fnosProxy,
+		rss:            svc.rss,
 		httpSrv:        httpSrv,
 		httpBaseCancel: httpBaseCancel,
 	}, nil
@@ -142,6 +145,9 @@ func (a *App) Run(ctx context.Context) error {
 	}
 	if a.automation != nil {
 		a.automation.Start(ctx)
+	}
+	if a.rss != nil {
+		a.rss.Start(ctx)
 	}
 	if a.fuse != nil {
 		a.fuse.Start(ctx)

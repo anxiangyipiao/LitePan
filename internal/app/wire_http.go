@@ -55,6 +55,7 @@ func wireHTTPServer(cfg config.Config, logs *logx.Manager, st *storeBundle, core
 		CrossTransfer:     svc.crossTransfer,
 		EmbyProxy:         svc.embyProxy,
 		FnosProxy:         svc.fnosProxy,
+		RSS:               svc.rss,
 		ApiKeys:           apiKeySvc,
 		Auth:              core.auth,
 		AuthSched:         core.sched,

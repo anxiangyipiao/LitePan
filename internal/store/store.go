@@ -19,6 +19,8 @@ type Store struct {
 	CacheRetentionTasks domain.CacheRetentionTaskRepository
 	AutomationRules     domain.AutomationRuleRepository
 	AutomationRuns      domain.AutomationRunRepository
+	RSSSubscriptions    domain.RSSSubscriptionRepository
+	RSSDownloadHistory  domain.RSSDownloadHistoryRepository
 }
 
 // New 基于已打开的 DB 构造仓储集合。
@@ -39,5 +41,7 @@ func New(db *DB) *Store {
 		CacheRetentionTasks: &cacheRetentionRepo{db: db},
 		AutomationRules:     &automationRuleRepo{db: db},
 		AutomationRuns:      &automationRunRepo{db: db},
+		RSSSubscriptions:    &subscriptionRepo{db: db},
+		RSSDownloadHistory:  &historyRepo{db: db},
 	}
 }

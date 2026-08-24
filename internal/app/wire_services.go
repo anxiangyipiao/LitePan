@@ -20,6 +20,7 @@ import (
 	"litepan/internal/mediaorganize"
 	"litepan/internal/offlinedownload"
 	"litepan/internal/playback"
+	"litepan/internal/rss"
 	"litepan/internal/settings"
 	"litepan/internal/strm"
 	"litepan/internal/strmscrape"
@@ -44,6 +45,7 @@ type servicesBundle struct {
 	embyProxy        *embyproxy.Service
 	fnosProxy        *fnosproxy.Service
 	favorites        *favorites.Service
+	rss              *rss.Service
 }
 
 func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *coreBundle) *servicesBundle {
@@ -120,6 +122,16 @@ func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *
 		Log:      logs.For(logx.ModuleFileOp),
 	})
 	fuseSvc.SetUploads(uploadSvc)
+	rssSvc := rss.New(rss.Options{
+		Subscriptions: st.store.RSSSubscriptions,
+		History:       st.store.RSSDownloadHistory,
+		Accounts:      st.store.Accounts,
+		Offline:       offlineDownloadSvc,
+		Settings:      st.settings,
+		Bus:           core.bus,
+		Log:           logs.For(logx.ModuleSystem),
+	})
+	rssSvc.Register(core.bus)
 	crossTransferSvc := crosstransfer.New(crosstransfer.Options{
 		Exec:     core.exec,
 		Files:    fileSvc,
@@ -170,5 +182,6 @@ func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *
 		embyProxy:        embyProxySvc,
 		fnosProxy:        fnosProxySvc,
 		favorites:        favoritesSvc,
+		rss:              rssSvc,
 	}
 }
