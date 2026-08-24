@@ -39,7 +39,8 @@ type RSSSubscription struct {
 	AccountID            int64     `json:"account_id"`
 	TargetParentID       string    `json:"target_parent_id"`
 	TargetDisplayPath    string    `json:"target_display_path"`
-	FetchIntervalMinutes int       `json:"fetch_interval_minutes"` // 0 = 用系统默认
+	ConvertTorrentToMagnet bool    `json:"convert_torrent_to_magnet"` // 仅 offline 目标：http .torrent 转磁力
+	FetchIntervalMinutes int       `json:"fetch_interval_minutes"`    // 0 = 用系统默认
 	ConsecutiveFailures  int       `json:"consecutive_failures"`
 	LastFetchAt          time.Time `json:"last_fetch_at"`
 	LastFetchStatus      string    `json:"last_fetch_status"`

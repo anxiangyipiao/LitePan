@@ -19,6 +19,7 @@ export interface RSSSubscription {
   account_id: number;
   target_parent_id: string;
   target_display_path: string;
+  convert_torrent_to_magnet: boolean;
   fetch_interval_minutes: number;
   consecutive_failures: number;
   last_fetch_at?: string;

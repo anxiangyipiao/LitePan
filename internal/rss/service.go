@@ -242,6 +242,7 @@ func (s *Service) rebuildSubForHistory(ctx context.Context, rec *domain.RSSDownl
 		sub.AccountID = real.AccountID
 		sub.TargetParentID = real.TargetParentID
 		sub.TargetDisplayPath = real.TargetDisplayPath
+		sub.ConvertTorrentToMagnet = real.ConvertTorrentToMagnet
 	}
 	return sub, nil
 }

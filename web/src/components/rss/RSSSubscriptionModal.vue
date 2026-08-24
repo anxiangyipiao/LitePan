@@ -21,6 +21,7 @@ import AppButton from "@/components/base/AppButton.vue";
 import AppInput from "@/components/base/AppInput.vue";
 import AppSelect from "@/components/base/AppSelect.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
+import SettingsBoolSegment from "@/components/admin/SettingsBoolSegment.vue";
 import FolderPickerModal from "@/components/file/FolderPickerModal.vue";
 
 const props = defineProps<{
@@ -48,6 +49,7 @@ const form = reactive<RSSSubscriptionInput>({
   account_id: 0,
   target_parent_id: "",
   target_display_path: "/",
+  convert_torrent_to_magnet: true,
   fetch_interval_minutes: 0,
 });
 
@@ -120,6 +122,7 @@ function resetForm() {
   form.account_id = s?.account_id ?? 0;
   form.target_parent_id = s?.target_parent_id ?? "";
   form.target_display_path = s?.target_display_path ?? "/";
+  form.convert_torrent_to_magnet = s?.convert_torrent_to_magnet ?? true;
   form.fetch_interval_minutes = s?.fetch_interval_minutes ?? 0;
   previewResult.value = null;
   previewError.value = "";
@@ -300,6 +303,18 @@ function torrentType(it: RSSPreviewItem): string {
               </AppButton>
             </div>
           </div>
+          <label class="rss-modal__field rss-modal__field--span">
+            <span class="rss-modal__label">HTTP 种子转磁力</span>
+            <SettingsBoolSegment
+              v-model="form.convert_torrent_to_magnet"
+              label="HTTP 种子转磁力"
+              on-label="转换"
+              off-label="跳过"
+            />
+            <small class="rss-modal__hint">
+              仅提供 http .torrent 链接的条目：开启会下载种子解析 infohash 转成磁力链再离线，关闭则直接跳过。
+            </small>
+          </label>
         </template>
       </div>
 

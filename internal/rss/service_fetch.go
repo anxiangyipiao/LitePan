@@ -212,10 +212,10 @@ func (s *Service) pushToOffline(ctx context.Context, sub *domain.RSSSubscription
 		return
 	}
 	// http .torrent 链接直接离线只会把种子文件本体下载下来：先下载并解析出 infohash，
-	// 转成磁力链再走正常离线流（可在系统设置关闭该转换）。
+	// 转成磁力链再走正常离线流（订阅级开关控制）。
 	if isHttpTorrentURL(torrentURL) {
-		if s.settings == nil || !s.settings.Bool(settings.KeyRSSConvertTorrentToMagnet) {
-			s.markHistory(ctx, rec, domain.RSSStatusSkipped, "已关闭 .torrent 转磁力链，跳过 HTTP 种子链接", "")
+		if !sub.ConvertTorrentToMagnet {
+			s.markHistory(ctx, rec, domain.RSSStatusSkipped, "已关闭该订阅的 .torrent 转磁力链，跳过 HTTP 种子链接", "")
 			return
 		}
 		magnet, hash, err := s.downloadTorrentToMagnet(ctx, torrentURL, rec.Title)

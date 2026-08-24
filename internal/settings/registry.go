@@ -54,8 +54,7 @@ const (
 	KeyMagnetSearchProxyUsername = "magnet_search_proxy_username"
 	KeyMagnetSearchProxyPassword = "magnet_search_proxy_password"
 
-	KeyRSSDefaultFetchInterval    = "rss_default_fetch_interval_minutes"
-	KeyRSSConvertTorrentToMagnet  = "rss_convert_torrent_to_magnet"
+	KeyRSSDefaultFetchInterval = "rss_default_fetch_interval_minutes"
 
 	KeyQBURL      = "qb_url"
 	KeyQBUsername = "qb_username"
@@ -329,14 +328,6 @@ func defaultSpecs() []Spec {
 			Unit:        "分钟",
 			Min:         intp(1),
 			Max:         intp(1440),
-		},
-		{
-			Key:         KeyRSSConvertTorrentToMagnet,
-			Type:        TypeBool,
-			Category:    "rss",
-			Label:       "离线目标转换 .torrent 为磁力",
-			Description: "开启后，只有 http .torrent 链接的条目会下载种子文件解析 infohash 转成磁力链再离线；关闭则直接跳过此类条目。",
-			Default:     "true",
 		},
 		{
 			Key:         KeyQBURL,

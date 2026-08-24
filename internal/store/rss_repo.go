@@ -15,11 +15,11 @@ func (r *subscriptionRepo) Create(ctx context.Context, sub *domain.RSSSubscripti
 		`INSERT INTO rss_subscriptions
 		  (name, feed_url, enabled, title_keyword, exclude_keywords, episode_min, episode_max, quality_keyword,
 		   target_type, qb_save_path, qb_category, account_id, target_parent_id, target_display_path,
-		   fetch_interval_minutes, consecutive_failures, last_fetch_at, last_fetch_status, last_fetch_message)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		   convert_torrent_to_magnet, fetch_interval_minutes, consecutive_failures, last_fetch_at, last_fetch_status, last_fetch_message)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		sub.Name, sub.FeedURL, boolToInt(sub.Enabled), sub.TitleKeyword, sub.ExcludeKeywords,
 		sub.EpisodeMin, sub.EpisodeMax, sub.QualityKeyword, sub.TargetType, sub.QBSavePath, sub.QBCategory,
-		sub.AccountID, sub.TargetParentID, sub.TargetDisplayPath, sub.FetchIntervalMinutes,
+		sub.AccountID, sub.TargetParentID, sub.TargetDisplayPath, boolToInt(sub.ConvertTorrentToMagnet), sub.FetchIntervalMinutes,
 		sub.ConsecutiveFailures, tsValue(sub.LastFetchAt), sub.LastFetchStatus, sub.LastFetchMessage)
 	if err != nil {
 		return 0, wrapDB(err)
@@ -36,11 +36,11 @@ func (r *subscriptionRepo) Update(ctx context.Context, sub *domain.RSSSubscripti
 		`UPDATE rss_subscriptions
 		 SET name=?, feed_url=?, enabled=?, title_keyword=?, exclude_keywords=?, episode_min=?, episode_max=?, quality_keyword=?,
 		     target_type=?, qb_save_path=?, qb_category=?, account_id=?, target_parent_id=?, target_display_path=?,
-		     fetch_interval_minutes=?, updated_at=CURRENT_TIMESTAMP
+		     convert_torrent_to_magnet=?, fetch_interval_minutes=?, updated_at=CURRENT_TIMESTAMP
 		 WHERE id=?`,
 		sub.Name, sub.FeedURL, boolToInt(sub.Enabled), sub.TitleKeyword, sub.ExcludeKeywords,
 		sub.EpisodeMin, sub.EpisodeMax, sub.QualityKeyword, sub.TargetType, sub.QBSavePath, sub.QBCategory,
-		sub.AccountID, sub.TargetParentID, sub.TargetDisplayPath, sub.FetchIntervalMinutes, sub.ID)
+		sub.AccountID, sub.TargetParentID, sub.TargetDisplayPath, boolToInt(sub.ConvertTorrentToMagnet), sub.FetchIntervalMinutes, sub.ID)
 	return wrapDB(err)
 }
 
@@ -99,13 +99,14 @@ func (r *subscriptionRepo) UpdateFetchState(ctx context.Context, id int64, statu
 
 const selectRSSSubscriptionCols = `SELECT id, name, feed_url, enabled, title_keyword, exclude_keywords, episode_min, episode_max,
   quality_keyword, target_type, qb_save_path, qb_category, account_id, target_parent_id, target_display_path,
-  fetch_interval_minutes, consecutive_failures, last_fetch_at, last_fetch_status, last_fetch_message, created_at, updated_at
+  convert_torrent_to_magnet, fetch_interval_minutes, consecutive_failures, last_fetch_at, last_fetch_status, last_fetch_message, created_at, updated_at
 FROM rss_subscriptions`
 
 func scanRSSSubscription(s rowScanner) (*domain.RSSSubscription, error) {
 	var (
 		sub         domain.RSSSubscription
 		enabledInt  int
+		convertInt  int
 		lastFetchAt sql.NullString
 		createdAt   sql.NullString
 		updatedAt   sql.NullString
@@ -113,12 +114,13 @@ func scanRSSSubscription(s rowScanner) (*domain.RSSSubscription, error) {
 	err := s.Scan(
 		&sub.ID, &sub.Name, &sub.FeedURL, &enabledInt, &sub.TitleKeyword, &sub.ExcludeKeywords,
 		&sub.EpisodeMin, &sub.EpisodeMax, &sub.QualityKeyword, &sub.TargetType, &sub.QBSavePath, &sub.QBCategory,
-		&sub.AccountID, &sub.TargetParentID, &sub.TargetDisplayPath, &sub.FetchIntervalMinutes,
+		&sub.AccountID, &sub.TargetParentID, &sub.TargetDisplayPath, &convertInt, &sub.FetchIntervalMinutes,
 		&sub.ConsecutiveFailures, &lastFetchAt, &sub.LastFetchStatus, &sub.LastFetchMessage, &createdAt, &updatedAt)
 	if err != nil {
 		return nil, wrapDB(err)
 	}
 	sub.Enabled = enabledInt != 0
+	sub.ConvertTorrentToMagnet = convertInt != 0
 	sub.LastFetchAt = parseTS(lastFetchAt)
 	sub.CreatedAt = parseTS(createdAt)
 	sub.UpdatedAt = parseTS(updatedAt)
