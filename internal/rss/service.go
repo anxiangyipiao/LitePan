@@ -215,14 +215,15 @@ func (s *Service) ClearHistory(ctx context.Context, subscriptionID int64) (int, 
 	return s.history.Clear(ctx, subscriptionID)
 }
 
-// RetryHistory 重推一条失败/跳过记录。
+// RetryHistory 重推一条失败记录。
+// 仅允许失败状态：跳过的记录含「全局去重」类（重推会重复推送）且已在 UI 隐藏。
 func (s *Service) RetryHistory(ctx context.Context, historyID int64) (*domain.RSSDownloadHistory, error) {
 	rec, err := s.history.Get(ctx, historyID)
 	if err != nil {
 		return nil, err
 	}
-	if rec.Status != domain.RSSStatusFailed && rec.Status != domain.RSSStatusSkipped {
-		return nil, domain.Errorf(domain.CodeValidation, "仅支持重推失败或跳过的记录")
+	if rec.Status != domain.RSSStatusFailed {
+		return nil, domain.Errorf(domain.CodeValidation, "仅支持重推失败的记录")
 	}
 	sub, err := s.rebuildSubForHistory(ctx, rec)
 	if err != nil {
