@@ -31,6 +31,7 @@ const adminNav = [
   { key: "tasks", label: "任务管理", icon: "fa-solid fa-list-check" },
   { key: "tools", label: "辅助工具", icon: "fa-solid fa-toolbox" },
   { key: "cross-transfer", label: "跨盘秒传", icon: "fa-solid fa-right-left" },
+  { key: "backup", label: "定时备份", icon: "fa-solid fa-clock-rotate-left" },
   { key: "share", label: "文件共享", icon: "fa-solid fa-share-nodes" },
 ];
 const adminKeys = adminNav.map((n) => n.key);
