@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onActivated, onDeactivated, ref } from "vue";
+import { computed, onActivated, onDeactivated, ref, watch } from "vue";
+
+const props = withDefaults(defineProps<{ active?: boolean }>(), { active: true });
 import AppButton from "@/components/base/AppButton.vue";
 import AppBadge from "@/components/base/AppBadge.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
@@ -202,6 +204,7 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 function startPolling() {
   stopPolling();
+  if (props.active === false) return;
   pollTimer = setInterval(() => {
     if (document.hidden) return;
     void load();
@@ -215,6 +218,19 @@ function stopPolling() {
     pollTimer = null;
   }
 }
+
+// 作为磁力页标签时，仅在标签激活时轮询
+watch(
+  () => props.active,
+  (active) => {
+    if (active) {
+      void load();
+      startPolling();
+    } else {
+      stopPolling();
+    }
+  },
+);
 
 onActivated(() => {
   void load();

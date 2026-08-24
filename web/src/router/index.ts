@@ -30,14 +30,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: "magnet",
         name: "magnet",
-        component: () => import("@/views/MagnetSearchView.vue"),
-        meta: { title: "磁力搜索", requiresAuth: true },
-      },
-      {
-        path: "subscribe",
-        name: "subscribe",
-        component: () => import("@/views/SubscribeView.vue"),
-        meta: { title: "订阅追番", requiresAuth: true },
+        component: () => import("@/views/MagnetHubView.vue"),
+        meta: { title: "磁力 · 追番", requiresAuth: true },
       },
       {
         path: "admin",
