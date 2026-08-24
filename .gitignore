@@ -33,3 +33,4 @@ dist/*.tar.gz
 # 环境与密钥
 .env
 .env.*
+.commandcode
