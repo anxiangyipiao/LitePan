@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import AppButton from "@/components/base/AppButton.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
 import {
@@ -21,7 +21,6 @@ import { toast, copyTextToClipboard } from "@/composables/useToast";
 import MagnetOfflineModal from "@/components/common/MagnetOfflineModal.vue";
 
 const route = useRoute();
-const router = useRouter();
 
 const movieId = computed(() => Number(route.params.id) || 0);
 const mediaType = computed(() => (route.query.type as string) || "movie");
@@ -139,10 +138,6 @@ function formatDate(unix: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function goBack() {
-  router.back();
-}
-
 function posterSrc(): string {
   const m = movie.value;
   if (!m) return "";
@@ -202,12 +197,6 @@ onMounted(() => {
 
 <template>
   <div class="omd-page">
-    <button class="omd-page__back" @click="goBack">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="m15 18-6-6 6-6" />
-      </svg>
-      返回
-    </button>
 
     <div v-if="loading" class="omd-page__loading">
       <BusySpinner :size="32" />
@@ -328,27 +317,6 @@ onMounted(() => {
   min-height: 100vh;
   background: linear-gradient(180deg, #0a0a0f 0%, #14141c 100%);
   padding-bottom: 40px;
-}
-
-.omd-page__back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 16px;
-  padding: 8px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: #c0c0c0;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.omd-page__back:hover {
-  border-color: rgba(255, 215, 0, 0.4);
-  color: #ffd700;
-  background: rgba(255, 215, 0, 0.08);
 }
 
 .omd-page__loading {
