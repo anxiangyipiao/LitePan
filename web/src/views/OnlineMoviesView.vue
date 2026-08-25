@@ -496,7 +496,7 @@ function year(movie: TmdbMedia): string {
 .om-card__poster img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
   transition: transform 0.4s ease;
 }
@@ -515,6 +515,7 @@ function year(movie: TmdbMedia): string {
   font-weight: 700;
   color: #555;
   background: linear-gradient(160deg, #1a1a24, #252532);
+  z-index: 1;
 }
 
 .om-card__rating {

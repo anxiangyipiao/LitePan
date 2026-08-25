@@ -78,13 +78,30 @@ func errorResp(msg string) Resp {
 }
 
 // tmdbDo 发起 TMDB API 请求并解析响应。
-func (h *Handler) tmdbDo(ctx context.Context, apiKey, path string, query url.Values, target any) error {
+// 支持缓存：列表类请求缓存 1 小时，详情类请求缓存 24 小时。
+func (h *Handler) tmdbDo(ctx context.Context, apiKey, path string, query url.Values, target any, cacheTTL ...time.Duration) error {
 	if apiKey == "" {
 		return fmt.Errorf("TMDB API Key 未配置，请在系统设置中配置")
 	}
 	if query == nil {
 		query = url.Values{}
 	}
+
+	// 构建缓存键
+	cacheKey := fmt.Sprintf("tmdb:%s:%s", path, query.Encode())
+
+	// 尝试从缓存读取
+	ttl := time.Hour // 默认缓存 1 小时
+	if len(cacheTTL) > 0 && cacheTTL[0] > 0 {
+		ttl = cacheTTL[0]
+	}
+
+	if cached, ok := h.cache.Get(cacheKey); ok {
+		if data, ok := cached.(json.RawMessage); ok {
+			return json.Unmarshal(data, target)
+		}
+	}
+
 	query.Set("api_key", apiKey)
 	query.Set("language", "zh-CN")
 
@@ -115,6 +132,9 @@ func (h *Handler) tmdbDo(ctx context.Context, apiKey, path string, query url.Val
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("TMDB 返回错误 (HTTP %d): %s", resp.StatusCode, string(body))
 	}
+
+	// 写入缓存
+	h.cache.Set(cacheKey, json.RawMessage(body), ttl)
 
 	return json.Unmarshal(body, target)
 }
@@ -284,7 +304,7 @@ func (h *Handler) tmdbMovieDetail(w http.ResponseWriter, r *http.Request) {
 	path := fmt.Sprintf("/movie/%s", id)
 
 	var res json.RawMessage
-	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res, 24*time.Hour)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -304,7 +324,7 @@ func (h *Handler) tmdbTvDetail(w http.ResponseWriter, r *http.Request) {
 	path := fmt.Sprintf("/tv/%s", id)
 
 	var res json.RawMessage
-	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res, 24*time.Hour)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -328,7 +348,7 @@ func (h *Handler) tmdbCredits(w http.ResponseWriter, r *http.Request) {
 	path := fmt.Sprintf("/%s/%s/credits", mediaType, id)
 
 	var res json.RawMessage
-	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res, 24*time.Hour)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -352,7 +372,7 @@ func (h *Handler) tmdbImages(w http.ResponseWriter, r *http.Request) {
 	path := fmt.Sprintf("/%s/%s/images", mediaType, id)
 
 	var res json.RawMessage
-	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res, 24*time.Hour)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -371,7 +391,7 @@ func (h *Handler) tmdbGenres(w http.ResponseWriter, r *http.Request) {
 	path := fmt.Sprintf("/genre/%s/list", mediaType)
 
 	var res json.RawMessage
-	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res, 24*time.Hour)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
