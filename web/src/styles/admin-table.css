@@ -6,8 +6,16 @@
   overflow: hidden;
 }
 
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 @media (max-width: 720px) {
   .admin-panel-table-wrap {
+    overflow-x: visible;
+  }
+  .table-wrap {
     overflow-x: auto;
   }
 }
