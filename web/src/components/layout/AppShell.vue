@@ -21,7 +21,7 @@ const router = useRouter();
 const auth = useAuthStore();
 
 // 仅缓存影视相关页面（返回保留状态）；网盘页 IndexView 不缓存，避免启动数据不刷新。
-const keepAlivePages = ["MediaLibraryView", "MovieDetailView", "MagnetHubView", "AdminView"];
+const keepAlivePages = ["MediaLibraryView", "MovieDetailView", "OnlineMoviesView", "MovieDetailView", "MagnetHubView", "AdminView"];
 
 // 管理后台子导航（对应 AdminView 的 nav 定义）
 const adminNav = [
@@ -94,6 +94,17 @@ async function handleLogout() {
         >
           <SvgIcon name="video" :size="22" class="app-nav__icon" />
           <span class="app-nav__label">影视</span>
+        </RouterLink>
+
+        <!-- 在线选片 -->
+        <RouterLink
+          to="/online-movies"
+          class="app-nav__btn"
+          :class="{ 'is-active': route.path.startsWith('/online-movies') }"
+          aria-label="在线选片"
+        >
+          <SvgIcon name="compass" :size="22" class="app-nav__icon" />
+          <span class="app-nav__label">选片</span>
         </RouterLink>
 
         <!-- 磁力搜索 + 订阅追番（登录态可用，独立页） -->
