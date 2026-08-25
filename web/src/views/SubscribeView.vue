@@ -296,6 +296,7 @@ onDeactivated(stopPolling);
     </div>
 
     <div v-else class="admin-panel-table-wrap">
+      <div class="table-wrap">
       <table class="admin-table">
         <thead>
           <tr>
@@ -347,6 +348,7 @@ onDeactivated(stopPolling);
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
 
     <RSSSubscriptionModal :open="modalOpen" :subscription="editing" @close="modalOpen = false" @saved="onSaved" />
@@ -524,6 +526,37 @@ onDeactivated(stopPolling);
   padding: 48px 0;
 }
 
+/* 订阅表格：固定布局 + 列宽，避免内容把表撑出容器 */
+.admin-panel-table-wrap .admin-table {
+  table-layout: fixed;
+  min-width: 900px;
+}
+
+.subscribe-page__th:nth-child(1),
+.subscribe-page__td-name {
+  width: 22%;
+}
+
+.subscribe-page__th:nth-child(2),
+.subscribe-page__td-trunc:nth-child(2) {
+  width: 18%;
+}
+
+.subscribe-page__th:nth-child(3),
+.subscribe-page__td-trunc:nth-child(3) {
+  width: 18%;
+}
+
+.subscribe-page__th:nth-child(4),
+.subscribe-page__td-nowrap:nth-child(4) {
+  width: 10%;
+}
+
+.subscribe-page__th:nth-child(5),
+.subscribe-page__td-nowrap:nth-child(5) {
+  width: 16%;
+}
+
 .subscribe-page__td-name {
   white-space: nowrap;
 }
@@ -590,11 +623,18 @@ onDeactivated(stopPolling);
 }
 
 .subscribe-page__actions {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   flex-wrap: nowrap;
   gap: 4px;
+}
+
+/* 操作列：固定宽度，确保 4 个按钮能排下 */
+.subscribe-page__th-actions,
+.subscribe-page__td-actions {
+  width: 16%;
+  min-width: 160px;
 }
 
 /* 抓取记录抽屉 */
