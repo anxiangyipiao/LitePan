@@ -47,14 +47,14 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
   --magnet-accent-soft: rgba(79, 142, 247, 0.12);
 }
 
-/* 分段药丸：与影视的 .ml-mode-switch 同款——白底圆角胶囊，内部含 1–2 个圆角按钮 */
+/* 分段药丸：与影视的 .ml-mode-switch 同款——白底圆角胶囊，内部含 1–2 个圆角按钮（与下方面板共享 960 容器，左对齐） */
 .magnet-hub__tabs {
   max-width: 960px;
   margin: 16px auto 0;
   padding: 0 20px;
   box-sizing: border-box;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .magnet-hub__tabs-inner {
