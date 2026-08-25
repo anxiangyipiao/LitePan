@@ -91,6 +91,7 @@
   --content-width: 85%;
 
   --transition: 0.2s ease;
+  --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   --admin-sidebar-bg: linear-gradient(180deg, var(--brand-start), var(--brand-end));  --admin-sidebar-border: transparent;
   --admin-sidebar-shadow: none;
@@ -125,8 +126,8 @@
   --brand-strong: #3b82f6;
   --brand-gradient-h-hover: linear-gradient(90deg, #2563eb, #0284c7);
 
-  --bg: #101215;
-  --bg-muted: #1b1f24;
+  --bg: #0a0a0f;
+  --bg-muted: #14141c;
   --surface: #181b20;
   --surface-muted: #1d2127;
   --surface-sunken: #15181c;
@@ -142,9 +143,9 @@
   --info: #60a5fa;
   --info-soft: #1e293b;
 
-  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --shadow-soft: 0 2px 4px rgba(0, 0, 0, 0.35);
-  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
 
   --admin-sidebar-bg: linear-gradient(
     135deg,

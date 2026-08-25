@@ -9,8 +9,10 @@
   border-radius: var(--radius-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: var(--transition);
+  transition: all var(--transition-smooth);
   white-space: nowrap;
+  position: relative;
+  overflow: hidden;
 }
 .btn--md {
   padding: 8px 16px;
@@ -26,16 +28,30 @@
   opacity: 0.55;
   cursor: not-allowed;
 }
+.btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(255,255,255,0.1), transparent);
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+.btn:not(:disabled):hover::after {
+  opacity: 1;
+}
 
 .btn--primary {
   background: var(--brand-gradient-h);
   color: var(--text-on-brand);
+  box-shadow: 0 2px 8px rgba(79, 142, 247, 0.25);
 }
 .btn--primary:not(:disabled):hover {
   background: var(--brand-gradient-h-hover);
+  box-shadow: 0 4px 16px rgba(79, 142, 247, 0.35);
+  transform: translateY(-1px);
 }
 .btn--primary:not(:disabled):active {
-  transform: translateY(1px);
+  transform: translateY(0);
   filter: brightness(0.96);
 }
 
@@ -54,6 +70,7 @@
   background: var(--surface-sunken);
   border-color: var(--brand);
   color: var(--brand);
+  box-shadow: 0 2px 8px rgba(79, 142, 247, 0.15);
 }
 .btn--secondary:not(:disabled):active {
   transform: translateY(1px);
@@ -86,11 +103,33 @@
 .btn--danger {
   background: var(--danger);
   color: #fff;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
 }
 .btn--danger:not(:disabled):hover {
   filter: brightness(1.05);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.35);
+  transform: translateY(-1px);
 }
 .btn--danger:not(:disabled):active {
-  transform: translateY(1px);
+  transform: translateY(0);
   filter: brightness(0.94);
+}
+
+/* 暗色模式按钮增强 */
+:root[data-theme="dark"] .btn--secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #c0c0c0;
+}
+:root[data-theme="dark"] .btn--secondary:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 215, 0, 0.4);
+  color: #ffd700;
+}
+:root[data-theme="dark"] .btn--cancel {
+  background: rgba(255, 255, 255, 0.05);
+  color: #c0c0c0;
+}
+:root[data-theme="dark"] .btn--cancel:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.1);
 }

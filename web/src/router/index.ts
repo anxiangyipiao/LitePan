@@ -28,12 +28,6 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "影视详情" },
       },
       {
-        path: "online-movies",
-        name: "online-movies",
-        component: () => import("@/views/OnlineMoviesView.vue"),
-        meta: { title: "在线选片" },
-      },
-      {
         path: "online-movies/:id",
         name: "online-movie-detail",
         component: () => import("@/views/OnlineMovieDetailView.vue"),
