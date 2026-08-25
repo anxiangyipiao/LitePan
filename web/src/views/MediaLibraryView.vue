@@ -14,6 +14,7 @@ import {
   getTmdbTopRated,
   getTmdbNowPlaying,
   getTmdbUpcoming,
+  getTmdbGenres,
   tmdbImage,
   type TmdbMedia,
   type TmdbSearchResult,
@@ -396,7 +397,41 @@ onMounted(() => {
   if (onlineItems.value.length === 0) {
     void loadOnlineData(true);
   }
+  void loadTmdbGenres();
 });
+
+// TMDB 分类表（id → 中文/英文名称），用于把在线选片卡片的 genre_ids 解析为真实名称
+const tmdbGenres = ref<Map<number, string>>(new Map());
+async function loadTmdbGenres() {
+  try {
+    const [movie, tv] = await Promise.all([
+      getTmdbGenres("movie").catch(() => ({ genres: [] as { id: number; name: string }[] })),
+      getTmdbGenres("tv").catch(() => ({ genres: [] as { id: number; name: string }[] })),
+    ]);
+    const map = new Map<number, string>();
+    for (const g of movie.genres || []) map.set(g.id, g.name);
+    for (const g of tv.genres || []) map.set(g.id, g.name);
+    tmdbGenres.value = map;
+  } catch {
+    // 静默失败：名称解析不出来就退回到不显示分类
+  }
+}
+
+// 从 genre_ids 解析出最多 max 个真实分类名（同名去重）
+function onlineGenres(movie: TmdbMedia, max = 2): string[] {
+  const ids = movie.genre_ids || [];
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (names.length >= max) break;
+    const n = tmdbGenres.value.get(id);
+    if (n && !seen.has(n)) {
+      seen.add(n);
+      names.push(n);
+    }
+  }
+  return names;
+}
 
 watch(
   () => [String(route.query.genre ?? ""), String(route.query.actor ?? "")],
@@ -656,7 +691,7 @@ const subtitle = (item: MediaLibraryItem) => {
               <div class="ml-online__title">{{ movie.title || movie.name }}</div>
               <div class="ml-online__sub">
                 <span v-if="onlineYear(movie)">{{ onlineYear(movie) }}</span>
-                <span v-if="movie.genre_ids?.length"> · {{ movie.genre_ids.length }} 类型</span>
+                <span v-if="onlineGenres(movie).length"> · {{ onlineGenres(movie).join(" · ") }}</span>
               </div>
             </div>
           </div>
