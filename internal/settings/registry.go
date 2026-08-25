@@ -70,8 +70,10 @@ const (
 	KeyMOTmdbLanguage          = "mo_tmdb_language"
 	KeyMOAPIRequestIntervalMS  = "mo_api_request_interval_ms"
 	KeyMOTmdbRequestIntervalMS = "mo_tmdb_request_interval_ms"
-	KeyMOTmdbImageCacheHours   = "mo_tmdb_image_cache_hours"
-	KeyMOTmdbListCacheHours    = "mo_tmdb_list_cache_hours"
+	KeyMOTmdbImageCacheHours    = "mo_tmdb_image_cache_hours"
+	KeyMOTmdbListCacheHours     = "mo_tmdb_list_cache_hours"
+	KeyMOTmdbSearchCacheHours   = "mo_tmdb_search_cache_hours"
+	KeyMOTmdbDetailCacheHours   = "mo_tmdb_detail_cache_hours"
 	KeyMOFileExtensions        = "mo_file_extensions"
 	KeyMOMetadataExtensions    = "mo_metadata_extensions"
 	KeyMOMediaTagOrder         = "mo_media_tag_order"
@@ -687,9 +689,31 @@ func defaultSpecs() []Spec {
 			Key:         KeyMOTmdbListCacheHours,
 			Type:        TypeInt,
 			Category:    "media_organize",
-			Label:       "TMDB 列表缓存时长",
-			Description: "在线选片「热门 / 高分 / 正在热映 / 即将上映 / 剧集热门」以及搜索结果等列表接口的服务端缓存时间。榜单变化频繁，建议 1–6 小时；设为 0 表示不缓存。",
+			Label:       "TMDB 榜单缓存时长",
+			Description: "在线选片「热门 / 高分 / 正在热映 / 即将上映 / 剧集热门 / 发现筛选」等榜单列表的服务端缓存时间。榜单变化频繁，建议 1–6 小时；设为 0 表示不缓存。",
 			Default:     "1",
+			Unit:        "小时",
+			Min:         intp(0),
+			Max:         intp(2160),
+		},
+		{
+			Key:         KeyMOTmdbSearchCacheHours,
+			Type:        TypeInt,
+			Category:    "media_organize",
+			Label:       "TMDB 搜索缓存时长",
+			Description: "在线选片搜索接口（/search/multi）的服务端缓存时间，按关键词 + 页码独立缓存。搜索结果变化较快，建议 1 小时左右；设为 0 表示不缓存。",
+			Default:     "1",
+			Unit:        "小时",
+			Min:         intp(0),
+			Max:         intp(2160),
+		},
+		{
+			Key:         KeyMOTmdbDetailCacheHours,
+			Type:        TypeInt,
+			Category:    "media_organize",
+			Label:       "TMDB 详情缓存时长",
+			Description: "电影 / 剧集详情、演员、图片列表、分类等几乎不变的接口的服务端缓存时间。建议 24 小时以上；设为 0 表示不缓存。",
+			Default:     "24",
 			Unit:        "小时",
 			Min:         intp(0),
 			Max:         intp(2160),

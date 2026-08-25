@@ -99,6 +99,12 @@ const tmdbImageCacheItem = computed(
 const tmdbListCacheItem = computed(
   () => items.value.find((it) => it.key === "mo_tmdb_list_cache_hours") ?? null,
 );
+const tmdbSearchCacheItem = computed(
+  () => items.value.find((it) => it.key === "mo_tmdb_search_cache_hours") ?? null,
+);
+const tmdbDetailCacheItem = computed(
+  () => items.value.find((it) => it.key === "mo_tmdb_detail_cache_hours") ?? null,
+);
 const systemChangedKeys = computed(() => systemItems.value.filter((it) => isChanged(it)).map((it) => it.key));
 const systemChangedCount = computed(() => systemChangedKeys.value.length);
 const tmdbImageCacheChanged = computed(
@@ -106,6 +112,12 @@ const tmdbImageCacheChanged = computed(
 );
 const tmdbListCacheChanged = computed(
   () => Boolean(tmdbListCacheItem.value) && isChanged(tmdbListCacheItem.value!),
+);
+const tmdbSearchCacheChanged = computed(
+  () => Boolean(tmdbSearchCacheItem.value) && isChanged(tmdbSearchCacheItem.value!),
+);
+const tmdbDetailCacheChanged = computed(
+  () => Boolean(tmdbDetailCacheItem.value) && isChanged(tmdbDetailCacheItem.value!),
 );
 
 const passwordsMismatch = computed(
@@ -129,7 +141,12 @@ const homepageDirty = computed(
 );
 
 const servicesDirty = computed(
-  () => systemChangedCount.value > 0 || tmdbImageCacheChanged.value || tmdbListCacheChanged.value,
+  () =>
+    systemChangedCount.value > 0 ||
+    tmdbImageCacheChanged.value ||
+    tmdbListCacheChanged.value ||
+    tmdbSearchCacheChanged.value ||
+    tmdbDetailCacheChanged.value,
 );
 
 function revertSecurityDraft() {
@@ -145,11 +162,13 @@ function revertHomepageDraft() {
 
 function revertServicesDraft() {
   for (const it of systemItems.value) form[it.key] = original[it.key];
-  if (tmdbImageCacheItem.value) {
-    form[tmdbImageCacheItem.value.key] = original[tmdbImageCacheItem.value.key];
-  }
-  if (tmdbListCacheItem.value) {
-    form[tmdbListCacheItem.value.key] = original[tmdbListCacheItem.value.key];
+  for (const item of [
+    tmdbImageCacheItem.value,
+    tmdbListCacheItem.value,
+    tmdbSearchCacheItem.value,
+    tmdbDetailCacheItem.value,
+  ]) {
+    if (item) form[item.key] = original[item.key];
   }
 }
 
@@ -358,6 +377,12 @@ async function saveServices() {
     }
     if (tmdbListCacheItem.value && isChanged(tmdbListCacheItem.value)) {
       changed[tmdbListCacheItem.value.key] = form[tmdbListCacheItem.value.key];
+    }
+    if (tmdbSearchCacheItem.value && isChanged(tmdbSearchCacheItem.value)) {
+      changed[tmdbSearchCacheItem.value.key] = form[tmdbSearchCacheItem.value.key];
+    }
+    if (tmdbDetailCacheItem.value && isChanged(tmdbDetailCacheItem.value)) {
+      changed[tmdbDetailCacheItem.value.key] = form[tmdbDetailCacheItem.value.key];
     }
     if (Object.keys(changed).length > 0) {
       applyPayload(await saveSettings(changed));
@@ -569,7 +594,7 @@ async function submit() {
             </template>
           </SettingsRow>
         </SettingsCard>
-        <SettingsCard v-if="tmdbListCacheItem" title="TMDB 列表缓存" :accent="accentColor">
+        <SettingsCard v-if="tmdbListCacheItem" title="TMDB 榜单缓存" :accent="accentColor">
           <SettingsRow
             :show-changed-badge="true"
             :changed="tmdbListCacheChanged"
@@ -582,8 +607,7 @@ async function submit() {
                   :title="`${displayLabel(tmdbListCacheItem!)}说明`"
                 >
                   <p>{{ tmdbListCacheItem!.description }}</p>
-                  <p>缓存覆盖「热门 / 高分 / 正在热映 / 即将上映 / 剧集热门」以及搜索结果，按 接口路径 + 页码 区分。</p>
-                  <p>修改后立即生效；设为 0 时列表请求将不再被缓存，每次都回源 TMDB。</p>
+                  <p>按 接口路径 + 页码 区分缓存；设为 0 时榜单请求将不再被缓存，每次都回源 TMDB。</p>
                 </SettingsHelpTooltip>
               </div>
             </template>
@@ -593,6 +617,62 @@ async function submit() {
                   v-model="form[tmdbListCacheItem!.key]"
                   type="number"
                   :placeholder="tmdbListCacheItem!.default"
+                />
+              </div>
+            </template>
+          </SettingsRow>
+        </SettingsCard>
+        <SettingsCard v-if="tmdbSearchCacheItem" title="TMDB 搜索缓存" :accent="accentColor">
+          <SettingsRow
+            :show-changed-badge="true"
+            :changed="tmdbSearchCacheChanged"
+          >
+            <template #info>
+              <div class="settings-row__label">
+                <span>{{ displayLabel(tmdbSearchCacheItem!) }}</span>
+                <SettingsHelpTooltip
+                  v-if="tmdbSearchCacheItem!.description"
+                  :title="`${displayLabel(tmdbSearchCacheItem!)}说明`"
+                >
+                  <p>{{ tmdbSearchCacheItem!.description }}</p>
+                  <p>按 关键词 + 页码 区分缓存；搜索结果变化较快，建议保持较短时长。</p>
+                </SettingsHelpTooltip>
+              </div>
+            </template>
+            <template #control>
+              <div class="field-num">
+                <AppInput
+                  v-model="form[tmdbSearchCacheItem!.key]"
+                  type="number"
+                  :placeholder="tmdbSearchCacheItem!.default"
+                />
+              </div>
+            </template>
+          </SettingsRow>
+        </SettingsCard>
+        <SettingsCard v-if="tmdbDetailCacheItem" title="TMDB 详情缓存" :accent="accentColor">
+          <SettingsRow
+            :show-changed-badge="true"
+            :changed="tmdbDetailCacheChanged"
+          >
+            <template #info>
+              <div class="settings-row__label">
+                <span>{{ displayLabel(tmdbDetailCacheItem!) }}</span>
+                <SettingsHelpTooltip
+                  v-if="tmdbDetailCacheItem!.description"
+                  :title="`${displayLabel(tmdbDetailCacheItem!)}说明`"
+                >
+                  <p>{{ tmdbDetailCacheItem!.description }}</p>
+                  <p>覆盖电影 / 剧集详情、演员、图片列表、分类等几乎不变的接口，建议保持 24 小时以上以减少回源。</p>
+                </SettingsHelpTooltip>
+              </div>
+            </template>
+            <template #control>
+              <div class="field-num">
+                <AppInput
+                  v-model="form[tmdbDetailCacheItem!.key]"
+                  type="number"
+                  :placeholder="tmdbDetailCacheItem!.default"
                 />
               </div>
             </template>
