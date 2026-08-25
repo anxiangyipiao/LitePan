@@ -90,14 +90,16 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
   border-bottom-color: var(--brand);
 }
 
-/* 子页面包裹矩形：白底卡片 + 圆角 + 边框 + 阴影 */
+/* 子页面包裹矩形：白底卡片 + 圆角 + 边框 + 阴影（边框与阴影加重，确保浅色主题下也能明显区分） */
 .magnet-hub__panel {
   max-width: 960px;
   margin: 16px auto 24px;
   background: var(--surface);
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-soft);
-  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 24px rgba(15, 23, 42, 0.08);
   overflow: hidden;
 }
 
