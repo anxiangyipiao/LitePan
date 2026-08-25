@@ -207,14 +207,14 @@ export function discoverTmdb(params: {
   });
 }
 
-// 图片 URL 工具
+// 图片 URL 工具 - 使用后端代理（支持代理环境）
 export const tmdbImage = {
   poster: (path?: string, size = "w500") =>
-    path ? `https://image.tmdb.org/t/p/${size}${path}` : "",
+    path ? `/api/tmdb/image?s=${encodeURIComponent(size)}&p=${encodeURIComponent(path)}` : "",
   backdrop: (path?: string, size = "w780") =>
-    path ? `https://image.tmdb.org/t/p/${size}${path}` : "",
+    path ? `/api/tmdb/image?s=${encodeURIComponent(size)}&p=${encodeURIComponent(path)}` : "",
   profile: (path?: string, size = "w185") =>
-    path ? `https://image.tmdb.org/t/p/${size}${path}` : "",
+    path ? `/api/tmdb/image?s=${encodeURIComponent(size)}&p=${encodeURIComponent(path)}` : "",
   original: (path?: string) =>
-    path ? `https://image.tmdb.org/t/p/original${path}` : "",
+    path ? `/api/tmdb/image?s=original&p=${encodeURIComponent(path)}` : "",
 };

@@ -189,6 +189,7 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/images", h.tmdbImages)
 			r.Get("/genres", h.tmdbGenres)
 			r.Get("/discover", h.tmdbDiscover)
+			r.Get("/image", h.tmdbImage)
 		})
 		r.Route("/public", func(r chi.Router) {
 			r.Use(h.requirePublicOrAdmin)

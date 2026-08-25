@@ -442,9 +442,65 @@ func (h *Handler) tmdbDiscover(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, successRaw(res))
 }
 
+// tmdbImage 代理 TMDB 图片请求，避免浏览器直连 image.tmdb.org（需要代理时更稳定）。
+func (h *Handler) tmdbImage(w http.ResponseWriter, r *http.Request) {
+	size := r.URL.Query().Get("s")
+	if size == "" {
+		size = "w500"
+	}
+	path := r.URL.Query().Get("p")
+	if path == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("图片路径不能为空"))
+		return
+	}
+
+	// 安全校验：path 必须以 / 开头且不含 ..
+	if !strings.HasPrefix(path, "/") || strings.Contains(path, "..") {
+		writeJSON(w, http.StatusBadRequest, errorResp("无效的图片路径"))
+		return
+	}
+
+	imageURL := fmt.Sprintf("https://image.tmdb.org/t/p/%s%s", size, path)
+
+	// 构建请求
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, imageURL, nil)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+	req.Header.Set("User-Agent", "LitePan/1.0")
+	req.Header.Set("Accept", "image/*")
+
+	// 使用代理客户端
+	client, err := h.newTmdbClient(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(fmt.Sprintf("图片请求失败: %v", err)))
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		writeJSON(w, resp.StatusCode, errorResp(fmt.Sprintf("TMDB 图片返回 HTTP %d", resp.StatusCode)))
+		return
+	}
+
+	// 返回图片数据
+	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+	if resp.Header.Get("Content-Length") != "" {
+		w.Header().Set("Content-Length", resp.Header.Get("Content-Length"))
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, resp.Body)
+}
+
 // successRaw 直接返回原始 JSON 数据（已包装 success 结构）。
 func successRaw(data any) Resp {
-	// 将 TMDB 的原始 JSON 数据包装到 success 响应中
 	bytes, err := json.Marshal(data)
 	if err != nil {
 		return Resp{Success: false, Message: "序列化失败", ErrorType: "INTERNAL_ERROR"}
