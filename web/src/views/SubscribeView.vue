@@ -297,57 +297,57 @@ onDeactivated(stopPolling);
 
     <div v-else class="admin-panel-table-wrap">
       <div class="table-wrap">
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th>名称</th>
-            <th>规则</th>
-            <th>目标</th>
-            <th>间隔</th>
-            <th>上次抓取</th>
-            <th class="subscribe-page__th-actions">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="sub in subscriptions" :key="sub.id">
-            <td class="subscribe-page__td-name">
-              <div class="subscribe-page__name" :title="sub.name">{{ sub.name }}</div>
-              <div class="subscribe-page__feed" :title="sub.feed_url">{{ sub.feed_url }}</div>
-            </td>
-            <td class="subscribe-page__td-trunc" :title="ruleLabel(sub)">
-              <span class="subscribe-page__cell">{{ ruleLabel(sub) }}</span>
-            </td>
-            <td class="subscribe-page__td-trunc" :title="targetLabel(sub)">
-              <span class="subscribe-page__cell">{{ targetLabel(sub) }}</span>
-            </td>
-            <td class="subscribe-page__td-nowrap">
-              <span class="subscribe-page__cell">{{ intervalLabel(sub) }}</span>
-            </td>
-            <td class="subscribe-page__td-nowrap">
-              <div class="subscribe-page__fetch">
-                <AdminStatusPill :tone="statusTone[sub.last_fetch_status] ?? 'muted'">
-                  {{ sub.last_fetch_status === "ok" ? "正常" : sub.last_fetch_status === "error" ? "异常" : "未抓取" }}
-                </AdminStatusPill>
-                <span
-                  v-if="sub.last_fetch_at"
-                  class="subscribe-page__time"
-                  :title="sub.last_fetch_message || formatTime(sub.last_fetch_at)"
-                >
-                  {{ formatTimeShort(sub.last_fetch_at) }}
-                </span>
-              </div>
-            </td>
-            <td class="subscribe-page__td-nowrap subscribe-page__td-actions">
-              <div class="subscribe-page__actions">
-                <AdminEnableToggle :enabled="sub.enabled" :aria-label="sub.name" @enable="(v) => toggle(sub, v)" />
-                <AdminTableActionBtn icon="play" title="立即抓取" @click="fetchNow(sub)" />
-                <AdminTableActionBtn icon="edit" title="编辑" @click="openEdit(sub)" />
-                <AdminTableActionBtn icon="delete" title="删除" danger @click="remove(sub)" />
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>名称</th>
+              <th>规则</th>
+              <th>目标</th>
+              <th>间隔</th>
+              <th>上次抓取</th>
+              <th class="subscribe-page__th-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="sub in subscriptions" :key="sub.id">
+              <td class="subscribe-page__td-name">
+                <div class="subscribe-page__name" :title="sub.name">{{ sub.name }}</div>
+                <div class="subscribe-page__feed" :title="sub.feed_url">{{ sub.feed_url }}</div>
+              </td>
+              <td class="subscribe-page__td-trunc" :title="ruleLabel(sub)">
+                <span class="subscribe-page__cell">{{ ruleLabel(sub) }}</span>
+              </td>
+              <td class="subscribe-page__td-trunc" :title="targetLabel(sub)">
+                <span class="subscribe-page__cell">{{ targetLabel(sub) }}</span>
+              </td>
+              <td class="subscribe-page__td-nowrap">
+                <span class="subscribe-page__cell">{{ intervalLabel(sub) }}</span>
+              </td>
+              <td class="subscribe-page__td-nowrap">
+                <div class="subscribe-page__fetch">
+                  <AdminStatusPill :tone="statusTone[sub.last_fetch_status] ?? 'muted'">
+                    {{ sub.last_fetch_status === "ok" ? "正常" : sub.last_fetch_status === "error" ? "异常" : "未抓取" }}
+                  </AdminStatusPill>
+                  <span
+                    v-if="sub.last_fetch_at"
+                    class="subscribe-page__time"
+                    :title="sub.last_fetch_message || formatTime(sub.last_fetch_at)"
+                  >
+                    {{ formatTimeShort(sub.last_fetch_at) }}
+                  </span>
+                </div>
+              </td>
+              <td class="subscribe-page__td-nowrap subscribe-page__td-actions">
+                <div class="subscribe-page__actions">
+                  <AdminEnableToggle :enabled="sub.enabled" :aria-label="sub.name" @enable="(v) => toggle(sub, v)" />
+                  <AdminTableActionBtn icon="play" title="立即抓取" @click="fetchNow(sub)" />
+                  <AdminTableActionBtn icon="edit" title="编辑" @click="openEdit(sub)" />
+                  <AdminTableActionBtn icon="delete" title="删除" danger @click="remove(sub)" />
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
