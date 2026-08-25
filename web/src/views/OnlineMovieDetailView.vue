@@ -3,7 +3,16 @@ import { ref, onMounted, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppButton from "@/components/base/AppButton.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
-import { getDoubanDetail, type DoubanMovie } from "@/api/douban";
+import {
+  getTmdbMovieDetails,
+  getTmdbTvDetails,
+  getTmdbCredits,
+  getTmdbImages,
+  tmdbImage,
+  type TmdbMovieDetails,
+  type TmdbTvDetails,
+  type TmdbCredits,
+} from "@/api/tmdb";
 import { searchMagnet, type MagnetSearchResult } from "@/api/magnetSearch";
 import { addToQB } from "@/api/qb";
 import { getApiErrorMessage } from "@/api/client";
@@ -14,10 +23,13 @@ import MagnetOfflineModal from "@/components/common/MagnetOfflineModal.vue";
 const route = useRoute();
 const router = useRouter();
 
-const movieId = computed(() => route.params.id as string);
+const movieId = computed(() => Number(route.params.id) || 0);
+const mediaType = computed(() => (route.query.type as string) || "movie");
 const movieTitle = computed(() => (route.query.title as string) || "");
 
-const movie = ref<DoubanMovie | null>(null);
+const movie = ref<TmdbMovieDetails | TmdbTvDetails | null>(null);
+const credits = ref<TmdbCredits | null>(null);
+const images = ref<{ backdrops: { file_path: string }[] } | null>(null);
 const loading = ref(true);
 const error = ref("");
 
@@ -35,14 +47,37 @@ async function loadMovieDetail() {
   loading.value = true;
   error.value = "";
   try {
-    movie.value = await getDoubanDetail(movieId.value);
+    if (mediaType.value === "tv") {
+      movie.value = await getTvDetails(movieId.value);
+    } else {
+      movie.value = await getTmdbMovieDetails(movieId.value);
+    }
+    // 加载演员和图片
+    try {
+      credits.value = await getTmdbCredits(movieId.value, mediaType.value as "movie" | "tv");
+    } catch {
+      // 忽略演员加载失败
+    }
+    try {
+      const imgRes = await getTmdbImages(movieId.value, mediaType.value as "movie" | "tv");
+      images.value = { backdrops: imgRes.backdrops || [] };
+    } catch {
+      // 忽略图片加载失败
+    }
     // 初始化磁力搜索关键词
-    magnetKeyword.value = movie.value.original_title || movie.value.title || movieTitle.value;
+    const title = (movie.value as TmdbMovieDetails)?.title || (movie.value as TmdbTvDetails)?.name || movieTitle.value;
+    const originalTitle = (movie.value as TmdbMovieDetails)?.original_title || (movie.value as TmdbTvDetails)?.original_name || "";
+    magnetKeyword.value = originalTitle || title;
   } catch (e) {
     error.value = getApiErrorMessage(e, "加载详情失败");
   } finally {
     loading.value = false;
   }
+}
+
+// 包装 getTmdbTvDetails 以统一错误处理
+async function getTvDetails(id: number) {
+  return await getTmdbTvDetails(id);
 }
 
 async function doMagnetSearch() {
@@ -109,14 +144,55 @@ function goBack() {
 }
 
 function posterSrc(): string {
-  if (movie.value?.poster) return movie.value.poster;
-  if (movie.value?.thumb) return movie.value.thumb;
-  return "";
+  const m = movie.value;
+  if (!m) return "";
+  return tmdbImage.poster(m.poster_path, "w500");
+}
+
+function backdropSrc(): string {
+  const m = movie.value;
+  if (!m) return "";
+  return tmdbImage.backdrop(m.backdrop_path, "w780");
 }
 
 const summaryText = computed(() => {
-  if (!movie.value?.summary) return "";
-  return movie.value.summary;
+  return movie.value?.overview || "";
+});
+
+const title = computed(() => {
+  const m = movie.value;
+  if (!m) return "";
+  return (m as TmdbMovieDetails)?.title || (m as TmdbTvDetails)?.name || "";
+});
+
+const originalTitle = computed(() => {
+  const m = movie.value;
+  if (!m) return "";
+  return (m as TmdbMovieDetails)?.original_title || (m as TmdbTvDetails)?.original_name || "";
+});
+
+const releaseDate = computed(() => {
+  const m = movie.value;
+  if (!m) return "";
+  return (m as TmdbMovieDetails)?.release_date || (m as TmdbTvDetails)?.first_air_date || "";
+});
+
+const runtime = computed(() => {
+  const m = movie.value as TmdbMovieDetails;
+  return m?.runtime;
+});
+
+const genres = computed(() => {
+  return movie.value?.genres || [];
+});
+
+const castList = computed(() => {
+  return credits.value?.cast?.slice(0, 8) || [];
+});
+
+const director = computed(() => {
+  const crew = credits.value?.crew || [];
+  return crew.find((c) => c.job === "Director")?.name || "";
 });
 
 onMounted(() => {
@@ -146,39 +222,38 @@ onMounted(() => {
     <template v-else-if="movie">
       <!-- 英雄区 -->
       <div class="omd-hero">
-        <div class="omd-hero__backdrop" :style="{ backgroundImage: posterSrc() ? `url(${posterSrc()})` : 'none' }"></div>
+        <div class="omd-hero__backdrop" :style="{ backgroundImage: backdropSrc() ? `url(${backdropSrc()})` : 'none' }"></div>
         <div class="omd-hero__shade"></div>
         <div class="omd-hero__content">
           <div class="omd-poster">
-            <img v-if="posterSrc()" :src="posterSrc()" :alt="movie.title" />
-            <div v-else class="omd-poster__placeholder">{{ movie.title?.slice(0, 1) || "?" }}</div>
+            <img v-if="posterSrc()" :src="posterSrc()" :alt="title" />
+            <div v-else class="omd-poster__placeholder">{{ title?.slice(0, 1) || "?" }}</div>
           </div>
           <div class="omd-info">
-            <h1 class="omd-title">{{ movie.title }}</h1>
-            <p v-if="movie.original_title && movie.original_title !== movie.title" class="omd-original">
-              {{ movie.original_title }}
+            <h1 class="omd-title">{{ title }}</h1>
+            <p v-if="originalTitle && originalTitle !== title" class="omd-original">
+              {{ originalTitle }}
             </p>
             <div class="omd-meta">
-              <span v-if="movie.rating" class="omd-rating">
+              <span v-if="movie.vote_average && movie.vote_average > 0" class="omd-rating">
                 <svg viewBox="0 0 24 24" width="13" height="13" fill="#ffd700" style="display:inline-block;vertical-align:-1px;">
                   <polygon points="12,2 15,8.5 22,9.3 17,14.1 18.2,21 12,17.8 5.8,21 7,14.1 2,9.3 9,8.5" />
                 </svg>
-                {{ movie.rating }}
+                {{ movie.vote_average.toFixed(1) }}
               </span>
-              <span v-if="movie.year">{{ movie.year }}</span>
-              <span v-if="movie.durations?.length">{{ movie.durations[0] }}</span>
-              <span v-if="movie.countries?.length">{{ movie.countries.join(" / ") }}</span>
+              <span v-if="releaseDate">{{ releaseDate }}</span>
+              <span v-if="runtime">{{ runtime }} 分钟</span>
             </div>
-            <div v-if="movie.genres?.length" class="omd-genres">
-              <span v-for="g in movie.genres" :key="g" class="omd-genre">{{ g }}</span>
+            <div v-if="genres.length" class="omd-genres">
+              <span v-for="g in genres" :key="g.id" class="omd-genre">{{ g.name }}</span>
             </div>
-            <div v-if="movie.directors?.length" class="omd-people">
+            <div v-if="director" class="omd-people">
               <span class="omd-people-label">导演</span>
-              {{ movie.directors.join(" / ") }}
+              {{ director }}
             </div>
-            <div v-if="movie.casts?.length" class="omd-people">
+            <div v-if="castList.length" class="omd-people">
               <span class="omd-people-label">主演</span>
-              {{ movie.casts.slice(0, 5).join(" / ") }}
+              {{ castList.map((c) => c.name).join(" / ") }}
             </div>
           </div>
         </div>

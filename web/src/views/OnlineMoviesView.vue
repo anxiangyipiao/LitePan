@@ -3,67 +3,69 @@ import { ref, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import BusySpinner from "@/components/base/BusySpinner.vue";
 import {
-  searchDouban,
-  getDoubanHot,
-  getDoubanTop250,
-  getDoubanRecommend,
-  type DoubanHotItem,
-} from "@/api/douban";
+  searchTmdb,
+  getTmdbPopular,
+  getTmdbTopRated,
+  getTmdbNowPlaying,
+  getTmdbUpcoming,
+  tmdbImage,
+  type TmdbMedia,
+  type TmdbSearchResult,
+} from "@/api/tmdb";
 import { getApiErrorMessage } from "@/api/client";
 
 const router = useRouter();
 
-type TabKey = "hot" | "top250" | "movie" | "tv";
+type TabKey = "popular" | "top-rated" | "now-playing" | "upcoming" | "movie" | "tv";
 
 const tabs: { key: TabKey; label: string }[] = [
-  { key: "hot", label: "热门" },
-  { key: "top250", label: "Top 250" },
-  { key: "movie", label: "电影" },
+  { key: "popular", label: "热门" },
+  { key: "top-rated", label: "高分" },
+  { key: "now-playing", label: "热映" },
+  { key: "upcoming", label: "待映" },
   { key: "tv", label: "剧集" },
 ];
 
-const activeTab = ref<TabKey>("hot");
-const movies = ref<DoubanHotItem[]>([]);
+const activeTab = ref<TabKey>("popular");
+const movies = ref<TmdbMedia[]>([]);
 const loading = ref(false);
 const error = ref("");
-const page = ref(0);
-const hasMore = ref(true);
+const page = ref(1);
+const totalPages = ref(1);
 const keyword = ref("");
 const searching = ref(false);
 
-const pageSize = 24;
-
 async function loadData(reset = false) {
   if (reset) {
-    page.value = 0;
+    page.value = 1;
     movies.value = [];
-    hasMore.value = true;
+    totalPages.value = 1;
   }
-  if (!hasMore.value || loading.value) return;
+  if (page.value > totalPages.value && totalPages.value > 0) return;
+  if (loading.value) return;
 
   loading.value = true;
   error.value = "";
   try {
-    const start = page.value * pageSize;
-    let result: DoubanHotItem[] = [];
+    let result: TmdbSearchResult;
 
-    if (activeTab.value === "hot") {
-      const res = await getDoubanHot("movie", start, pageSize);
-      result = res.movies;
-    } else if (activeTab.value === "top250") {
-      result = (await getDoubanTop250(start, pageSize)) ?? [];
+    if (activeTab.value === "popular") {
+      result = await getTmdbPopular("movie", page.value);
+    } else if (activeTab.value === "top-rated") {
+      result = await getTmdbTopRated("movie", page.value);
+    } else if (activeTab.value === "now-playing") {
+      result = await getTmdbNowPlaying(page.value);
+    } else if (activeTab.value === "upcoming") {
+      result = await getTmdbUpcoming(page.value);
     } else {
-      const type = activeTab.value === "movie" ? "movie" : "tv";
-      result = (await getDoubanRecommend(type, start, pageSize)) ?? [];
+      result = await getTmdbPopular("tv", page.value);
     }
 
-    if (result.length < pageSize) {
-      hasMore.value = false;
-    }
-    movies.value = [...movies.value, ...result];
+    totalPages.value = result.total_pages || 1;
+    movies.value = [...movies.value, ...(result.results || [])];
     page.value++;
   } catch (e) {
-    error.value = getApiErrorMessage(e, "加载失败，请检查网络");
+    error.value = getApiErrorMessage(e, "加载失败，请检查网络和 TMDB API Key 配置");
   } finally {
     loading.value = false;
   }
@@ -72,7 +74,6 @@ async function loadData(reset = false) {
 async function doSearch() {
   const q = keyword.value.trim();
   if (!q) {
-    // 如果清空搜索框，恢复原来的列表
     searching.value = false;
     await loadData(true);
     return;
@@ -82,19 +83,10 @@ async function doSearch() {
   error.value = "";
   movies.value = [];
   try {
-    const res = await searchDouban(q, 0, pageSize);
-    movies.value = res.movies.map((m) => ({
-      id: m.id,
-      title: m.title,
-      rating: m.rating,
-      poster: m.poster || m.thumb,
-      year: m.year,
-      genres: m.genres,
-      directors: m.directors,
-      actors: m.casts,
-    }));
-    hasMore.value = movies.value.length >= pageSize;
-    page.value = 1;
+    const result = await searchTmdb(q, 1);
+    movies.value = result.results || [];
+    totalPages.value = result.total_pages || 1;
+    page.value = 2;
   } catch (e) {
     error.value = getApiErrorMessage(e, "搜索失败");
   } finally {
@@ -104,26 +96,17 @@ async function doSearch() {
 
 async function loadMore() {
   if (searching.value) {
-    // 搜索模式下加载更多
     loading.value = true;
     error.value = "";
     try {
-      const res = await searchDouban(keyword.value.trim(), page.value * pageSize, pageSize);
-      const moreMovies = res.movies.map((m) => ({
-        id: m.id,
-        title: m.title,
-        rating: m.rating,
-        poster: m.poster || m.thumb,
-        year: m.year,
-        genres: m.genres,
-        directors: m.directors,
-        actors: m.casts,
-      }));
-      if (moreMovies.length < pageSize) {
-        hasMore.value = false;
+      const q = keyword.value.trim();
+      const nextPage = Math.floor(movies.value.length / 20) + 1;
+      const result = await searchTmdb(q, nextPage);
+      const more = result.results || [];
+      if (more.length < 20) {
+        totalPages.value = nextPage;
       }
-      movies.value = [...movies.value, ...moreMovies];
-      page.value++;
+      movies.value = [...movies.value, ...more];
     } catch (e) {
       error.value = getApiErrorMessage(e, "加载更多失败");
     } finally {
@@ -141,8 +124,13 @@ async function switchTab(tab: TabKey) {
   await loadData(true);
 }
 
-function goDetail(movie: DoubanHotItem) {
-  router.push({ name: "online-movie-detail", params: { id: movie.id }, query: { title: movie.title } });
+function goDetail(movie: TmdbMedia) {
+  const type = movie.media_type || (activeTab.value === "tv" ? "tv" : "movie");
+  router.push({
+    name: "online-movie-detail",
+    params: { id: String(movie.id) },
+    query: { type, title: movie.title || movie.name || "" },
+  });
 }
 
 function retry() {
@@ -157,8 +145,12 @@ function handleScroll(e: Event) {
   const target = e.target as HTMLElement;
   if (!target) return;
   const { scrollTop, scrollHeight, clientHeight } = target;
-  if (scrollHeight - scrollTop - clientHeight < 200 && !loading.value && hasMore.value) {
-    loadMore();
+  if (scrollHeight - scrollTop - clientHeight < 200 && !loading.value) {
+    if (searching.value) {
+      if (page.value <= totalPages.value) loadMore();
+    } else {
+      if (page.value <= totalPages.value) loadMore();
+    }
   }
 }
 
@@ -170,12 +162,24 @@ watch(activeTab, () => {
   loadData(true);
 });
 
-function posterSrc(movie: DoubanHotItem): string {
-  return movie.poster || `https://img1.doubanio.com/view/photo/s_ratio_poster/public/${movie.id}.jpg`;
+function posterSrc(movie: TmdbMedia): string {
+  return tmdbImage.poster(movie.poster_path, "w342");
 }
 
-function placeholderText(title: string): string {
+function placeholderText(movie: TmdbMedia): string {
+  const title = movie.title || movie.name || "";
   return title ? title.slice(0, 1) : "?";
+}
+
+function ratingClass(rating: number): string {
+  if (rating >= 8) return "om-card__rating--high";
+  if (rating >= 6) return "om-card__rating--mid";
+  return "om-card__rating--low";
+}
+
+function year(movie: TmdbMedia): string {
+  const date = movie.release_date || movie.first_air_date || "";
+  return date ? date.slice(0, 4) : "";
 }
 </script>
 
@@ -183,7 +187,7 @@ function placeholderText(title: string): string {
   <div class="om-page" @scroll="handleScroll">
     <header class="om-page__head">
       <h1 class="om-page__title">在线选片</h1>
-      <div class="om-page__desc">豆瓣热门影视 · 磁力搜索</div>
+      <p class="om-page__desc">TMDB · 热门影视</p>
     </header>
 
     <div class="om-page__bar">
@@ -207,12 +211,9 @@ function placeholderText(title: string): string {
           @keydown.enter="doSearch"
         />
         <button class="om-search__btn" @click="doSearch">
-          <svg v-if="!searching" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.3-4.3" />
-          </svg>
-          <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83" />
           </svg>
         </button>
       </div>
@@ -237,30 +238,31 @@ function placeholderText(title: string): string {
     <div v-if="movies.length" class="om-grid">
       <div
         v-for="movie in movies"
-        :key="movie.id"
+        :key="`${movie.media_type || activeTab}-${movie.id}`"
         class="om-card"
         @click="goDetail(movie)"
       >
         <div class="om-card__poster">
           <img
             :src="posterSrc(movie)"
-            :alt="movie.title"
+            :alt="movie.title || movie.name"
             loading="lazy"
             @error="($event.target as HTMLImageElement).style.display = 'none'"
           />
-          <div class="om-card__placeholder">{{ placeholderText(movie.title) }}</div>
-          <div v-if="movie.rating && Number(movie.rating) > 0" class="om-card__rating">
-            {{ movie.rating }}
+          <div class="om-card__placeholder">{{ placeholderText(movie) }}</div>
+          <div
+            v-if="movie.vote_average && movie.vote_average > 0"
+            class="om-card__rating"
+            :class="ratingClass(movie.vote_average)"
+          >
+            {{ movie.vote_average.toFixed(1) }}
           </div>
         </div>
         <div class="om-card__meta">
-          <div class="om-card__title">{{ movie.title }}</div>
+          <div class="om-card__title">{{ movie.title || movie.name }}</div>
           <div class="om-card__sub">
-            <span v-if="movie.year">{{ movie.year }}</span>
-            <span v-if="movie.genres?.length"> · {{ movie.genres.slice(0, 2).join(" / ") }}</span>
-          </div>
-          <div v-if="movie.actors?.length" class="om-card__actors">
-            {{ movie.actors.slice(0, 3).join(" / ") }}
+            <span v-if="year(movie)">{{ year(movie) }}</span>
+            <span v-if="movie.genre_ids?.length"> · {{ movie.genre_ids.length }} 类型</span>
           </div>
         </div>
       </div>
@@ -271,7 +273,7 @@ function placeholderText(title: string): string {
       <span>加载更多…</span>
     </div>
 
-    <div v-if="!hasMore && movies.length" class="om-page__end">— 没有更多了 —</div>
+    <div v-if="!loading && page > totalPages && movies.length" class="om-page__end">— 没有更多了 —</div>
   </div>
 </template>
 
@@ -527,6 +529,16 @@ function placeholderText(title: string): string {
   background: linear-gradient(135deg, #ffd700, #ffaa00);
 }
 
+.om-card__rating--low {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+}
+
+.om-card__rating--mid {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #000;
+}
+
 .om-card__meta {
   padding: 8px 6px 10px;
 }
@@ -548,20 +560,6 @@ function placeholderText(title: string): string {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.om-card__actors {
-  font-size: 11px;
-  color: #777;
-  margin-top: 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  white-space: normal;
-  line-height: 1.4;
 }
 
 @media (max-width: 640px) {

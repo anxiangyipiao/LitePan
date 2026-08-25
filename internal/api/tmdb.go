@@ -1,0 +1,384 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"time"
+)
+
+// tmdbConfig 返回 TMDB API 配置（API Key 与基础 URL）。
+// 后续可改为从 settings 读取，支持用户自行配置。
+func (h *Handler) tmdbAPIKey() string {
+	// TODO: 从 settings 读取用户配置的 TMDB API Key
+	// 当前返回空字符串，需要用户配置后才能使用
+	return h.settings.GetString("tmdb_api_key", "")
+}
+
+const tmdbBaseURL = "https://api.themoviedb.org/3"
+
+// tmdbClient 是复用的 HTTP 客户端。
+var tmdbClient = &http.Client{
+	Timeout: 15 * time.Second,
+}
+
+// errorResp 创建错误响应。
+func errorResp(msg string) Resp {
+	return Resp{Success: false, Message: msg, ErrorType: "TMDB_ERROR"}
+}
+
+// tmdbDo 发起 TMDB API 请求并解析响应。
+func tmdbDo(ctx context.Context, apiKey, path string, query url.Values, target any) error {
+	if apiKey == "" {
+		return fmt.Errorf("TMDB API Key 未配置，请在系统设置中配置")
+	}
+	if query == nil {
+		query = url.Values{}
+	}
+	query.Set("api_key", apiKey)
+	query.Set("language", "zh-CN")
+
+	reqURL := fmt.Sprintf("%s%s?%s", tmdbBaseURL, path, query.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "LitePan/1.0")
+
+	resp, err := tmdbClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("TMDB 请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("读取 TMDB 响应失败: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("TMDB 返回错误 (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	return json.Unmarshal(body, target)
+}
+
+// tmdbSearch 搜索影视。
+func (h *Handler) tmdbSearch(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("搜索关键词不能为空"))
+		return
+	}
+	page := r.URL.Query().Get("page")
+	if page == "" {
+		page = "1"
+	}
+
+	type result struct {
+		Page         int             `json:"page"`
+		Results      json.RawMessage `json:"results"`
+		TotalPages   int             `json:"total_pages"`
+		TotalResults int             `json:"total_results"`
+	}
+
+	var res result
+	query := url.Values{}
+	query.Set("query", q)
+	query.Set("page", page)
+	query.Set("include_adult", "false")
+
+	err := tmdbDo(r.Context(), h.tmdbAPIKey(), "/search/multi", query, &res)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successRaw(res))
+}
+
+// tmdbPopular 获取热门影视。
+func (h *Handler) tmdbPopular(w http.ResponseWriter, r *http.Request) {
+	mediaType := r.URL.Query().Get("type")
+	if mediaType == "" {
+		mediaType = "movie"
+	}
+	page := r.URL.Query().Get("page")
+	if page == "" {
+		page = "1"
+	}
+
+	path := fmt.Sprintf("/%s/popular", mediaType)
+
+	type result struct {
+		Page         int             `json:"page"`
+		Results      json.RawMessage `json:"results"`
+		TotalPages   int             `json:"total_pages"`
+		TotalResults int             `json:"total_results"`
+	}
+
+	var res result
+	query := url.Values{}
+	query.Set("page", page)
+
+	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, query, &res)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successRaw(res))
+}
+
+// tmdbTopRated 获取高分影视。
+func (h *Handler) tmdbTopRated(w http.ResponseWriter, r *http.Request) {
+	mediaType := r.URL.Query().Get("type")
+	if mediaType == "" {
+		mediaType = "movie"
+	}
+	page := r.URL.Query().Get("page")
+	if page == "" {
+		page = "1"
+	}
+
+	path := fmt.Sprintf("/%s/top_rated", mediaType)
+
+	type result struct {
+		Page         int             `json:"page"`
+		Results      json.RawMessage `json:"results"`
+		TotalPages   int             `json:"total_pages"`
+		TotalResults int             `json:"total_results"`
+	}
+
+	var res result
+	query := url.Values{}
+	query.Set("page", page)
+
+	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, query, &res)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successRaw(res))
+}
+
+// tmdbNowPlaying 获取正在热映。
+func (h *Handler) tmdbNowPlaying(w http.ResponseWriter, r *http.Request) {
+	page := r.URL.Query().Get("page")
+	if page == "" {
+		page = "1"
+	}
+
+	type result struct {
+		Page         int             `json:"page"`
+		Results      json.RawMessage `json:"results"`
+		TotalPages   int             `json:"total_pages"`
+		TotalResults int             `json:"total_results"`
+	}
+
+	var res result
+	query := url.Values{}
+	query.Set("page", page)
+
+	err := tmdbDo(r.Context(), h.tmdbAPIKey(), "/movie/now_playing", query, &res)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successRaw(res))
+}
+
+// tmdbUpcoming 获取即将上映。
+func (h *Handler) tmdbUpcoming(w http.ResponseWriter, r *http.Request) {
+	page := r.URL.Query().Get("page")
+	if page == "" {
+		page = "1"
+	}
+
+	type result struct {
+		Page         int             `json:"page"`
+		Results      json.RawMessage `json:"results"`
+		TotalPages   int             `json:"total_pages"`
+		TotalResults int             `json:"total_results"`
+	}
+
+	var res result
+	query := url.Values{}
+	query.Set("page", page)
+
+	err := tmdbDo(r.Context(), h.tmdbAPIKey(), "/movie/upcoming", query, &res)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successRaw(res))
+}
+
+// tmdbMovieDetail 获取电影详情。
+func (h *Handler) tmdbMovieDetail(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("电影 ID 不能为空"))
+		return
+	}
+
+	path := fmt.Sprintf("/movie/%s", id)
+
+	var res json.RawMessage
+	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successRaw(json.RawMessage(res)))
+}
+
+// tmdbTvDetail 获取剧集详情。
+func (h *Handler) tmdbTvDetail(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("剧集 ID 不能为空"))
+		return
+	}
+
+	path := fmt.Sprintf("/tv/%s", id)
+
+	var res json.RawMessage
+	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successRaw(json.RawMessage(res)))
+}
+
+// tmdbCredits 获取演员列表。
+func (h *Handler) tmdbCredits(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("ID 不能为空"))
+		return
+	}
+	mediaType := r.URL.Query().Get("type")
+	if mediaType == "" {
+		mediaType = "movie"
+	}
+
+	path := fmt.Sprintf("/%s/%s/credits", mediaType, id)
+
+	var res json.RawMessage
+	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successRaw(json.RawMessage(res)))
+}
+
+// tmdbImages 获取图片列表。
+func (h *Handler) tmdbImages(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("ID 不能为空"))
+		return
+	}
+	mediaType := r.URL.Query().Get("type")
+	if mediaType == "" {
+		mediaType = "movie"
+	}
+
+	path := fmt.Sprintf("/%s/%s/images", mediaType, id)
+
+	var res json.RawMessage
+	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successRaw(json.RawMessage(res)))
+}
+
+// tmdbGenres 获取分类列表。
+func (h *Handler) tmdbGenres(w http.ResponseWriter, r *http.Request) {
+	mediaType := r.URL.Query().Get("type")
+	if mediaType == "" {
+		mediaType = "movie"
+	}
+
+	path := fmt.Sprintf("/genre/%s/list", mediaType)
+
+	var res json.RawMessage
+	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successRaw(json.RawMessage(res)))
+}
+
+// tmdbDiscover 发现/推荐影视。
+func (h *Handler) tmdbDiscover(w http.ResponseWriter, r *http.Request) {
+	mediaType := r.URL.Query().Get("type")
+	if mediaType == "" {
+		mediaType = "movie"
+	}
+	sortBy := r.URL.Query().Get("sort_by")
+	if sortBy == "" {
+		sortBy = "popularity.desc"
+	}
+	genres := r.URL.Query().Get("with_genres")
+	page := r.URL.Query().Get("page")
+	if page == "" {
+		page = "1"
+	}
+
+	path := fmt.Sprintf("/discover/%s", mediaType)
+
+	type result struct {
+		Page         int             `json:"page"`
+		Results      json.RawMessage `json:"results"`
+		TotalPages   int             `json:"total_pages"`
+		TotalResults int             `json:"total_results"`
+	}
+
+	var res result
+	query := url.Values{}
+	query.Set("sort_by", sortBy)
+	query.Set("page", page)
+	if genres != "" {
+		query.Set("with_genres", genres)
+	}
+
+	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, query, &res)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, successRaw(res))
+}
+
+// successRaw 直接返回原始 JSON 数据（已包装 success 结构）。
+func successRaw(data any) Resp {
+	// 将 TMDB 的原始 JSON 数据包装到 success 响应中
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return Resp{Success: false, Message: "序列化失败", ErrorType: "INTERNAL_ERROR"}
+	}
+	raw := `{"success":true,"data":` + string(bytes) + `}`
+	var wrapped map[string]any
+	_ = json.Unmarshal([]byte(raw), &wrapped)
+	return Resp{Success: true, Data: wrapped["data"]}
+}
