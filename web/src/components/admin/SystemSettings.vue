@@ -96,10 +96,16 @@ const otherSystemItems = computed(() => systemItems.value.filter((it) => !QB_KEY
 const tmdbImageCacheItem = computed(
   () => items.value.find((it) => it.key === "mo_tmdb_image_cache_hours") ?? null,
 );
+const tmdbListCacheItem = computed(
+  () => items.value.find((it) => it.key === "mo_tmdb_list_cache_hours") ?? null,
+);
 const systemChangedKeys = computed(() => systemItems.value.filter((it) => isChanged(it)).map((it) => it.key));
 const systemChangedCount = computed(() => systemChangedKeys.value.length);
 const tmdbImageCacheChanged = computed(
   () => Boolean(tmdbImageCacheItem.value) && isChanged(tmdbImageCacheItem.value!),
+);
+const tmdbListCacheChanged = computed(
+  () => Boolean(tmdbListCacheItem.value) && isChanged(tmdbListCacheItem.value!),
 );
 
 const passwordsMismatch = computed(
@@ -122,7 +128,9 @@ const homepageDirty = computed(
     homepageForm.index_strm_auto_detect_enabled !== homepageOriginal.index_strm_auto_detect_enabled,
 );
 
-const servicesDirty = computed(() => systemChangedCount.value > 0 || tmdbImageCacheChanged.value);
+const servicesDirty = computed(
+  () => systemChangedCount.value > 0 || tmdbImageCacheChanged.value || tmdbListCacheChanged.value,
+);
 
 function revertSecurityDraft() {
   securityForm.admin_username = securityOriginal.admin_username;
@@ -139,6 +147,9 @@ function revertServicesDraft() {
   for (const it of systemItems.value) form[it.key] = original[it.key];
   if (tmdbImageCacheItem.value) {
     form[tmdbImageCacheItem.value.key] = original[tmdbImageCacheItem.value.key];
+  }
+  if (tmdbListCacheItem.value) {
+    form[tmdbListCacheItem.value.key] = original[tmdbListCacheItem.value.key];
   }
 }
 
@@ -345,6 +356,9 @@ async function saveServices() {
     if (tmdbImageCacheItem.value && isChanged(tmdbImageCacheItem.value)) {
       changed[tmdbImageCacheItem.value.key] = form[tmdbImageCacheItem.value.key];
     }
+    if (tmdbListCacheItem.value && isChanged(tmdbListCacheItem.value)) {
+      changed[tmdbListCacheItem.value.key] = form[tmdbListCacheItem.value.key];
+    }
     if (Object.keys(changed).length > 0) {
       applyPayload(await saveSettings(changed));
     }
@@ -550,6 +564,35 @@ async function submit() {
                   v-model="form[tmdbImageCacheItem!.key]"
                   type="number"
                   :placeholder="tmdbImageCacheItem!.default"
+                />
+              </div>
+            </template>
+          </SettingsRow>
+        </SettingsCard>
+        <SettingsCard v-if="tmdbListCacheItem" title="TMDB 列表缓存" :accent="accentColor">
+          <SettingsRow
+            :show-changed-badge="true"
+            :changed="tmdbListCacheChanged"
+          >
+            <template #info>
+              <div class="settings-row__label">
+                <span>{{ displayLabel(tmdbListCacheItem!) }}</span>
+                <SettingsHelpTooltip
+                  v-if="tmdbListCacheItem!.description"
+                  :title="`${displayLabel(tmdbListCacheItem!)}说明`"
+                >
+                  <p>{{ tmdbListCacheItem!.description }}</p>
+                  <p>缓存覆盖「热门 / 高分 / 正在热映 / 即将上映 / 剧集热门」以及搜索结果，按 接口路径 + 页码 区分。</p>
+                  <p>修改后立即生效；设为 0 时列表请求将不再被缓存，每次都回源 TMDB。</p>
+                </SettingsHelpTooltip>
+              </div>
+            </template>
+            <template #control>
+              <div class="field-num">
+                <AppInput
+                  v-model="form[tmdbListCacheItem!.key]"
+                  type="number"
+                  :placeholder="tmdbListCacheItem!.default"
                 />
               </div>
             </template>

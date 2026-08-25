@@ -86,7 +86,8 @@ func errorResp(msg string) Resp {
 }
 
 // tmdbDo 发起 TMDB API 请求并解析响应。
-// 支持缓存：列表类请求缓存 1 小时，详情类请求缓存 24 小时。
+// 支持缓存：列表类请求的默认 TTL 由系统设置项 mo_tmdb_list_cache_hours 控制；
+// 详情类请求可显式传入 cacheTTL（例如 24*time.Hour）；TTL 为 0 表示不缓存。
 func (h *Handler) tmdbDo(ctx context.Context, apiKey, path string, query url.Values, target any, cacheTTL ...time.Duration) error {
 	if apiKey == "" {
 		return fmt.Errorf("TMDB API Key 未配置，请在系统设置中配置")
@@ -98,15 +99,17 @@ func (h *Handler) tmdbDo(ctx context.Context, apiKey, path string, query url.Val
 	// 构建缓存键
 	cacheKey := fmt.Sprintf("tmdb:%s:%s", path, query.Encode())
 
-	// 尝试从缓存读取
-	ttl := time.Hour // 默认缓存 1 小时
-	if len(cacheTTL) > 0 && cacheTTL[0] > 0 {
+	// 默认 TTL：未显式传入时走设置项（默认 1 小时，0 表示不缓存）
+	ttl := time.Duration(h.settings.Int(settings.KeyMOTmdbListCacheHours)) * time.Hour
+	if len(cacheTTL) > 0 {
 		ttl = cacheTTL[0]
 	}
 
-	if cached, ok := h.cache.Get(cacheKey); ok {
-		if data, ok := cached.(json.RawMessage); ok {
-			return json.Unmarshal(data, target)
+	if ttl > 0 {
+		if cached, ok := h.cache.Get(cacheKey); ok {
+			if data, ok := cached.(json.RawMessage); ok {
+				return json.Unmarshal(data, target)
+			}
 		}
 	}
 
@@ -141,8 +144,10 @@ func (h *Handler) tmdbDo(ctx context.Context, apiKey, path string, query url.Val
 		return fmt.Errorf("TMDB 返回错误 (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
-	// 写入缓存
-	h.cache.Set(cacheKey, json.RawMessage(body), ttl)
+	// 写入缓存（ttl<=0 时跳过）
+	if ttl > 0 {
+		h.cache.Set(cacheKey, json.RawMessage(body), ttl)
+	}
 
 	return json.Unmarshal(body, target)
 }
