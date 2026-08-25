@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
+
+	"golang.org/x/net/proxy"
 )
 
 // tmdbAPIKey 返回 TMDB API Key。
@@ -18,9 +21,55 @@ func (h *Handler) tmdbAPIKey() string {
 
 const tmdbBaseURL = "https://api.themoviedb.org/3"
 
-// tmdbClient 是复用的 HTTP 客户端。
-var tmdbClient = &http.Client{
-	Timeout: 15 * time.Second,
+// newTmdbClient 创建支持代理的 HTTP 客户端。
+func (h *Handler) newTmdbClient(ctx context.Context) (*http.Client, error) {
+	enabled := h.settings.Bool("mo_proxy_enabled")
+	proxyURL := h.settings.String("mo_proxy_url")
+
+	transport := &http.Transport{}
+
+	if enabled && proxyURL != "" {
+		pu, err := url.Parse(proxyURL)
+		if err != nil {
+			return nil, fmt.Errorf("代理地址解析失败: %w", err)
+		}
+
+		username := h.settings.String("mo_proxy_username")
+		password := h.settings.String("mo_proxy_password")
+
+		switch pu.Scheme {
+		case "socks5":
+			auth := &proxy.Auth{}
+			if username != "" {
+				auth.User = username
+				auth.Password = password
+			}
+			dialer, err := proxy.SOCKS5("tcp", pu.Host, auth, proxy.Direct)
+			if err != nil {
+				return nil, fmt.Errorf("SOCKS5 代理初始化失败: %w", err)
+			}
+			transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return dialer.Dial(network, addr)
+			}
+		case "http", "https":
+			if username != "" {
+				transport.Proxy = func(req *http.Request) (*url.URL, error) {
+					u := *pu
+					u.User = url.UserPassword(username, password)
+					return &u, nil
+				}
+			} else {
+				transport.Proxy = http.ProxyURL(pu)
+			}
+		default:
+			return nil, fmt.Errorf("不支持的代理协议: %s", pu.Scheme)
+		}
+	}
+
+	return &http.Client{
+		Timeout:   15 * time.Second,
+		Transport: transport,
+	}, nil
 }
 
 // errorResp 创建错误响应。
@@ -29,7 +78,7 @@ func errorResp(msg string) Resp {
 }
 
 // tmdbDo 发起 TMDB API 请求并解析响应。
-func tmdbDo(ctx context.Context, apiKey, path string, query url.Values, target any) error {
+func (h *Handler) tmdbDo(ctx context.Context, apiKey, path string, query url.Values, target any) error {
 	if apiKey == "" {
 		return fmt.Errorf("TMDB API Key 未配置，请在系统设置中配置")
 	}
@@ -47,7 +96,12 @@ func tmdbDo(ctx context.Context, apiKey, path string, query url.Values, target a
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "LitePan/1.0")
 
-	resp, err := tmdbClient.Do(req)
+	client, err := h.newTmdbClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("TMDB 请求失败: %w", err)
 	}
@@ -90,7 +144,7 @@ func (h *Handler) tmdbSearch(w http.ResponseWriter, r *http.Request) {
 	query.Set("page", page)
 	query.Set("include_adult", "false")
 
-	err := tmdbDo(r.Context(), h.tmdbAPIKey(), "/search/multi", query, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), "/search/multi", query, &res)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -123,7 +177,7 @@ func (h *Handler) tmdbPopular(w http.ResponseWriter, r *http.Request) {
 	query := url.Values{}
 	query.Set("page", page)
 
-	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, query, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, query, &res)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -156,7 +210,7 @@ func (h *Handler) tmdbTopRated(w http.ResponseWriter, r *http.Request) {
 	query := url.Values{}
 	query.Set("page", page)
 
-	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, query, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, query, &res)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -183,7 +237,7 @@ func (h *Handler) tmdbNowPlaying(w http.ResponseWriter, r *http.Request) {
 	query := url.Values{}
 	query.Set("page", page)
 
-	err := tmdbDo(r.Context(), h.tmdbAPIKey(), "/movie/now_playing", query, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), "/movie/now_playing", query, &res)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -210,7 +264,7 @@ func (h *Handler) tmdbUpcoming(w http.ResponseWriter, r *http.Request) {
 	query := url.Values{}
 	query.Set("page", page)
 
-	err := tmdbDo(r.Context(), h.tmdbAPIKey(), "/movie/upcoming", query, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), "/movie/upcoming", query, &res)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -230,7 +284,7 @@ func (h *Handler) tmdbMovieDetail(w http.ResponseWriter, r *http.Request) {
 	path := fmt.Sprintf("/movie/%s", id)
 
 	var res json.RawMessage
-	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -250,7 +304,7 @@ func (h *Handler) tmdbTvDetail(w http.ResponseWriter, r *http.Request) {
 	path := fmt.Sprintf("/tv/%s", id)
 
 	var res json.RawMessage
-	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -274,7 +328,7 @@ func (h *Handler) tmdbCredits(w http.ResponseWriter, r *http.Request) {
 	path := fmt.Sprintf("/%s/%s/credits", mediaType, id)
 
 	var res json.RawMessage
-	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -298,7 +352,7 @@ func (h *Handler) tmdbImages(w http.ResponseWriter, r *http.Request) {
 	path := fmt.Sprintf("/%s/%s/images", mediaType, id)
 
 	var res json.RawMessage
-	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -317,7 +371,7 @@ func (h *Handler) tmdbGenres(w http.ResponseWriter, r *http.Request) {
 	path := fmt.Sprintf("/genre/%s/list", mediaType)
 
 	var res json.RawMessage
-	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, nil, &res)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
@@ -359,7 +413,7 @@ func (h *Handler) tmdbDiscover(w http.ResponseWriter, r *http.Request) {
 		query.Set("with_genres", genres)
 	}
 
-	err := tmdbDo(r.Context(), h.tmdbAPIKey(), path, query, &res)
+	err := h.tmdbDo(r.Context(), h.tmdbAPIKey(), path, query, &res)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp(err.Error()))
 		return
