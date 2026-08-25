@@ -1555,18 +1555,18 @@ watch(activeTab, (tab) => {
 
 .strm-task-table th:nth-child(1),
 .strm-task-table td:nth-child(1) {
-  width: 14%;
+  width: 12%;
 }
 
 .strm-task-table th:nth-child(2),
 .strm-task-table td:nth-child(2) {
-  width: 16%;
+  width: 14%;
 }
 
 .strm-task-table th:nth-child(3),
 .strm-task-table td:nth-child(3) {
-  width: 48%;
-  min-width: 280px;
+  width: 34%;
+  min-width: 200px;
 }
 
 .strm-task-table td:first-child,
@@ -1582,7 +1582,8 @@ watch(activeTab, (tab) => {
 
 .strm-task-table th:last-child,
 .strm-task-table td:last-child {
-  width: 22%;
+  width: 40%;
+  min-width: 200px;
   text-align: center;
 }
 
