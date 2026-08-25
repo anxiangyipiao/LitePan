@@ -10,12 +10,10 @@ import (
 	"time"
 )
 
-// tmdbConfig 返回 TMDB API 配置（API Key 与基础 URL）。
-// 后续可改为从 settings 读取，支持用户自行配置。
+// tmdbAPIKey 返回 TMDB API Key。
+// 复用媒体整理功能的 TMDB API Key 设置项。
 func (h *Handler) tmdbAPIKey() string {
-	// TODO: 从 settings 读取用户配置的 TMDB API Key
-	// 当前返回空字符串，需要用户配置后才能使用
-	return h.settings.GetString("tmdb_api_key", "")
+	return h.settings.String("mo_tmdb_api_key")
 }
 
 const tmdbBaseURL = "https://api.themoviedb.org/3"
