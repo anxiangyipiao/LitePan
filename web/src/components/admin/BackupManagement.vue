@@ -402,7 +402,27 @@ onBeforeUnmount(() => {
                     @click="runNow(job)"
                   />
                   <AdminTableActionBtn icon="log" title="运行记录 / 进度" @click="openRuns(job)" />
+                  <AdminTableActionBtn icon="edit" title="编辑" @click="openEdit(job)" />
+                  <AdminTableActionBtn icon="delete" title="删除" danger @click="deleteJob(job)" />
                   <template #menu>
+                    <button
+                      class="admin-row-actions__item"
+                      type="button"
+                      @click="setEnabled(job, !job.enabled)"
+                    >
+                      {{ job.enabled ? "停用" : "启用" }}
+                    </button>
+                    <button
+                      class="admin-row-actions__item"
+                      type="button"
+                      :disabled="job.last_run_status === 'running'"
+                      @click="runNow(job)"
+                    >
+                      立即备份
+                    </button>
+                    <button class="admin-row-actions__item" type="button" @click="openRuns(job)">
+                      运行记录 / 进度
+                    </button>
                     <button class="admin-row-actions__item" type="button" @click="openEdit(job)">编辑</button>
                     <button
                       class="admin-row-actions__item admin-row-actions__item--danger"
@@ -552,15 +572,15 @@ onBeforeUnmount(() => {
 }
 
 .backup-table {
-  min-width: 900px;
+  min-width: 760px;
   table-layout: fixed;
 }
 .col-name { width: 14%; }
-.col-source { width: 18%; }
-.col-target { width: 20%; }
+.col-source { width: 16%; }
+.col-target { width: 18%; }
 .col-schedule { width: 12%; }
-.col-last { width: 16%; }
-.col-op { width: 20%; }
+.col-last { width: 14%; }
+.col-op { width: 26%; min-width: 180px; }
 
 .backup-table th.col-op {
   text-align: center;
