@@ -113,6 +113,7 @@ type Handler struct {
 	adminAuth         *adminauth.Service
 	notifications     *notification.Service
 	onSettingsUpdated func(map[string]string)
+	dataDir           string
 }
 
 // NewRouter 装配并返回 HTTP 路由（含内嵌管理页面）。
@@ -151,6 +152,7 @@ func NewRouter(d Deps) http.Handler {
 		adminAuth:         d.AdminAuth,
 		notifications:     d.Notifications,
 		onSettingsUpdated: d.OnSettingsUpdated,
+		dataDir:           d.DataDir,
 	}
 
 	r := chi.NewRouter()

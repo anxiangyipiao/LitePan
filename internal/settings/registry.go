@@ -70,6 +70,7 @@ const (
 	KeyMOTmdbLanguage          = "mo_tmdb_language"
 	KeyMOAPIRequestIntervalMS  = "mo_api_request_interval_ms"
 	KeyMOTmdbRequestIntervalMS = "mo_tmdb_request_interval_ms"
+	KeyMOTmdbImageCacheHours   = "mo_tmdb_image_cache_hours"
 	KeyMOFileExtensions        = "mo_file_extensions"
 	KeyMOMetadataExtensions    = "mo_metadata_extensions"
 	KeyMOMediaTagOrder         = "mo_media_tag_order"
@@ -669,6 +670,17 @@ func defaultSpecs() []Spec {
 			Unit:        "毫秒",
 			Min:         intp(100),
 			Max:         intp(5000),
+		},
+		{
+			Key:         KeyMOTmdbImageCacheHours,
+			Type:        TypeInt,
+			Category:    "media_organize",
+			Label:       "TMDB 图片缓存时长",
+			Description: "在线选片海报、剧照等图片经后端代理的缓存时间。海报几乎不变，建议设较长；设为 0 表示不缓存。",
+			Default:     "168",
+			Unit:        "小时",
+			Min:         intp(0),
+			Max:         intp(2160),
 		},
 		{
 			Key:         KeyMOFileExtensions,

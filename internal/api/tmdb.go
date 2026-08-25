@@ -2,14 +2,21 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
+
+	"litepan/internal/settings"
 
 	"golang.org/x/net/proxy"
 )
@@ -444,6 +451,7 @@ func (h *Handler) tmdbDiscover(w http.ResponseWriter, r *http.Request) {
 }
 
 // tmdbImage 代理 TMDB 图片请求，避免浏览器直连 image.tmdb.org（需要代理时更稳定）。
+// 按「TMDB 图片缓存时长」设置项把图片落到磁盘缓存目录，TTL 内直接返回磁盘文件。
 func (h *Handler) tmdbImage(w http.ResponseWriter, r *http.Request) {
 	size := r.URL.Query().Get("s")
 	if size == "" {
@@ -459,6 +467,39 @@ func (h *Handler) tmdbImage(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(path, "/") || strings.Contains(path, "..") {
 		writeJSON(w, http.StatusBadRequest, errorResp("无效的图片路径"))
 		return
+	}
+
+	// 缓存键与文件路径：基于 size + path 哈希，避免不同尺寸/不同图片互相覆盖。
+	cacheHours := h.settings.Int(settings.KeyMOTmdbImageCacheHours)
+	ext := filepath.Ext(path)
+	if ext == "" {
+		ext = ".jpg"
+	}
+	var cacheFile string
+	if cacheHours > 0 && h.dataDir != "" {
+		sum := sha256.Sum256([]byte("tmdb-image|" + size + "|" + path))
+		cacheFile = filepath.Join(h.dataDir, "cache", "tmdb_image", hex.EncodeToString(sum[:])+ext)
+	}
+
+	// 命中缓存：mtime 在 TTL 内就直接返回磁盘文件。
+	if cacheFile != "" {
+		if info, err := os.Stat(cacheFile); err == nil {
+			if time.Since(info.ModTime()) < time.Duration(cacheHours)*time.Hour {
+				body, readErr := os.ReadFile(cacheFile)
+				if readErr == nil {
+					w.Header().Set("Content-Type", contentTypeFromExt(ext))
+					w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+					w.Header().Set("X-TMDB-Image-Cache", "HIT")
+					w.WriteHeader(http.StatusOK)
+					_, _ = w.Write(body)
+					return
+				}
+				// 读失败：落到下面重新拉取
+			} else {
+				// 过期文件清理（异步，避免阻塞响应）
+				go func(p string) { _ = os.Remove(p) }(cacheFile)
+			}
+		}
 	}
 
 	imageURL := fmt.Sprintf("https://image.tmdb.org/t/p/%s%s", size, path)
@@ -491,13 +532,48 @@ func (h *Handler) tmdbImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 返回图片数据
-	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
-	if resp.Header.Get("Content-Length") != "" {
-		w.Header().Set("Content-Length", resp.Header.Get("Content-Length"))
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp(fmt.Sprintf("读取图片失败: %v", err)))
+		return
 	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = contentTypeFromExt(ext)
+	}
+
+	// 写入磁盘缓存（写失败不影响当前响应）
+	if cacheFile != "" {
+		if dir := filepath.Dir(cacheFile); dir != "" {
+			_ = os.MkdirAll(dir, 0o755)
+		}
+		_ = os.WriteFile(cacheFile, body, 0o644)
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	w.Header().Set("X-TMDB-Image-Cache", "MISS")
 	w.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(w, resp.Body)
+	_, _ = w.Write(body)
+}
+
+// contentTypeFromExt 根据文件后缀返回对应 Content-Type。
+func contentTypeFromExt(ext string) string {
+	switch strings.ToLower(ext) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	case ".gif":
+		return "image/gif"
+	case ".svg":
+		return "image/svg+xml"
+	default:
+		return "image/jpeg"
+	}
 }
 
 // successRaw 直接返回原始 JSON 数据（已包装 success 结构）。

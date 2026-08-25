@@ -93,8 +93,14 @@ const QB_KEYS = new Set(["qb_url", "qb_username", "qb_password", "qb_save_path",
 const systemItems = computed(() => items.value.filter((it) => it.category === "system"));
 const qbItems = computed(() => systemItems.value.filter((it) => QB_KEYS.has(it.key)));
 const otherSystemItems = computed(() => systemItems.value.filter((it) => !QB_KEYS.has(it.key)));
+const tmdbImageCacheItem = computed(
+  () => items.value.find((it) => it.key === "mo_tmdb_image_cache_hours") ?? null,
+);
 const systemChangedKeys = computed(() => systemItems.value.filter((it) => isChanged(it)).map((it) => it.key));
 const systemChangedCount = computed(() => systemChangedKeys.value.length);
+const tmdbImageCacheChanged = computed(
+  () => Boolean(tmdbImageCacheItem.value) && isChanged(tmdbImageCacheItem.value!),
+);
 
 const passwordsMismatch = computed(
   () =>
@@ -116,7 +122,7 @@ const homepageDirty = computed(
     homepageForm.index_strm_auto_detect_enabled !== homepageOriginal.index_strm_auto_detect_enabled,
 );
 
-const servicesDirty = computed(() => systemChangedCount.value > 0);
+const servicesDirty = computed(() => systemChangedCount.value > 0 || tmdbImageCacheChanged.value);
 
 function revertSecurityDraft() {
   securityForm.admin_username = securityOriginal.admin_username;
@@ -131,6 +137,9 @@ function revertHomepageDraft() {
 
 function revertServicesDraft() {
   for (const it of systemItems.value) form[it.key] = original[it.key];
+  if (tmdbImageCacheItem.value) {
+    form[tmdbImageCacheItem.value.key] = original[tmdbImageCacheItem.value.key];
+  }
 }
 
 function isTabDirty(tab: string): boolean {
@@ -333,6 +342,9 @@ async function saveServices() {
   try {
     const changed: Record<string, string> = {};
     for (const key of systemChangedKeys.value) changed[key] = form[key];
+    if (tmdbImageCacheItem.value && isChanged(tmdbImageCacheItem.value)) {
+      changed[tmdbImageCacheItem.value.key] = form[tmdbImageCacheItem.value.key];
+    }
     if (Object.keys(changed).length > 0) {
       applyPayload(await saveSettings(changed));
     }
@@ -515,6 +527,34 @@ async function submit() {
 
       <template v-else-if="isServicesTab">
         <QbSettingsCard v-if="qbItems.length" :form="form" :is-changed="isChanged" :accent="accentColor" />
+        <SettingsCard v-if="tmdbImageCacheItem" title="TMDB 图片缓存" :accent="accentColor">
+          <SettingsRow
+            :show-changed-badge="true"
+            :changed="tmdbImageCacheChanged"
+          >
+            <template #info>
+              <div class="settings-row__label">
+                <span>{{ displayLabel(tmdbImageCacheItem!) }}</span>
+                <SettingsHelpTooltip
+                  v-if="tmdbImageCacheItem!.description"
+                  :title="`${displayLabel(tmdbImageCacheItem!)}说明`"
+                >
+                  <p>{{ tmdbImageCacheItem!.description }}</p>
+                  <p>修改后立即生效；TTL 内同 size + path 的图片请求直接命中磁盘缓存，不再回源 image.tmdb.org。</p>
+                </SettingsHelpTooltip>
+              </div>
+            </template>
+            <template #control>
+              <div class="field-num">
+                <AppInput
+                  v-model="form[tmdbImageCacheItem!.key]"
+                  type="number"
+                  :placeholder="tmdbImageCacheItem!.default"
+                />
+              </div>
+            </template>
+          </SettingsRow>
+        </SettingsCard>
         <SettingsCard v-if="systemItems.length" title="授权与日志" :accent="accentColor">
           <SettingsRow
             v-for="it in otherSystemItems"
