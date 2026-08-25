@@ -315,8 +315,12 @@ onMounted(() => {
 <style scoped>
 .omd-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #0a0a0f 0%, #14141c 100%);
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-muted) 100%);
   padding-bottom: 40px;
+  --omd-gold: #b45309;
+  --omd-gold-soft: rgba(217, 119, 6, 0.1);
+  --omd-gold-border: rgba(217, 119, 6, 0.35);
+  --omd-gold-grad: linear-gradient(135deg, #f59e0b, #d97706);
 }
 
 .omd-page__loading {
@@ -326,7 +330,7 @@ onMounted(() => {
   justify-content: center;
   gap: 16px;
   padding: 100px 20px;
-  color: #888;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -336,7 +340,7 @@ onMounted(() => {
   align-items: center;
   gap: 16px;
   padding: 80px 20px;
-  color: #f87171;
+  color: var(--danger);
   text-align: center;
 }
 
@@ -352,14 +356,14 @@ onMounted(() => {
   inset: 0;
   background-size: cover;
   background-position: center 25%;
-  filter: blur(30px) brightness(0.4);
+  filter: blur(30px) brightness(0.7) saturate(1.2);
   transform: scale(1.1);
 }
 
 .omd-hero__shade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, rgba(10, 10, 15, 0.5) 0%, #0a0a0f 100%);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.55) 0%, var(--bg) 100%);
 }
 
 .omd-hero__content {
@@ -378,8 +382,8 @@ onMounted(() => {
   aspect-ratio: 2 / 3;
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(255, 215, 0, 0.1);
-  border: 3px solid rgba(255, 215, 0, 0.2);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+  border: 3px solid var(--surface);
 }
 
 .omd-poster img {
@@ -396,8 +400,8 @@ onMounted(() => {
   justify-content: center;
   font-size: 64px;
   font-weight: 700;
-  color: #555;
-  background: linear-gradient(160deg, #1a1a24, #252532);
+  color: var(--text-muted);
+  background: linear-gradient(160deg, var(--surface-sunken), var(--surface-muted));
 }
 
 .omd-info {
@@ -412,14 +416,13 @@ onMounted(() => {
   margin: 0;
   font-size: clamp(24px, 3vw, 36px);
   font-weight: 800;
-  color: #f0f0f0;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  color: var(--text);
 }
 
 .omd-original {
   margin: 6px 0 0;
   font-size: 14px;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .omd-meta {
@@ -428,14 +431,14 @@ onMounted(() => {
   gap: 8px 16px;
   margin: 12px 0;
   font-size: 14px;
-  color: #aaa;
+  color: var(--text-regular);
 }
 
 .omd-rating {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #ffd700;
+  color: var(--omd-gold);
   font-weight: 700;
   font-size: 16px;
 }
@@ -449,10 +452,10 @@ onMounted(() => {
 
 .omd-genre {
   padding: 4px 12px;
-  border: 1px solid rgba(255, 215, 0, 0.3);
+  border: 1px solid var(--omd-gold-border);
   border-radius: 999px;
-  background: rgba(255, 215, 0, 0.08);
-  color: #ffd700;
+  background: var(--omd-gold-soft);
+  color: var(--omd-gold);
   font-size: 12px;
   font-weight: 600;
 }
@@ -460,11 +463,11 @@ onMounted(() => {
 .omd-people {
   margin: 4px 0;
   font-size: 13px;
-  color: #bbb;
+  color: var(--text-regular);
 }
 
 .omd-people-label {
-  color: #777;
+  color: var(--text-muted);
   margin-right: 8px;
 }
 
@@ -479,14 +482,14 @@ onMounted(() => {
   margin: 0 0 14px;
   font-size: 18px;
   font-weight: 700;
-  color: #e0e0e0;
+  color: var(--text);
 }
 
 .omd-summary {
   margin: 0;
   font-size: 14px;
   line-height: 1.8;
-  color: #bbb;
+  color: var(--text-regular);
   white-space: pre-wrap;
 }
 
@@ -502,14 +505,14 @@ onMounted(() => {
   padding: 0;
   border: none;
   background: transparent;
-  color: #ffd700;
+  color: var(--omd-gold);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .omd-summary__toggle:hover {
-  color: #ffe44d;
+  color: #92400e;
 }
 
 /* 磁力搜索 */
@@ -523,21 +526,21 @@ onMounted(() => {
   flex: 1;
   height: 40px;
   padding: 0 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  color: #e0e0e0;
+  background: var(--surface);
+  color: var(--text);
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s ease;
 }
 
 .omd-magnet-input:focus {
-  border-color: rgba(255, 215, 0, 0.5);
+  border-color: var(--omd-gold-border);
 }
 
 .omd-magnet-input::placeholder {
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--text-muted);
 }
 
 .omd-magnet-loading {
@@ -545,14 +548,14 @@ onMounted(() => {
   align-items: center;
   gap: 10px;
   padding: 30px 0;
-  color: #888;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 .omd-magnet-empty {
   padding: 30px 0;
   text-align: center;
-  color: #777;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -560,9 +563,11 @@ onMounted(() => {
   list-style: none;
   margin: 0;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-soft);
   border-radius: 12px;
   overflow: hidden;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 .omd-magnet-row {
@@ -570,7 +575,7 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .omd-magnet-row:last-child {
@@ -585,7 +590,7 @@ onMounted(() => {
 .omd-magnet-name {
   font-size: 14px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -597,7 +602,7 @@ onMounted(() => {
   gap: 4px 12px;
   margin-top: 4px;
   font-size: 12px;
-  color: #888;
+  color: var(--text-muted);
 }
 
 .omd-magnet-meta-item {

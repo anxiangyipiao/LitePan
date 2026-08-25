@@ -88,30 +88,46 @@ function formatDate(unix: number): string {
 <template>
   <div class="magnet-page">
     <header class="magnet-page__head">
-      <h1 class="magnet-page__title">磁力搜索</h1>
-      <p class="magnet-page__desc">输入番号或关键词，搜索磁力资源</p>
+      <div class="magnet-page__hero">
+        <div class="magnet-page__icon">
+          <i class="fa-solid fa-magnet" aria-hidden="true"></i>
+        </div>
+        <div class="magnet-page__hero-text">
+          <h1 class="magnet-page__title">磁力搜索</h1>
+          <p class="magnet-page__desc">输入番号或关键词，搜索磁力资源</p>
+        </div>
+      </div>
     </header>
 
     <div class="magnet-page__bar">
-      <input
-        v-model="keyword"
-        class="magnet-page__input"
-        type="search"
-        placeholder="输入番号或关键词，回车搜索"
-        @keydown.enter="search"
-      />
+      <div class="magnet-page__input-wrap">
+        <i class="fa-solid fa-search magnet-page__input-icon" aria-hidden="true"></i>
+        <input
+          v-model="keyword"
+          class="magnet-page__input"
+          type="search"
+          placeholder="输入番号或关键词，回车搜索"
+          @keydown.enter="search"
+        />
+      </div>
       <AppButton type="button" variant="primary" :disabled="loading" @click="search">
+        <i v-if="!loading" class="fa-solid fa-search" aria-hidden="true"></i>
         {{ loading ? "搜索中…" : "搜索" }}
       </AppButton>
     </div>
 
-    <p v-if="error" class="magnet-page__error">{{ error }}</p>
+    <p v-if="error" class="magnet-page__error">
+      <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+      {{ error }}
+    </p>
 
     <div v-if="!loading && !error && !searched" class="magnet-page__empty">
-      输入番号或关键词，搜索磁力资源
+      <i class="fa-solid fa-magnet" aria-hidden="true"></i>
+      <p>输入番号或关键词，搜索磁力资源</p>
     </div>
     <div v-else-if="!loading && !error && searched && results.length === 0" class="magnet-page__empty">
-      没有找到结果，换个关键词试试
+      <i class="fa-solid fa-inbox" aria-hidden="true"></i>
+      <p>没有找到结果，换个关键词试试</p>
     </div>
 
     <div v-if="loading" class="magnet-page__loading">
@@ -119,21 +135,38 @@ function formatDate(unix: number): string {
       <span>正在搜索…</span>
     </div>
 
+    <div v-if="results.length" class="magnet-page__stats">
+      <span class="magnet-page__stats-item">
+        <i class="fa-solid fa-list" aria-hidden="true"></i>
+        共 {{ results.length }} 条结果
+      </span>
+    </div>
+
     <ul v-if="results.length" class="magnet-page__list">
       <li v-for="r in results" :key="r.id" class="magnet-page__row">
         <div class="magnet-page__main">
           <div class="magnet-page__name" :title="r.name">{{ r.name }}</div>
           <div class="magnet-page__meta">
-            <span v-if="r.category" class="magnet-page__meta-item">{{ r.category }}</span>
-            <span class="magnet-page__meta-item">{{ formatSize(r.size) }}</span>
-            <span class="magnet-page__meta-item" :title="'做种 ' + r.seeders">↑{{ r.seeders }}</span>
-            <span class="magnet-page__meta-item" :title="'下载 ' + r.leechers">↓{{ r.leechers }}</span>
-            <span class="magnet-page__meta-item">{{ formatDate(r.date) }}</span>
+            <span v-if="r.category" class="magnet-page__tag magnet-page__tag--cat">
+              <i class="fa-solid fa-folder-open" aria-hidden="true"></i>{{ r.category }}
+            </span>
+            <span class="magnet-page__tag magnet-page__tag--size">
+              <i class="fa-solid fa-database" aria-hidden="true"></i>{{ formatSize(r.size) }}
+            </span>
+            <span class="magnet-page__tag magnet-page__tag--seed">
+              <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>{{ r.seeders }}
+            </span>
+            <span class="magnet-page__tag magnet-page__tag--leech">
+              <i class="fa-solid fa-arrow-down" aria-hidden="true"></i>{{ r.leechers }}
+            </span>
+            <span class="magnet-page__tag magnet-page__tag--date">
+              <i class="fa-regular fa-clock" aria-hidden="true"></i>{{ formatDate(r.date) }}
+            </span>
           </div>
         </div>
         <div class="magnet-page__actions">
           <AppButton type="button" variant="secondary" size="sm" @click="copyMagnet(r)">
-            复制
+            <i class="fa-solid fa-copy" aria-hidden="true"></i>复制
           </AppButton>
           <AppButton
             type="button"
@@ -142,10 +175,11 @@ function formatDate(unix: number): string {
             :disabled="!!qbPushing[r.id]"
             @click="pushToQB(r)"
           >
+            <i class="fa-solid fa-download" aria-hidden="true"></i>
             {{ qbPushing[r.id] ? "推送中…" : "下载到 qB" }}
           </AppButton>
           <AppButton type="button" variant="secondary" size="sm" @click="openOffline(r)">
-            离线到网盘
+            <i class="fa-solid fa-cloud-arrow-down" aria-hidden="true"></i>离线
           </AppButton>
           <a
             v-if="r.view_url"
@@ -154,7 +188,7 @@ function formatDate(unix: number): string {
             rel="noopener"
             class="magnet-page__link"
           >
-            详情
+            <i class="fa-solid fa-external-link-alt" aria-hidden="true"></i>详情
           </a>
         </div>
       </li>
@@ -165,67 +199,127 @@ function formatDate(unix: number): string {
 
 <style scoped>
 .magnet-page {
-  max-width: 900px;
+  max-width: 960px;
   margin: 0 auto;
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 24px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  padding: 28px 20px calc(20px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
 .magnet-page__head {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+}
+
+.magnet-page__hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  border-radius: var(--radius-md);
+  background: var(--brand-gradient);
+  box-shadow: var(--shadow-card);
+}
+
+.magnet-page__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.magnet-page__hero-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .magnet-page__title {
-  margin: 0 0 4px;
-  font-size: 20px;
+  margin: 0;
+  font-size: 22px;
   font-weight: 700;
-  color: var(--text);
+  color: #fff;
 }
 
 .magnet-page__desc {
-  margin: 0;
+  margin: 2px 0 0;
   font-size: 13px;
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .magnet-page__bar {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+}
+
+.magnet-page__input-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  position: relative;
+}
+
+.magnet-page__input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 14px;
+  pointer-events: none;
 }
 
 .magnet-page__input {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 40px;
-  padding: 0 14px;
+  width: 100%;
+  height: 44px;
+  padding: 0 14px 0 38px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text);
   font-size: 14px;
   outline: none;
+  box-shadow: var(--shadow-soft);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .magnet-page__input:focus {
   border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .magnet-page__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
   color: var(--danger);
   font-size: 13px;
 }
 
 .magnet-page__empty {
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 14px;
   text-align: center;
-  padding: 60px 0;
+  padding: 72px 0;
+}
+.magnet-page__empty i {
+  font-size: 40px;
+  color: var(--border);
 }
 
 .magnet-page__loading {
@@ -239,24 +333,40 @@ function formatDate(unix: number): string {
   padding: 60px 0;
 }
 
+.magnet-page__stats {
+  margin-bottom: 12px;
+}
+.magnet-page__stats-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 .magnet-page__list {
   list-style: none;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .magnet-page__row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-soft);
+  gap: 14px;
+  padding: 14px 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
-.magnet-page__row:last-child {
-  border-bottom: none;
+.magnet-page__row:hover {
+  border-color: var(--border);
+  box-shadow: var(--shadow-card);
 }
 
 .magnet-page__main {
@@ -277,9 +387,41 @@ function formatDate(unix: number): string {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px 10px;
-  margin-top: 4px;
-  font-size: 12px;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.magnet-page__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.magnet-page__tag i {
+  font-size: 10px;
+}
+.magnet-page__tag--cat {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.magnet-page__tag--size {
+  background: var(--surface-sunken);
+  color: var(--text-regular);
+}
+.magnet-page__tag--seed {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+.magnet-page__tag--leech {
+  background: rgba(239, 68, 68, 0.08);
+  color: #dc2626;
+}
+.magnet-page__tag--date {
+  background: var(--surface-sunken);
   color: var(--text-muted);
 }
 
@@ -292,22 +434,43 @@ function formatDate(unix: number): string {
 }
 
 .magnet-page__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--brand);
   font-size: 13px;
+  font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
+}
+.magnet-page__link:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 640px) {
   .magnet-page {
-    padding: 16px 12px calc(16px + env(safe-area-inset-bottom, 0px));
+    padding: 18px 12px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .magnet-page__hero {
+    padding: 16px 18px;
+  }
+
+  .magnet-page__icon {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+
+  .magnet-page__title {
+    font-size: 18px;
   }
 
   .magnet-page__row {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
-    padding: 12px;
+    gap: 12px;
+    padding: 14px;
   }
 
   .magnet-page__actions {
@@ -318,6 +481,7 @@ function formatDate(unix: number): string {
 
   .magnet-page__actions .btn {
     width: 100%;
+    justify-content: center;
   }
 
   .magnet-page__link {

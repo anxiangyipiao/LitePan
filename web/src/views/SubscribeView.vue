@@ -249,8 +249,25 @@ onDeactivated(stopPolling);
 <template>
   <div class="subscribe-page">
     <header class="subscribe-page__head">
-      <h1 class="subscribe-page__title">订阅追番</h1>
-      <p class="subscribe-page__desc">自动抓取动漫 RSS，按关键词 / 集数 / 画质匹配并推送到 qB 或网盘离线下载</p>
+      <div class="subscribe-page__hero">
+        <div class="subscribe-page__icon">
+          <i class="fa-solid fa-rss" aria-hidden="true"></i>
+        </div>
+        <div class="subscribe-page__hero-text">
+          <h1 class="subscribe-page__title">订阅追番</h1>
+          <p class="subscribe-page__desc">自动抓取动漫 RSS，按关键词 / 集数 / 画质匹配并推送到 qB 或网盘离线下载</p>
+        </div>
+      </div>
+      <div class="subscribe-page__stats">
+        <div class="subscribe-page__stat">
+          <span class="subscribe-page__stat-value subscribe-page__stat-value--active">{{ activeCount }}</span>
+          <span class="subscribe-page__stat-label">运行中</span>
+        </div>
+        <div class="subscribe-page__stat">
+          <span class="subscribe-page__stat-value">{{ subscriptions.length }}</span>
+          <span class="subscribe-page__stat-label">总订阅</span>
+        </div>
+      </div>
     </header>
 
     <div class="subscribe-page__bar">
@@ -392,25 +409,88 @@ onDeactivated(stopPolling);
   margin: 0 auto;
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 24px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  padding: 28px 20px calc(20px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
 .subscribe-page__head {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+}
+
+.subscribe-page__hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  box-shadow: var(--shadow-card);
+  margin-bottom: 14px;
+}
+
+.subscribe-page__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.subscribe-page__hero-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .subscribe-page__title {
+  margin: 0;
   font-size: 22px;
   font-weight: 700;
-  color: var(--text);
-  margin: 0 0 4px;
+  color: #fff;
 }
 
 .subscribe-page__desc {
-  color: var(--text-muted);
+  margin: 2px 0 0;
   font-size: 13px;
-  margin: 0;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.subscribe-page__stats {
+  display: flex;
+  gap: 12px;
+}
+
+.subscribe-page__stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-soft);
+}
+
+.subscribe-page__stat-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+}
+
+.subscribe-page__stat-value--active {
+  color: var(--success);
+}
+
+.subscribe-page__stat-label {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .subscribe-page__bar {

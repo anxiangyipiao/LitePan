@@ -23,6 +23,7 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
           :class="{ 'is-active': activeTab === t.key }"
           @click="setActiveTab(t.key)"
         >
+          <i :class="t.key === 'search' ? 'fa-solid fa-magnet' : 'fa-solid fa-rss'" aria-hidden="true"></i>
           {{ t.label }}
         </button>
       </div>
@@ -49,6 +50,7 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
   z-index: 60;
   background: var(--surface);
   border-bottom: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-soft);
 }
 
 .magnet-hub__tabs-inner {
@@ -56,12 +58,15 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
   margin: 0 auto;
   display: flex;
   gap: 4px;
-  padding: 10px 20px 0;
+  padding: 12px 20px 0;
   box-sizing: border-box;
 }
 
 .magnet-hub__tab {
-  padding: 8px 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -69,7 +74,11 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
   font-weight: 600;
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  transition: color 0.15s ease;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.magnet-hub__tab i {
+  font-size: 13px;
 }
 
 .magnet-hub__tab:hover {
