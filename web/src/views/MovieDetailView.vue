@@ -27,6 +27,43 @@ function openFanart(url: string) {
   fanartViewUrl.value = url;
 }
 
+// 背景图切换：合并主 backdrop 和额外 fanart，watch detail 变化时重置
+const currentBackdrop = ref("");
+const allBackdrops = computed<string[]>(() => {
+  const list: string[] = [];
+  if (detail.value?.backdrop_url) list.push(detail.value.backdrop_url);
+  if (detail.value?.extra_fanart_urls?.length) {
+    for (const url of detail.value.extra_fanart_urls) {
+      if (url && !list.includes(url)) list.push(url);
+    }
+  }
+  return list;
+});
+const currentBackdropIndex = computed(
+  () => allBackdrops.value.findIndex((u) => u === currentBackdrop.value),
+);
+
+watch(
+  () => detail.value?.backdrop_url,
+  (v) => {
+    currentBackdrop.value = v ?? "";
+  },
+);
+
+function setBackdrop(url: string) {
+  if (url && allBackdrops.value.includes(url)) {
+    currentBackdrop.value = url;
+  }
+}
+
+function shiftBackdrop(delta: number) {
+  const list = allBackdrops.value;
+  if (list.length < 2) return;
+  const idx = currentBackdropIndex.value >= 0 ? currentBackdropIndex.value : 0;
+  const next = ((idx + delta) % list.length + list.length) % list.length;
+  currentBackdrop.value = list[next];
+}
+
 const overviewExpanded = ref(false);
 watch(
   () => detail.value?.id,
@@ -116,12 +153,33 @@ function filterByActor(actor: string) {
 
     <template v-else-if="detail">
       <div
-        v-if="detail.backdrop_url"
+        v-if="currentBackdrop"
         class="detail-hero"
         :class="{ 'detail-hero--with-poster': detail.poster_url }"
-        :style="{ backgroundImage: `url(${detail.backdrop_url})` }"
+        :style="{ backgroundImage: `url(${currentBackdrop})` }"
       >
         <div class="detail-hero__shade" />
+        <template v-if="allBackdrops.length > 1">
+          <button
+            type="button"
+            class="detail-hero__nav detail-hero__nav--prev"
+            aria-label="上一张背景图"
+            @click="shiftBackdrop(-1)"
+          >
+            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+          </button>
+          <button
+            type="button"
+            class="detail-hero__nav detail-hero__nav--next"
+            aria-label="下一张背景图"
+            @click="shiftBackdrop(1)"
+          >
+            <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+          </button>
+          <div class="detail-hero__counter">
+            {{ currentBackdropIndex >= 0 ? currentBackdropIndex + 1 : 1 }} / {{ allBackdrops.length }}
+          </div>
+        </template>
       </div>
 
       <div class="detail-body" :class="{ 'detail-body--over-hero': detail.backdrop_url && detail.poster_url }">
@@ -244,18 +302,43 @@ function filterByActor(actor: string) {
           </div>
         </div>
 
-        <div v-if="detail.extra_fanart_urls?.length" class="detail-fanart">
-          <h3 class="detail-sec">背景图（{{ detail.extra_fanart_urls.length }}）</h3>
+        <div v-if="allBackdrops.length > 1" class="detail-fanart">
+          <h3 class="detail-sec">
+            背景图（{{ allBackdrops.length }}）
+            <span class="detail-fanart-hint">点击切换 · 双击或点放大图标全屏</span>
+          </h3>
           <div class="detail-fanart-scroll">
-            <img
-              v-for="(url, i) in detail.extra_fanart_urls"
+            <div
+              v-for="(url, i) in allBackdrops"
               :key="i"
-              :src="url"
-              class="detail-fanart-img"
-              loading="lazy"
-              decoding="async"
-              @click="openFanart(url)"
-            />
+              class="detail-fanart-item"
+              :class="{ 'is-active': url === currentBackdrop }"
+              :title="url === currentBackdrop ? '当前背景图（双击全屏查看）' : '点击设为背景图（双击全屏查看）'"
+              @click="setBackdrop(url)"
+              @dblclick="openFanart(url)"
+            >
+              <img
+                :src="url"
+                :alt="`背景图 ${i + 1}`"
+                class="detail-fanart-img"
+                loading="lazy"
+                decoding="async"
+              />
+              <span class="detail-fanart-index">{{ i + 1 }}</span>
+              <i
+                v-if="url === currentBackdrop"
+                class="detail-fanart-check fa-solid fa-check"
+                aria-hidden="true"
+              ></i>
+              <button
+                type="button"
+                class="detail-fanart-zoom"
+                aria-label="全屏查看背景图"
+                @click.stop="openFanart(url)"
+              >
+                <i class="fa-solid fa-expand" aria-hidden="true"></i>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -342,6 +425,62 @@ function filterByActor(actor: string) {
     rgba(10, 10, 15, 0.5) 50%,
     #0a0a0f 100%
   );
+}
+
+.detail-hero__nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  opacity: 0.55;
+  backdrop-filter: blur(6px);
+  transition: opacity 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.detail-hero__nav--prev {
+  left: 16px;
+}
+
+.detail-hero__nav--next {
+  right: 16px;
+}
+
+.detail-hero__nav:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.7);
+  transform: translateY(-50%) scale(1.06);
+}
+
+.detail-hero__nav:active {
+  transform: translateY(-50%) scale(0.96);
+}
+
+.detail-hero__counter {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  z-index: 5;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 
 .detail-hero--with-poster {
@@ -496,6 +635,14 @@ function filterByActor(actor: string) {
   margin-top: 30px;
 }
 
+.detail-fanart-hint {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #888;
+  vertical-align: middle;
+}
+
 .detail-fanart-scroll {
   display: flex;
   align-items: center;
@@ -507,23 +654,107 @@ function filterByActor(actor: string) {
   padding-bottom: 8px;
 }
 
-.detail-fanart-img {
+.detail-fanart-item {
+  position: relative;
   flex: 0 0 auto;
   width: 340px;
-  max-height: 220px;
   border-radius: 12px;
-  object-fit: cover;
-  cursor: pointer;
+  overflow: hidden;
   scroll-snap-align: start;
+  cursor: pointer;
   background: #1a1a24;
   border: 2px solid transparent;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
 }
 
-.detail-fanart-img:hover {
-  transform: scale(1.03);
+.detail-fanart-item:hover {
+  transform: translateY(-2px);
   border-color: rgba(255, 215, 0, 0.4);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.detail-fanart-item.is-active {
+  border-color: #ffd700;
+  box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.25), 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+
+.detail-fanart-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  object-fit: cover;
+  background: #1a1a24;
+  transition: filter 0.25s ease;
+}
+
+.detail-fanart-item:not(.is-active) .detail-fanart-img {
+  filter: brightness(0.72);
+}
+
+.detail-fanart-index {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail-fanart-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #ffd700;
+  color: #000;
+  font-size: 11px;
+}
+
+.detail-fanart-zoom {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, background 0.2s ease;
+}
+
+.detail-fanart-item:hover .detail-fanart-zoom,
+.detail-fanart-item.is-active .detail-fanart-zoom {
+  opacity: 1;
+}
+
+.detail-fanart-zoom:hover {
+  background: #ffd700;
+  color: #000;
 }
 
 .fanart-overlay {
@@ -689,6 +920,29 @@ function filterByActor(actor: string) {
 }
 
 @media (max-width: 640px) {
+  .detail-hero__nav {
+    width: 36px;
+    height: 36px;
+    font-size: 13px;
+  }
+
+  .detail-hero__nav--prev {
+    left: 8px;
+  }
+
+  .detail-hero__nav--next {
+    right: 8px;
+  }
+
+  .detail-hero__counter {
+    right: 8px;
+    bottom: 10px;
+  }
+
+  .detail-fanart-item {
+    width: 260px;
+  }
+
   .detail-main {
     flex-direction: column;
     align-items: center;

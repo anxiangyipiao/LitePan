@@ -30,7 +30,7 @@ const router = useRouter();
 const auth = useAuthStore();
 
 // 模式切换：local=本地影视库, online=在线选片
-const viewMode = ref<"local" | "online">("local");
+const viewMode = ref<"local" | "online">("online");
 
 // ---- 本地影视库 ----
 const roots = ref<MediaLibraryRoot[]>([]);
@@ -392,6 +392,10 @@ onMounted(() => {
     void loadFacets();
     void fetchItems(true);
   });
+  // 默认打开在线选片，主动触发一次加载，避免空白等待
+  if (onlineItems.value.length === 0) {
+    void loadOnlineData(true);
+  }
 });
 
 watch(
