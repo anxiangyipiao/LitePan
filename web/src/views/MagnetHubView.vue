@@ -51,8 +51,6 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
 .magnet-hub__tabs {
   max-width: 960px;
   margin: 16px auto 0;
-  padding: 0 20px;
-  box-sizing: border-box;
   display: flex;
   justify-content: flex-start;
 }
