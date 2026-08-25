@@ -42,39 +42,47 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
 .magnet-hub {
   min-height: 100vh;
   min-height: 100dvh;
+  /* 与影视模式切换视觉对齐的品牌色（蓝色） */
+  --magnet-accent: var(--brand-strong, #3b82f6);
+  --magnet-accent-soft: rgba(79, 142, 247, 0.12);
 }
 
+/* 分段药丸：与影视的 .ml-mode-switch 同款——白底圆角胶囊，内部含 1–2 个圆角按钮 */
 .magnet-hub__tabs {
-  position: sticky;
-  top: 0;
-  z-index: 60;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border-soft);
-  box-shadow: var(--shadow-soft);
+  max-width: 960px;
+  margin: 16px auto 0;
+  padding: 0 20px;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
 }
 
 .magnet-hub__tabs-inner {
-  max-width: 960px;
-  margin: 0 auto;
   display: flex;
   gap: 4px;
-  padding: 12px 20px 0;
-  box-sizing: border-box;
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 12px;
+  padding: 4px;
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-card);
+  width: fit-content;
 }
 
 .magnet-hub__tab {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
+  gap: 6px;
+  padding: 8px 16px;
   border: none;
+  border-radius: 8px;
   background: transparent;
   color: var(--text-muted);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition: color 0.2s ease, background-color 0.2s ease;
 }
 
 .magnet-hub__tab i {
@@ -82,12 +90,14 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
 }
 
 .magnet-hub__tab:hover {
-  color: var(--text);
+  color: var(--magnet-accent);
+  background: var(--magnet-accent-soft);
 }
 
 .magnet-hub__tab.is-active {
-  color: var(--brand-strong, var(--brand));
-  border-bottom-color: var(--brand);
+  background: var(--magnet-accent-soft);
+  color: var(--magnet-accent);
+  font-weight: 600;
 }
 
 /* 子页面包裹矩形：白底卡片 + 圆角 + 边框 + 阴影（边框与阴影加重，确保浅色主题下也能明显区分） */
