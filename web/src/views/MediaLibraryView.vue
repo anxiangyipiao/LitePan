@@ -8,16 +8,31 @@ import {
   type MediaLibraryRoot,
   type MediaLibrarySort,
 } from "@/api/mediaLibrary";
+import {
+  searchTmdb,
+  getTmdbPopular,
+  getTmdbTopRated,
+  getTmdbNowPlaying,
+  getTmdbUpcoming,
+  tmdbImage,
+  type TmdbMedia,
+  type TmdbSearchResult,
+} from "@/api/tmdb";
 import { getApiErrorMessage } from "@/api/client";
 import { useVirtualPosterWall } from "@/composables/useVirtualPosterWall";
 import { useAuthStore } from "@/stores/auth";
 import SvgIcon from "@/components/icons/SvgIcon.vue";
+import BusySpinner from "@/components/base/BusySpinner.vue";
 
 const ROWS_PER_PAGE = 7;
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 
+// 模式切换：local=本地影视库, online=在线选片
+const viewMode = ref<"local" | "online">("local");
+
+// ---- 本地影视库 ----
 const roots = ref<MediaLibraryRoot[]>([]);
 const libId = ref("");
 const sort = ref<MediaLibrarySort>("title_asc");
@@ -38,12 +53,40 @@ const wall = useVirtualPosterWall(items);
 const pageSize = computed(() => Math.max(1, wall.cols.value || 4) * ROWS_PER_PAGE);
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
 
+// ---- 在线选片 TMDB ----
+type OnlineTabKey = "popular" | "top-rated" | "now-playing" | "upcoming" | "tv";
+const onlineTabs: { key: OnlineTabKey; label: string }[] = [
+  { key: "popular", label: "热门" },
+  { key: "top-rated", label: "高分" },
+  { key: "now-playing", label: "热映" },
+  { key: "upcoming", label: "待映" },
+  { key: "tv", label: "剧集" },
+];
+const onlineTab = ref<OnlineTabKey>("popular");
+const onlineItems = ref<TmdbMedia[]>([]);
+const onlineLoading = ref(false);
+const onlineError = ref("");
+const onlinePage = ref(1);
+const onlineTotalPages = ref(1);
+const onlineKeyword = ref("");
+const onlineSearching = ref(false);
+
 // 点海报 → 独立详情页
 function goDetail(item: MediaLibraryItem) {
   void router.push({ path: `/movies/${item.id}`, query: { lib: item.lib_id } });
 }
 
-// KeepAlive 滚动记忆：离开前记录窗口滚动位置（onBeforeRouteLeave 时机 DOM 未变，最可靠），返回时恢复
+// 在线选片 → 详情页
+function goOnlineDetail(movie: TmdbMedia) {
+  const type = movie.media_type || (onlineTab.value === "tv" ? "tv" : "movie");
+  void router.push({
+    name: "online-movie-detail",
+    params: { id: String(movie.id) },
+    query: { type, title: movie.title || movie.name || "" },
+  });
+}
+
+// KeepAlive 滚动记忆
 let savedScrollY = 0;
 onBeforeRouteLeave(() => {
   savedScrollY = window.scrollY || 0;
@@ -70,7 +113,6 @@ function addRootRow() {
   rootDraft.value.push({ id: "", name: "", path: "" });
 }
 
-// 批量添加：每行一个绝对路径，自动生成根目录行
 function addBatchPaths() {
   const paths = batchPaths.value
     .split(/\r?\n/)
@@ -99,13 +141,12 @@ async function saveRoots() {
   }
 }
 
-// ---- 数据 ----
+// ---- 本地数据 ----
 async function loadFacets() {
   try {
     const r = await mediaLibraryApi.facets(libId.value || undefined);
     const incomingGenres = r.genres ?? [];
     const incomingActors = r.actors ?? [];
-    // 保留已选值，即使当前筛选项让它暂时不出现在 facets 里
     facetGenres.value = incomingGenres.includes(genreFilter.value) || !genreFilter.value
       ? incomingGenres
       : [...incomingGenres, genreFilter.value];
@@ -146,11 +187,9 @@ async function fetchItems(reset: boolean) {
     if (s !== seq) return;
     items.value = res.items;
     total.value = res.total;
-    // 后端 total 可能小于当前页（删除后页码越界），自动回退到最后一页
     const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value));
     if (targetPage > maxPage) {
       page.value = maxPage;
-      // 越界时重拉一次
       const fix = await mediaLibraryApi.items({
         lib: libId.value || undefined,
         sort: sort.value,
@@ -198,7 +237,6 @@ function goPage(p: number) {
   requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
 }
 
-// ---- 过滤联动 ----
 watch([libId, sort, genreFilter, actorFilter], () => void fetchItems(true));
 watch(libId, () => void loadFacets());
 
@@ -212,7 +250,6 @@ function clearFacetFilters() {
   searchDraft.value = "";
   genreFilter.value = "";
   actorFilter.value = "";
-  // 清掉 URL 上的 ?genre/?actor/?keyword，避免刷新后又带回
   void router.replace({ path: "/movies", query: {} });
   void fetchItems(true);
 }
@@ -220,6 +257,133 @@ function clearFacetFilters() {
 function applyQueryFiltersFromRoute() {
   genreFilter.value = String(route.query.genre ?? "");
   actorFilter.value = String(route.query.actor ?? "");
+}
+
+// ---- 在线选片 TMDB ----
+async function loadOnlineData(reset = false) {
+  if (reset) {
+    onlinePage.value = 1;
+    onlineItems.value = [];
+    onlineTotalPages.value = 1;
+  }
+  if (onlinePage.value > onlineTotalPages.value && onlineTotalPages.value > 0) return;
+  if (onlineLoading.value) return;
+
+  onlineLoading.value = true;
+  onlineError.value = "";
+  try {
+    let result: TmdbSearchResult;
+    if (onlineTab.value === "popular") {
+      result = await getTmdbPopular("movie", onlinePage.value);
+    } else if (onlineTab.value === "top-rated") {
+      result = await getTmdbTopRated("movie", onlinePage.value);
+    } else if (onlineTab.value === "now-playing") {
+      result = await getTmdbNowPlaying(onlinePage.value);
+    } else if (onlineTab.value === "upcoming") {
+      result = await getTmdbUpcoming(onlinePage.value);
+    } else {
+      result = await getTmdbPopular("tv", onlinePage.value);
+    }
+    onlineTotalPages.value = result.total_pages || 1;
+    onlineItems.value = [...onlineItems.value, ...(result.results || [])];
+    onlinePage.value++;
+  } catch (e) {
+    onlineError.value = getApiErrorMessage(e, "加载失败，请检查网络和 TMDB API Key 配置");
+  } finally {
+    onlineLoading.value = false;
+  }
+}
+
+async function searchOnline() {
+  const q = onlineKeyword.value.trim();
+  if (!q) {
+    onlineSearching.value = false;
+    await loadOnlineData(true);
+    return;
+  }
+  onlineSearching.value = true;
+  onlineLoading.value = true;
+  onlineError.value = "";
+  onlineItems.value = [];
+  try {
+    const result = await searchTmdb(q, 1);
+    onlineItems.value = result.results || [];
+    onlineTotalPages.value = result.total_pages || 1;
+    onlinePage.value = 2;
+  } catch (e) {
+    onlineError.value = getApiErrorMessage(e, "搜索失败");
+  } finally {
+    onlineLoading.value = false;
+  }
+}
+
+async function loadMoreOnline() {
+  if (onlineSearching.value) {
+    onlineLoading.value = true;
+    onlineError.value = "";
+    try {
+      const q = onlineKeyword.value.trim();
+      const nextPage = Math.floor(onlineItems.value.length / 20) + 1;
+      const result = await searchTmdb(q, nextPage);
+      const more = result.results || [];
+      if (more.length < 20) onlineTotalPages.value = nextPage;
+      onlineItems.value = [...onlineItems.value, ...more];
+    } catch (e) {
+      onlineError.value = getApiErrorMessage(e, "加载更多失败");
+    } finally {
+      onlineLoading.value = false;
+    }
+  } else {
+    await loadOnlineData();
+  }
+}
+
+async function switchOnlineTab(tab: OnlineTabKey) {
+  onlineTab.value = tab;
+  onlineSearching.value = false;
+  onlineKeyword.value = "";
+  await loadOnlineData(true);
+}
+
+function onlinePosterSrc(movie: TmdbMedia): string {
+  return tmdbImage.poster(movie.poster_path, "w342");
+}
+
+function onlinePlaceholderText(movie: TmdbMedia): string {
+  const title = movie.title || movie.name || "";
+  return title ? title.slice(0, 1) : "?";
+}
+
+function onlineRatingClass(rating: number): string {
+  if (rating >= 8) return "ml-online__rating--high";
+  if (rating >= 6) return "ml-online__rating--mid";
+  return "ml-online__rating--low";
+}
+
+function onlineYear(movie: TmdbMedia): string {
+  const date = movie.release_date || movie.first_air_date || "";
+  return date ? date.slice(0, 4) : "";
+}
+
+function handleOnlineScroll(e: Event) {
+  const target = e.target as HTMLElement;
+  if (!target) return;
+  const { scrollTop, scrollHeight, clientHeight } = target;
+  if (scrollHeight - scrollTop - clientHeight < 200 && !onlineLoading.value) {
+    if (onlineSearching.value) {
+      if (onlinePage.value <= onlineTotalPages.value) loadMoreOnline();
+    } else {
+      if (onlinePage.value <= onlineTotalPages.value) loadMoreOnline();
+    }
+  }
+}
+
+// 切换模式
+function switchViewMode(mode: "local" | "online") {
+  viewMode.value = mode;
+  if (mode === "online" && onlineItems.value.length === 0) {
+    loadOnlineData();
+  }
 }
 
 onMounted(() => {
@@ -240,10 +404,13 @@ watch(
 
 watch(pageSize, (n, o) => {
   if (n === o || !o) return;
-  // 列数变化导致每页条数变化，保持当前页首项不变
   const firstIndex = (page.value - 1) * (o as number);
   page.value = Math.floor(firstIndex / (n as number)) + 1;
   void fetchItems(false);
+});
+
+watch(onlineTab, () => {
+  loadOnlineData(true);
 });
 
 const typeLabel = (t: string) => (t === "tv" ? "剧集" : "电影");
@@ -257,148 +424,248 @@ const subtitle = (item: MediaLibraryItem) => {
 
 <template>
   <div class="ml-page">
-    <header class="ml-topbar">
-      <div class="ml-topbar__primary">
-
-        <select v-model="libId" class="ml-control ml-control--lib" aria-label="选择影视库">
-          <option value="">全部库</option>
-          <option v-for="r in roots" :key="r.id" :value="r.id">{{ r.name }}</option>
-        </select>
-
-        <select v-model="sort" class="ml-control" aria-label="排序">
-          <option value="title_asc">名称</option>
-          <option value="year_desc">年份 ↓</option>
-          <option value="year_asc">年份 ↑</option>
-        </select>
-
-        <form class="ml-search" @submit.prevent="submitSearch">
-          <input v-model="searchDraft" class="ml-search-input" placeholder="搜索片名…" />
-        </form>
-
-        <button
-          type="button"
-          class="ml-icon-btn"
-          title="刷新索引"
-          aria-label="刷新索引"
-          :disabled="refreshing"
-          @click="refresh"
-        >
-          <SvgIcon name="refresh" :size="15" />
-        </button>
-        <button
-          v-if="auth.isAdmin"
-          type="button"
-          class="ml-icon-btn"
-          title="配置影视库"
-          aria-label="配置影视库"
-          @click="openConfig"
-        >
-          <SvgIcon name="settings" :size="15" />
-        </button>
-      </div>
-
-      <div v-if="facetGenres.length || facetActors.length" class="ml-topbar__facets">
-        <select v-if="facetGenres.length" v-model="genreFilter" class="ml-control" aria-label="按分类筛选">
-          <option value="">全部分类</option>
-          <option v-for="g in facetGenres" :key="g" :value="g">{{ g }}</option>
-        </select>
-
-        <select v-if="facetActors.length" v-model="actorFilter" class="ml-control" aria-label="按演员筛选">
-          <option value="">全部演员</option>
-          <option v-for="a in facetActors" :key="a" :value="a">{{ a }}</option>
-        </select>
-
-        <span v-if="genreFilter || actorFilter" class="ml-facet-count">
-          已选：{{ [genreFilter, actorFilter].filter(Boolean).join(" · ") }}
-          <button type="button" class="ml-facet-clear" @click="clearFacetFilters">清除</button>
-        </span>
-      </div>
-    </header>
-
-    <p v-if="error" class="ml-error">{{ error }}</p>
-
-    <div
-      v-if="roots.length === 0 && !loading"
-      class="ml-empty"
-    >
-      <p class="ml-empty-title">尚未配置影视库</p>
-      <p class="ml-empty-sub">
-        影视模式读取服务器本地刮削输出目录（.strm / nfo / 海报所在）。
-        <template v-if="auth.isAdmin">点右上角 ⚙ 配置根目录。</template>
-        <template v-else>请联系管理员配置。</template>
-      </p>
+    <!-- 模式切换 -->
+    <div class="ml-mode-switch">
+      <button
+        class="ml-mode-btn"
+        :class="{ 'ml-mode-btn--active': viewMode === 'local' }"
+        @click="switchViewMode('local')"
+      >
+        <SvgIcon name="folder" :size="16" />
+        本地影视库
+      </button>
+      <button
+        class="ml-mode-btn"
+        :class="{ 'ml-mode-btn--active': viewMode === 'online' }"
+        @click="switchViewMode('online')"
+      >
+        <SvgIcon name="compass" :size="16" />
+        在线选片
+      </button>
     </div>
 
-    <div v-else-if="items.length === 0 && !loading" class="ml-empty">
-      <p class="ml-empty-title">
-        {{ keyword || genreFilter || actorFilter ? "没有匹配的影视" : "影视库为空" }}
-      </p>
-      <p v-if="!keyword && !genreFilter && !actorFilter" class="ml-empty-sub">该库还没有可展示的条目。</p>
-      <p v-else class="ml-empty-sub">
-        当前筛选（分类/演员/关键词）无匹配，试试
-        <button type="button" class="ml-empty-link" @click="clearFacetFilters">清除筛选</button>
-        或
-        <button type="button" class="ml-empty-link" @click="refresh">刷新索引</button>。
-      </p>
-    </div>
+    <!-- 本地影视库 -->
+    <template v-if="viewMode === 'local'">
+      <header class="ml-topbar">
+        <div class="ml-topbar__primary">
 
-    <div v-else>
-      <div :ref="wall.rootEl" class="ml-wall-root">
-        <div class="ml-wall-phantom" :style="{ height: `${wall.totalHeight.value}px` }">
-          <div
-            class="ml-wall"
-            :style="{ ...wall.gridStyle.value, transform: `translateY(${wall.offsetY.value}px)` }"
+          <select v-model="libId" class="ml-control ml-control--lib" aria-label="选择影视库">
+            <option value="">全部库</option>
+            <option v-for="r in roots" :key="r.id" :value="r.id">{{ r.name }}</option>
+          </select>
+
+          <select v-model="sort" class="ml-control" aria-label="排序">
+            <option value="title_asc">名称</option>
+            <option value="year_desc">年份 ↓</option>
+            <option value="year_asc">年份 ↑</option>
+          </select>
+
+          <form class="ml-search" @submit.prevent="submitSearch">
+            <input v-model="searchDraft" class="ml-search-input" placeholder="搜索片名…" />
+          </form>
+
+          <button
+            type="button"
+            class="ml-icon-btn"
+            title="刷新索引"
+            aria-label="刷新索引"
+            :disabled="refreshing"
+            @click="refresh"
           >
-            <article
-              v-for="item in wall.visibleItems.value"
-              :key="item.lib_id + item.tmdb_id + item.folder_name"
-              class="ml-card"
-              role="button"
-              tabindex="0"
-              :title="`查看详情：${item.title}`"
-              @click="goDetail(item)"
-              @keydown.enter="goDetail(item)"
+            <SvgIcon name="refresh" :size="15" />
+          </button>
+          <button
+            v-if="auth.isAdmin"
+            type="button"
+            class="ml-icon-btn"
+            title="配置影视库"
+            aria-label="配置影视库"
+            @click="openConfig"
+          >
+            <SvgIcon name="settings" :size="15" />
+          </button>
+        </div>
+
+        <div v-if="facetGenres.length || facetActors.length" class="ml-topbar__facets">
+          <select v-if="facetGenres.length" v-model="genreFilter" class="ml-control" aria-label="按分类筛选">
+            <option value="">全部分类</option>
+            <option v-for="g in facetGenres" :key="g" :value="g">{{ g }}</option>
+          </select>
+
+          <select v-if="facetActors.length" v-model="actorFilter" class="ml-control" aria-label="按演员筛选">
+            <option value="">全部演员</option>
+            <option v-for="a in facetActors" :key="a" :value="a">{{ a }}</option>
+          </select>
+
+          <span v-if="genreFilter || actorFilter" class="ml-facet-count">
+            已选：{{ [genreFilter, actorFilter].filter(Boolean).join(" · ") }}
+            <button type="button" class="ml-facet-clear" @click="clearFacetFilters">清除</button>
+          </span>
+        </div>
+      </header>
+
+      <p v-if="error" class="ml-error">{{ error }}</p>
+
+      <div v-if="roots.length === 0 && !loading" class="ml-empty">
+        <p class="ml-empty-title">尚未配置影视库</p>
+        <p class="ml-empty-sub">
+          影视模式读取服务器本地刮削输出目录（.strm / nfo / 海报所在）。
+          <template v-if="auth.isAdmin">点右上角 ⚙ 配置根目录。</template>
+          <template v-else>请联系管理员配置。</template>
+        </p>
+      </div>
+
+      <div v-else-if="items.length === 0 && !loading" class="ml-empty">
+        <p class="ml-empty-title">
+          {{ keyword || genreFilter || actorFilter ? "没有匹配的影视" : "影视库为空" }}
+        </p>
+        <p v-if="!keyword && !genreFilter && !actorFilter" class="ml-empty-sub">该库还没有可展示的条目。</p>
+        <p v-else class="ml-empty-sub">
+          当前筛选（分类/演员/关键词）无匹配，试试
+          <button type="button" class="ml-empty-link" @click="clearFacetFilters">清除筛选</button>
+          或
+          <button type="button" class="ml-empty-link" @click="refresh">刷新索引</button>。
+        </p>
+      </div>
+
+      <div v-else>
+        <div :ref="wall.rootEl" class="ml-wall-root">
+          <div class="ml-wall-phantom" :style="{ height: `${wall.totalHeight.value}px` }">
+            <div
+              class="ml-wall"
+              :style="{ ...wall.gridStyle.value, transform: `translateY(${wall.offsetY.value}px)` }"
             >
-              <div class="ml-card__poster">
-                <img
-                  v-if="item.poster_url"
-                  :src="item.poster_url"
-                  :alt="item.title"
-                  loading="lazy"
-                  decoding="async"
-                />
-                <div v-else class="ml-card__placeholder">{{ item.title.slice(0, 1) }}</div>
-                <span v-if="item.media_type === 'tv' && item.tv_state === 'updating'" class="ml-card__badge">
-                  追更
-                </span>
-                <span v-if="!item.play_url" class="ml-card__badge ml-card__badge--muted">无源</span>
-              </div>
-              <div class="ml-card__meta">
-                <div class="ml-card__title" :title="item.title">{{ item.title }}</div>
-                <div class="ml-card__sub">{{ subtitle(item) }}</div>
-              </div>
-            </article>
+              <article
+                v-for="item in wall.visibleItems.value"
+                :key="item.lib_id + item.tmdb_id + item.folder_name"
+                class="ml-card"
+                role="button"
+                tabindex="0"
+                :title="`查看详情：${item.title}`"
+                @click="goDetail(item)"
+                @keydown.enter="goDetail(item)"
+              >
+                <div class="ml-card__poster">
+                  <img
+                    v-if="item.poster_url"
+                    :src="item.poster_url"
+                    :alt="item.title"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <div v-else class="ml-card__placeholder">{{ item.title.slice(0, 1) }}</div>
+                  <span v-if="item.media_type === 'tv' && item.tv_state === 'updating'" class="ml-card__badge">
+                    追更
+                  </span>
+                  <span v-if="!item.play_url" class="ml-card__badge ml-card__badge--muted">无源</span>
+                </div>
+                <div class="ml-card__meta">
+                  <div class="ml-card__title" :title="item.title">{{ item.title }}</div>
+                  <div class="ml-card__sub">{{ subtitle(item) }}</div>
+                </div>
+              </article>
+            </div>
           </div>
         </div>
-      </div>
 
-      <nav v-if="totalPages > 1" class="ml-pager" aria-label="分页">
-        <button type="button" class="ml-pager-btn" :disabled="page <= 1" @click="goPage(page - 1)">上一页</button>
-        <template v-for="p in totalPages" :key="p">
-          <button
-            v-if="p === 1 || p === totalPages || Math.abs(p - page) <= 2"
-            type="button"
-            class="ml-pager-btn"
-            :class="{ 'ml-pager-btn--active': p === page }"
-            @click="goPage(p)"
-          >{{ p }}</button>
-          <span v-else-if="p === page - 3 || p === page + 3" class="ml-pager-ellipsis">…</span>
-        </template>
-        <button type="button" class="ml-pager-btn" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</button>
-        <span class="ml-pager-info">{{ total }} 部 · 第 {{ page }}/{{ totalPages }} 页 · 每页 {{ pageSize }}（7 行）</span>
-      </nav>
-      <p v-else class="ml-pager-info ml-pager-info--single">{{ total }} 部 · 每页 {{ pageSize }}（7 行）</p>
-    </div>
+        <nav v-if="totalPages > 1" class="ml-pager" aria-label="分页">
+          <button type="button" class="ml-pager-btn" :disabled="page <= 1" @click="goPage(page - 1)">上一页</button>
+          <template v-for="p in totalPages" :key="p">
+            <button
+              v-if="p === 1 || p === totalPages || Math.abs(p - page) <= 2"
+              type="button"
+              class="ml-pager-btn"
+              :class="{ 'ml-pager-btn--active': p === page }"
+              @click="goPage(p)"
+            >{{ p }}</button>
+            <span v-else-if="p === page - 3 || p === page + 3" class="ml-pager-ellipsis">…</span>
+          </template>
+          <button type="button" class="ml-pager-btn" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</button>
+          <span class="ml-pager-info">{{ total }} 部 · 第 {{ page }}/{{ totalPages }} 页 · 每页 {{ pageSize }}（7 行）</span>
+        </nav>
+        <p v-else class="ml-pager-info ml-pager-info--single">{{ total }} 部 · 每页 {{ pageSize }}（7 行）</p>
+      </div>
+    </template>
+
+    <!-- 在线选片 TMDB -->
+    <template v-else>
+      <div class="ml-online" @scroll="handleOnlineScroll">
+        <header class="ml-topbar">
+          <div class="ml-topbar__primary">
+            <div class="ml-online__tabs">
+              <button
+                v-for="tab in onlineTabs"
+                :key="tab.key"
+                class="ml-online__tab"
+                :class="{ 'ml-online__tab--active': onlineTab === tab.key && !onlineSearching }"
+                @click="switchOnlineTab(tab.key)"
+              >
+                {{ tab.label }}
+              </button>
+            </div>
+            <form class="ml-search" @submit.prevent="searchOnline">
+              <input v-model="onlineKeyword" class="ml-search-input" placeholder="搜索影视..." />
+            </form>
+          </div>
+        </header>
+
+        <p v-if="onlineError" class="ml-error">
+          {{ onlineError }}
+          <button class="ml-online__retry" @click="onlineSearching ? searchOnline() : loadOnlineData(true)">重试</button>
+        </p>
+
+        <div v-if="!onlineLoading && !onlineError && onlineItems.length === 0" class="ml-empty">
+          <div class="ml-empty__icon">🎬</div>
+          <p class="ml-empty-title">{{ onlineSearching ? "没有找到结果" : "暂无内容" }}</p>
+          <p v-if="onlineSearching" class="ml-empty-sub">换个关键词试试</p>
+        </div>
+
+        <div v-if="onlineLoading && onlineItems.length === 0" class="ml-online__loading">
+          <BusySpinner :size="28" />
+          <span>加载中…</span>
+        </div>
+
+        <div v-if="onlineItems.length" class="ml-online__grid">
+          <div
+            v-for="movie in onlineItems"
+            :key="`${movie.media_type || onlineTab}-${movie.id}`"
+            class="ml-online__card"
+            @click="goOnlineDetail(movie)"
+          >
+            <div class="ml-online__poster">
+              <img
+                :src="onlinePosterSrc(movie)"
+                :alt="movie.title || movie.name"
+                loading="lazy"
+                @error="($event.target as HTMLImageElement).style.display = 'none'"
+              />
+              <div class="ml-online__placeholder">{{ onlinePlaceholderText(movie) }}</div>
+              <div
+                v-if="movie.vote_average && movie.vote_average > 0"
+                class="ml-online__rating"
+                :class="onlineRatingClass(movie.vote_average)"
+              >
+                {{ movie.vote_average.toFixed(1) }}
+              </div>
+            </div>
+            <div class="ml-online__meta">
+              <div class="ml-online__title">{{ movie.title || movie.name }}</div>
+              <div class="ml-online__sub">
+                <span v-if="onlineYear(movie)">{{ onlineYear(movie) }}</span>
+                <span v-if="movie.genre_ids?.length"> · {{ movie.genre_ids.length }} 类型</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="onlineLoading && onlineItems.length" class="ml-online__loading ml-online__loading--more">
+          <BusySpinner :size="22" />
+          <span>加载更多…</span>
+        </div>
+
+        <div v-if="!onlineLoading && onlinePage > onlineTotalPages && onlineItems.length" class="ml-online__end">— 没有更多了 —</div>
+      </div>
+    </template>
 
     <!-- 配置弹窗 -->
     <div v-if="configOpen" class="ml-config-mask" @click.self="configOpen = false">
@@ -1300,6 +1567,225 @@ const subtitle = (item: MediaLibraryItem) => {
 
   .ml-detail-hero {
     height: 160px;
+  }
+}
+
+/* 模式切换 */
+.ml-mode-switch {
+  display: flex;
+  gap: 4px;
+  background: rgba(15, 15, 25, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  width: fit-content;
+}
+
+.ml-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #aaa;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ml-mode-btn:hover {
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.1);
+}
+
+.ml-mode-btn--active {
+  background: rgba(255, 215, 0, 0.15);
+  color: #ffd700;
+  font-weight: 600;
+}
+
+/* 在线选片 */
+.ml-online {
+  min-height: 100vh;
+  overflow-y: auto;
+  max-height: calc(100dvh - 120px);
+}
+
+.ml-online__tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.ml-online__tab {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #aaa;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ml-online__tab:hover {
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.1);
+}
+
+.ml-online__tab--active {
+  background: rgba(255, 215, 0, 0.15);
+  color: #ffd700;
+  font-weight: 600;
+}
+
+.ml-online__retry {
+  border: none;
+  background: rgba(255, 215, 0, 0.2);
+  color: #ffd700;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ml-online__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #888;
+  font-size: 13px;
+  padding: 60px 0;
+}
+
+.ml-online__loading--more {
+  padding: 20px 0;
+}
+
+.ml-online__end {
+  text-align: center;
+  color: #666;
+  font-size: 13px;
+  padding: 30px 0;
+}
+
+.ml-online__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px 12px;
+}
+
+.ml-online__card {
+  cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid transparent;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ml-online__card:hover {
+  transform: scale(1.05) translateY(-6px);
+  border-color: rgba(255, 215, 0, 0.6);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 215, 0, 0.15);
+  z-index: 10;
+}
+
+.ml-online__poster {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  background: #1a1a24;
+}
+
+.ml-online__poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  transition: transform 0.4s ease;
+}
+
+.ml-online__card:hover .ml-online__poster img {
+  transform: scale(1.08);
+}
+
+.ml-online__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  font-weight: 700;
+  color: #555;
+  background: linear-gradient(160deg, #1a1a24, #252532);
+  z-index: 1;
+}
+
+.ml-online__rating {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #000;
+  background: linear-gradient(135deg, #ffd700, #ffaa00);
+}
+
+.ml-online__rating--low {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+}
+
+.ml-online__rating--mid {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #000;
+}
+
+.ml-online__meta {
+  padding: 8px 6px 10px;
+}
+
+.ml-online__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e8e8e8;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ml-online__sub {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 640px) {
+  .ml-online__grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 12px 8px;
+  }
+
+  .ml-mode-btn {
+    padding: 6px 9px;
   }
 }
 </style>
