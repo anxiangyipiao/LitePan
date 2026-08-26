@@ -599,6 +599,9 @@ onDeactivated(stopPolling);
   justify-content: flex-end;
   flex-wrap: nowrap;
   gap: 4px;
+  /* 大屏操作列很宽时让按钮组本身只占按钮宽度，多余空间留在 td padding，不撑大按钮间距 */
+  width: fit-content;
+  margin-left: auto;
 }
 
 /* 操作列：35% 比例，与其他列一起 5 列总和 100% */
@@ -606,6 +609,13 @@ onDeactivated(stopPolling);
 .subscribe-page__td-actions {
   width: 35%;
   white-space: nowrap;
+  /* 让 td 内容可以靠右对齐而不被拉伸到 35% 宽度 */
+  text-align: right;
+}
+
+.subscribe-page__td-actions {
+  /* td 的内层 div 用 inline-flex 收缩宽度到只装按钮 */
+  vertical-align: middle;
 }
 
 /* 抓取记录抽屉 */
