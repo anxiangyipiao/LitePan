@@ -528,30 +528,30 @@ onDeactivated(stopPolling);
   overflow-x: visible;
 }
 
-/* 表格列宽：5 列各 15%，总 75% 留 25% 给 panel padding（不撑破） */
+/* 表格列宽：名称 20% / 规则 20% / 目标 20% / 间隔 5% / 操作 25%（总和 90%，留 10% 给 panel padding） */
 .subscribe-page__th:nth-child(1),
 .subscribe-page__td-name {
-  width: 15%;
+  width: 20%;
 }
 
 .subscribe-page__th:nth-child(2),
 .subscribe-page__td-trunc:nth-child(2) {
-  width: 15%;
+  width: 20%;
 }
 
 .subscribe-page__th:nth-child(3),
 .subscribe-page__td-trunc:nth-child(3) {
-  width: 15%;
+  width: 20%;
 }
 
 .subscribe-page__th:nth-child(4),
 .subscribe-page__td-nowrap:nth-child(4) {
-  width: 15%;
+  width: 5%;
 }
 
 .subscribe-page__th:nth-child(5),
 .subscribe-page__td-actions {
-  width: 15%;
+  width: 25%;
 }
 
 .subscribe-page__td-name {
@@ -597,30 +597,27 @@ onDeactivated(stopPolling);
 }
 
 .subscribe-page__td-actions {
-  text-align: right;
+  text-align: left;
 }
 
 .subscribe-page__th-actions {
-  text-align: right;
+  text-align: left;
 }
 
 
 .subscribe-page__actions {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   flex-wrap: nowrap;
   gap: 4px;
-  /* 大屏操作列很宽时让按钮组本身只占按钮宽度，多余空间留在 td padding，不撑大按钮间距 */
-  width: fit-content;
-  margin-left: auto;
 }
 
-/* 操作列：auto 布局下自然宽度（auto + max-width 220px） */
+/* 操作列：auto 布局下自然宽度，左对齐 */
 .subscribe-page__th-actions,
 .subscribe-page__td-actions {
   white-space: nowrap;
-  text-align: right;
+  text-align: left;
 }
 
 .subscribe-page__td-actions {
