@@ -522,25 +522,27 @@ onDeactivated(stopPolling);
 }
 
 /* 固定列宽：操作列 200px（容纳 4 个 34x34 按钮 + 间距 + td padding），
-   其他列基于「容器宽 - 200px」按比例分配，总宽度永远 = 容器宽 */
+   其他列基于「容器宽 - 200px」按比例分配，总宽度永远 = 容器宽
+   比例：名称 20% / 规则 20% / 目标 20% / 间隔 5%（合并为 65%，
+   但 4 列比例按 20/20/20/5 不等于 100%，需归一化） */
 .subscribe-page__th:nth-child(1),
 .subscribe-page__td-name {
-  width: calc((100% - 200px) * 0.36);
+  width: calc((100% - 200px) * 0.3077);
 }
 
 .subscribe-page__th:nth-child(2),
 .subscribe-page__td-trunc:nth-child(2) {
-  width: calc((100% - 200px) * 0.28);
+  width: calc((100% - 200px) * 0.3077);
 }
 
 .subscribe-page__th:nth-child(3),
 .subscribe-page__td-trunc:nth-child(3) {
-  width: calc((100% - 200px) * 0.26);
+  width: calc((100% - 200px) * 0.3077);
 }
 
 .subscribe-page__th:nth-child(4),
 .subscribe-page__td-nowrap:nth-child(4) {
-  width: calc((100% - 200px) * 0.10);
+  width: calc((100% - 200px) * 0.0769);
 }
 
 .subscribe-page__td-name {
