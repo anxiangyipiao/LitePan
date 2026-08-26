@@ -1,14 +1,22 @@
 <script setup lang="ts">
 import { useSectionTabRoute } from "@/composables/useSectionTabRoute";
 import MagnetSearchView from "./MagnetSearchView.vue";
+import MagnetFavoritesView from "./MagnetFavoritesView.vue";
 import SubscribeView from "./SubscribeView.vue";
 
 const TABS = [
   { key: "search", label: "磁力搜索" },
+  { key: "favorites", label: "我的收藏" },
   { key: "subscribe", label: "订阅追番" },
 ] as const;
 
-const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "subscribe"]);
+const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "favorites", "subscribe"]);
+
+const tabIcon: Record<string, string> = {
+  search: "fa-solid fa-magnet",
+  favorites: "fa-solid fa-star",
+  subscribe: "fa-solid fa-rss",
+};
 </script>
 
 <template>
@@ -23,7 +31,7 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
           :class="{ 'is-active': activeTab === t.key }"
           @click="setActiveTab(t.key)"
         >
-          <i :class="t.key === 'search' ? 'fa-solid fa-magnet' : 'fa-solid fa-rss'" aria-hidden="true"></i>
+          <i :class="tabIcon[t.key] ?? 'fa-solid fa-circle'" aria-hidden="true"></i>
           {{ t.label }}
         </button>
       </div>
@@ -31,6 +39,9 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
 
     <div v-show="activeTab === 'search'" class="magnet-hub__panel">
       <MagnetSearchView />
+    </div>
+    <div v-show="activeTab === 'favorites'" class="magnet-hub__panel">
+      <MagnetFavoritesView />
     </div>
     <div v-show="activeTab === 'subscribe'" class="magnet-hub__panel">
       <SubscribeView :active="activeTab === 'subscribe'" />

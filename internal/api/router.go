@@ -27,6 +27,7 @@ import (
 	"litepan/internal/domain"
 	"litepan/internal/embyproxy"
 	"litepan/internal/favorites"
+	"litepan/internal/magnetfavorites"
 	"litepan/internal/file"
 	"litepan/internal/fnosproxy"
 	"litepan/internal/fusemount"
@@ -58,6 +59,7 @@ type Deps struct {
 	ListHitTracker    *cache.HitTracker
 	Files             *file.Service
 	Favorites         *favorites.Service
+	MagnetFavorites   *magnetfavorites.Service
 	Uploads           *upload.Manager
 	OfflineDownloads  *offlinedownload.Service
 	Playback          *playback.Service
@@ -92,6 +94,7 @@ type Handler struct {
 	listHits          *cache.HitTracker
 	files             *file.Service
 	favorites         *favorites.Service
+	magnetFavorites   *magnetfavorites.Service
 	uploads           *upload.Manager
 	offlineDownloads  *offlinedownload.Service
 	playback          *playback.Service
@@ -131,6 +134,7 @@ func NewRouter(d Deps) http.Handler {
 		listHits:          d.ListHitTracker,
 		files:             d.Files,
 		favorites:         d.Favorites,
+		magnetFavorites:   d.MagnetFavorites,
 		uploads:           d.Uploads,
 		offlineDownloads:  d.OfflineDownloads,
 		playback:          d.Playback,
@@ -171,6 +175,9 @@ func NewRouter(d Deps) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(h.requireUser)
 			r.Get("/magnet-search", h.magnetSearch)
+			r.Get("/magnet-favorites", h.listMagnetFavorites)
+			r.Post("/magnet-favorites", h.addMagnetFavorite)
+			r.Delete("/magnet-favorites/{hash}", h.removeMagnetFavorite)
 			r.Post("/qb/add", h.qbAdd)
 			r.Post("/qb/test", h.qbTest)
 		})

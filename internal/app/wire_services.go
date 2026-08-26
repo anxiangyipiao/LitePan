@@ -19,6 +19,7 @@ import (
 	"litepan/internal/logx"
 	"litepan/internal/medialibrary"
 	"litepan/internal/mediaorganize"
+	"litepan/internal/magnetfavorites"
 	"litepan/internal/offlinedownload"
 	"litepan/internal/playback"
 	"litepan/internal/rss"
@@ -48,6 +49,7 @@ type servicesBundle struct {
 	fnosProxy        *fnosproxy.Service
 	favorites        *favorites.Service
 	rss              *rss.Service
+	magnetFavorites  *magnetfavorites.Service
 }
 
 func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *coreBundle) *servicesBundle {
@@ -176,6 +178,7 @@ func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *
 		States:   st.store.BackupFileStates,
 		Log:      logs.For(logx.ModuleSystem),
 	})
+	magnetFavoritesSvc := magnetfavorites.NewService(cfg.DBPath, logs.For(logx.ModuleSystem))
 	return &servicesBundle{
 		files:            fileSvc,
 		uploads:          uploadSvc,
@@ -196,5 +199,6 @@ func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *
 		fnosProxy:        fnosProxySvc,
 		favorites:        favoritesSvc,
 		rss:              rssSvc,
+		magnetFavorites:  magnetFavoritesSvc,
 	}
 }

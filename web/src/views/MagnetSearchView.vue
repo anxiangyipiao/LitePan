@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
 import AppButton from "@/components/base/AppButton.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
 import { searchMagnet, type MagnetSearchResult } from "@/api/magnetSearch";
@@ -8,6 +8,9 @@ import { getApiErrorMessage } from "@/api/client";
 import { formatSize } from "@/utils/format";
 import { toast, copyTextToClipboard } from "@/composables/useToast";
 import MagnetOfflineModal from "@/components/common/MagnetOfflineModal.vue";
+import { useMagnetFavorites } from "@/composables/useMagnetFavorites";
+
+const { refresh: refreshFavorites, isFavorited, toggle: toggleFavorite } = useMagnetFavorites();
 
 const keyword = ref("");
 const results = ref<MagnetSearchResult[]>([]);
@@ -18,6 +21,10 @@ const qbPushing = ref<Record<number, boolean>>({});
 const offlineOpen = ref(false);
 const offlineMagnet = ref("");
 const offlineName = ref("");
+
+onMounted(() => {
+  void refreshFavorites();
+});
 
 async function search() {
   const q = keyword.value.trim();
@@ -71,6 +78,24 @@ function openOffline(r: MagnetSearchResult) {
   offlineMagnet.value = r.magnet;
   offlineName.value = r.name;
   offlineOpen.value = true;
+}
+
+async function toggleFav(r: MagnetSearchResult) {
+  if (!r.hash) {
+    toast.warning("该结果没有磁力 hash，无法收藏");
+    return;
+  }
+  await toggleFavorite({
+    hash: r.hash,
+    name: r.name,
+    size: r.size,
+    seeders: r.seeders,
+    leechers: r.leechers,
+    date: r.date,
+    category: r.category,
+    magnet: r.magnet,
+    view_url: r.view_url,
+  });
 }
 
 function formatDate(unix: number): string {
@@ -169,6 +194,17 @@ function formatDate(unix: number): string {
           </div>
         </div>
         <div class="magnet-page__actions">
+          <AppButton
+            type="button"
+            :variant="isFavorited(r.hash) ? 'primary' : 'secondary'"
+            size="sm"
+            :title="isFavorited(r.hash) ? '取消收藏' : '加入收藏'"
+            :aria-label="isFavorited(r.hash) ? '取消收藏' : '加入收藏'"
+            @click="toggleFav(r)"
+          >
+            <i :class="isFavorited(r.hash) ? 'fa-solid fa-star' : 'fa-regular fa-star'" aria-hidden="true"></i>
+            {{ isFavorited(r.hash) ? "已收藏" : "收藏" }}
+          </AppButton>
           <AppButton type="button" variant="secondary" size="sm" @click="copyMagnet(r)">
             <i class="fa-solid fa-copy" aria-hidden="true"></i>复制
           </AppButton>
