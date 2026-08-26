@@ -505,14 +505,14 @@ onDeactivated(stopPolling);
   padding: 48px 0;
 }
 
-/* 订阅表格：auto 布局让列宽根据内容自适应，box-sizing border-box 防 padding 撑破 */
+/* 订阅表格：fixed 布局 + 5 列各 15% + box-sizing border-box */
 .admin-panel-table-wrap {
   box-sizing: border-box;
   max-width: 100%;
 }
 
 .admin-panel-table-wrap .admin-table {
-  table-layout: auto;
+  table-layout: fixed;
   width: 100%;
   border-collapse: collapse;
   box-sizing: border-box;
@@ -521,8 +521,6 @@ onDeactivated(stopPolling);
 .admin-panel-table-wrap .admin-table th,
 .admin-panel-table-wrap .admin-table td {
   box-sizing: border-box;
-  max-width: 0;
-  overflow: hidden;
 }
 
 /* 表格容器 */
@@ -530,31 +528,30 @@ onDeactivated(stopPolling);
   overflow-x: visible;
 }
 
-/* 表格列宽：auto 布局 + max-width 约束，列宽按内容自适应且不会撑破容器 */
+/* 表格列宽：5 列各 15%，总 75% 留 25% 给 panel padding（不撑破） */
 .subscribe-page__th:nth-child(1),
 .subscribe-page__td-name {
-  max-width: 220px;
+  width: 15%;
 }
 
 .subscribe-page__th:nth-child(2),
 .subscribe-page__td-trunc:nth-child(2) {
-  max-width: 180px;
+  width: 15%;
 }
 
 .subscribe-page__th:nth-child(3),
 .subscribe-page__td-trunc:nth-child(3) {
-  max-width: 180px;
+  width: 15%;
 }
 
 .subscribe-page__th:nth-child(4),
 .subscribe-page__td-nowrap:nth-child(4) {
-  max-width: 60px;
+  width: 15%;
 }
 
 .subscribe-page__th:nth-child(5),
 .subscribe-page__td-actions {
-  min-width: 180px;
-  max-width: 200px;
+  width: 15%;
 }
 
 .subscribe-page__td-name {
