@@ -573,7 +573,7 @@ onDeactivated(stopPolling);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 320px;
+  max-width: 100%;
 }
 
 .subscribe-page__feed {
@@ -582,7 +582,7 @@ onDeactivated(stopPolling);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 320px;
+  max-width: 100%;
 }
 
 .subscribe-page__cell {
@@ -590,17 +590,16 @@ onDeactivated(stopPolling);
   font-size: 13px;
 }
 
-/* 规则 / 目标：超长截断，避免把表撑出容器 */
+/* 规则 / 目标：允许文本换行以展示全部内容，不出现横向滚动条 */
 .subscribe-page__td-trunc {
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .subscribe-page__td-trunc .subscribe-page__cell {
   display: block;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
+  white-space: normal;
 }
 
 /* 间隔 / 上次抓取 / 操作：禁止换行 */
