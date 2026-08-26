@@ -509,7 +509,6 @@ onDeactivated(stopPolling);
 .admin-panel-table-wrap {
   box-sizing: border-box;
   max-width: 100%;
-  overflow: hidden;
 }
 
 .admin-panel-table-wrap .admin-table {
@@ -526,7 +525,7 @@ onDeactivated(stopPolling);
   overflow: hidden;
 }
 
-/* 表格容器不再保留横向滚动 */
+/* 表格容器 */
 .admin-panel-table-wrap .table-wrap {
   overflow-x: visible;
 }
@@ -534,27 +533,28 @@ onDeactivated(stopPolling);
 /* 表格列宽：auto 布局 + max-width 约束，列宽按内容自适应且不会撑破容器 */
 .subscribe-page__th:nth-child(1),
 .subscribe-page__td-name {
-  max-width: 360px;
+  max-width: 220px;
 }
 
 .subscribe-page__th:nth-child(2),
 .subscribe-page__td-trunc:nth-child(2) {
-  max-width: 280px;
+  max-width: 180px;
 }
 
 .subscribe-page__th:nth-child(3),
 .subscribe-page__td-trunc:nth-child(3) {
-  max-width: 280px;
+  max-width: 180px;
 }
 
 .subscribe-page__th:nth-child(4),
 .subscribe-page__td-nowrap:nth-child(4) {
-  max-width: 80px;
+  max-width: 60px;
 }
 
 .subscribe-page__th:nth-child(5),
 .subscribe-page__td-actions {
-  max-width: 220px;
+  min-width: 180px;
+  max-width: 200px;
 }
 
 .subscribe-page__td-name {
