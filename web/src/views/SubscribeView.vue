@@ -25,7 +25,7 @@ import { accountsApi } from "@/api/accounts";
 import { getApiErrorMessage } from "@/api/client";
 import { toast } from "@/composables/useToast";
 import { confirm } from "@/composables/useConfirm";
-import { formatTimeShort, formatTime } from "@/utils/format";
+import { formatTimeShort } from "@/utils/format";
 import "@/styles/admin-table.css";
 
 const subscriptions = ref<RSSSubscription[]>([]);
@@ -40,12 +40,6 @@ const history = ref<RSSDownloadHistory[]>([]);
 const historyLoading = ref(false);
 
 const activeCount = computed(() => subscriptions.value.filter((s) => s.enabled).length);
-
-const statusTone: Record<string, "success" | "warning" | "danger" | "muted"> = {
-  ok: "success",
-  error: "danger",
-  "": "muted",
-};
 
 const historyStatusTone: Record<RSSHistoryStatus, "success" | "warning" | "brand" | "danger" | "muted"> = {
   pushed: "success",
@@ -304,7 +298,6 @@ onDeactivated(stopPolling);
               <th>规则</th>
               <th>目标</th>
               <th>间隔</th>
-              <th>上次抓取</th>
               <th class="subscribe-page__th-actions">操作</th>
             </tr>
           </thead>
@@ -322,20 +315,6 @@ onDeactivated(stopPolling);
               </td>
               <td class="subscribe-page__td-nowrap">
                 <span class="subscribe-page__cell">{{ intervalLabel(sub) }}</span>
-              </td>
-              <td class="subscribe-page__td-nowrap">
-                <div class="subscribe-page__fetch">
-                  <AdminStatusPill :tone="statusTone[sub.last_fetch_status] ?? 'muted'">
-                    {{ sub.last_fetch_status === "ok" ? "正常" : sub.last_fetch_status === "error" ? "异常" : "未抓取" }}
-                  </AdminStatusPill>
-                  <span
-                    v-if="sub.last_fetch_at"
-                    class="subscribe-page__time"
-                    :title="sub.last_fetch_message || formatTime(sub.last_fetch_at)"
-                  >
-                    {{ formatTimeShort(sub.last_fetch_at) }}
-                  </span>
-                </div>
               </td>
               <td class="subscribe-page__td-nowrap subscribe-page__td-actions">
                 <div class="subscribe-page__actions">
@@ -546,27 +525,22 @@ onDeactivated(stopPolling);
    其他列基于「容器宽 - 200px」按比例分配，总宽度永远 = 容器宽 */
 .subscribe-page__th:nth-child(1),
 .subscribe-page__td-name {
-  width: calc((100% - 200px) * 0.32);
+  width: calc((100% - 200px) * 0.36);
 }
 
 .subscribe-page__th:nth-child(2),
 .subscribe-page__td-trunc:nth-child(2) {
-  width: calc((100% - 200px) * 0.22);
+  width: calc((100% - 200px) * 0.28);
 }
 
 .subscribe-page__th:nth-child(3),
 .subscribe-page__td-trunc:nth-child(3) {
-  width: calc((100% - 200px) * 0.22);
+  width: calc((100% - 200px) * 0.26);
 }
 
 .subscribe-page__th:nth-child(4),
 .subscribe-page__td-nowrap:nth-child(4) {
   width: calc((100% - 200px) * 0.10);
-}
-
-.subscribe-page__th:nth-child(5),
-.subscribe-page__td-nowrap:nth-child(5) {
-  width: calc((100% - 200px) * 0.14);
 }
 
 .subscribe-page__td-name {
@@ -619,17 +593,6 @@ onDeactivated(stopPolling);
   text-align: right;
 }
 
-.subscribe-page__fetch {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-}
-
-.subscribe-page__time {
-  color: var(--text-muted);
-  font-size: 12px;
-}
 
 .subscribe-page__actions {
   display: inline-flex;
