@@ -1,13 +1,9 @@
-// 共享的磁力镜像站点状态：拉取内置+自定义镜像清单，跨页签共享当前选中的 site。
-// 三个入口（搜索页、顶栏弹窗、TMDB 详情）共用同一份本地状态。
-import { computed, ref } from "vue";
+import { ref } from "vue";
 import { http } from "@/api/client";
 
 export interface MagnetSite {
-  id: string;
+  url: string;
   label: string;
-  base_url: string;
-  enabled: boolean;
 }
 
 const sites = ref<MagnetSite[]>([]);
@@ -31,14 +27,5 @@ export function useMagnetSites() {
     if (!loadPromise) loadPromise = fetchSites();
     return loadPromise;
   }
-
-  // 已启用的镜像（按内置 + 自定义顺序）
-  const enabledSites = computed(() => sites.value.filter((s) => s.enabled));
-
-  function labelOf(id: string): string {
-    const s = sites.value.find((x) => x.id === id);
-    return s ? s.label : id;
-  }
-
-  return { sites, enabledSites, loading, load, labelOf };
+  return { sites, loading, load };
 }

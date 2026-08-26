@@ -14,7 +14,7 @@ import { useMagnetSites } from "@/composables/useMagnetSites";
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: [] }>();
 
-const { enabledSites, load: loadSites } = useMagnetSites();
+const { sites, load: loadSites } = useMagnetSites();
 
 const keyword = ref("");
 const results = ref<MagnetSearchResult[]>([]);
@@ -36,8 +36,8 @@ watch(
       searched.value = false;
       results.value = [];
       void loadSites().then(() => {
-        if (!activeSite.value && enabledSites.value.length > 0) {
-          activeSite.value = enabledSites.value[0].id;
+        if (!activeSite.value && sites.value.length > 0) {
+          activeSite.value = sites.value[0].url;
         }
       });
     }
@@ -159,21 +159,21 @@ function formatDate(unix: number): string {
         </AppButton>
       </div>
 
-      <div v-if="enabledSites.length > 1" class="magnet-search__site-tabs" role="tablist">
+      <div v-if="sites.length > 1" class="magnet-search__site-tabs" role="tablist">
         <button
-          v-for="s in enabledSites"
-          :key="s.id"
+          v-for="s in sites"
+          :key="s.url"
           type="button"
           role="tab"
-          :aria-selected="activeSite === s.id"
-          :class="['magnet-search__site-tab', { 'magnet-search__site-tab--active': activeSite === s.id }]"
-          @click="activeSite = s.id"
+          :aria-selected="activeSite === s.url"
+          :class="['magnet-search__site-tab', { 'magnet-search__site-tab--active': activeSite === s.url }]"
+          @click="activeSite = s.url"
         >
           {{ s.label }}
         </button>
       </div>
-      <div v-else-if="enabledSites.length === 1" class="magnet-search__site-single">
-        镜像：<strong>{{ enabledSites[0].label }}</strong>
+      <div v-else-if="sites.length === 1" class="magnet-search__site-single">
+        镜像：<strong>{{ sites[0].label }}</strong>
       </div>
 
       <p v-if="error" class="magnet-search__error">{{ error }}</p>

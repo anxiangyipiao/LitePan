@@ -38,7 +38,7 @@ const magnetResults = ref<MagnetSearchResult[]>([]);
 const magnetLoading = ref(false);
 const magnetSearched = ref(false);
 const activeSite = ref("");
-const { enabledSites, load: loadMagnetSites } = useMagnetSites();
+const { sites: magnetSites, load: loadMagnetSites } = useMagnetSites();
 
 watch(activeSite, () => {
   if (magnetSearched.value) {
@@ -95,8 +95,8 @@ async function doMagnetSearch() {
     toast.warning("请输入搜索关键词");
     return;
   }
-  if (!activeSite.value && enabledSites.value.length > 0) {
-    activeSite.value = enabledSites.value[0].id;
+  if (!activeSite.value && magnetSites.value.length > 0) {
+    activeSite.value = magnetSites.value[0].url;
   }
   if (!activeSite.value) {
     toast.warning("暂无可用的磁力镜像");
@@ -210,8 +210,8 @@ const director = computed(() => {
 onMounted(async () => {
   loadMovieDetail();
   await loadMagnetSites();
-  if (!activeSite.value && enabledSites.value.length > 0) {
-    activeSite.value = enabledSites.value[0].id;
+  if (!activeSite.value && magnetSites.value.length > 0) {
+    activeSite.value = magnetSites.value[0].url;
   }
 });
 </script>
@@ -296,21 +296,21 @@ onMounted(async () => {
           </AppButton>
         </div>
 
-        <div v-if="enabledSites.length > 1" class="omd-magnet-site-tabs" role="tablist">
+        <div v-if="magnetSites.length > 1" class="omd-magnet-site-tabs" role="tablist">
           <button
-            v-for="s in enabledSites"
-            :key="s.id"
+            v-for="s in magnetSites"
+            :key="s.url"
             type="button"
             role="tab"
-            :aria-selected="activeSite === s.id"
-            :class="['omd-magnet-site-tab', { 'omd-magnet-site-tab--active': activeSite === s.id }]"
-            @click="activeSite = s.id"
+            :aria-selected="activeSite === s.url"
+            :class="['omd-magnet-site-tab', { 'omd-magnet-site-tab--active': activeSite === s.url }]"
+            @click="activeSite = s.url"
           >
             {{ s.label }}
           </button>
         </div>
-        <div v-else-if="enabledSites.length === 1" class="omd-magnet-site-single">
-          镜像：<strong>{{ enabledSites[0].label }}</strong>
+        <div v-else-if="magnetSites.length === 1" class="omd-magnet-site-single">
+          镜像：<strong>{{ magnetSites[0].label }}</strong>
         </div>
 
         <div v-if="magnetLoading" class="omd-magnet-loading">

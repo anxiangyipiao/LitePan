@@ -13,7 +13,7 @@ import { useMagnetFavorites } from "@/composables/useMagnetFavorites";
 import { useMagnetSites } from "@/composables/useMagnetSites";
 
 const { refresh: refreshFavorites, isFavorited, toggle: toggleFavorite } = useMagnetFavorites();
-const { enabledSites, load: loadSites } = useMagnetSites();
+const { sites, load: loadSites } = useMagnetSites();
 
 const keyword = ref("");
 const results = ref<MagnetSearchResult[]>([]);
@@ -24,13 +24,13 @@ const qbPushing = ref<Record<number, boolean>>({});
 const offlineOpen = ref(false);
 const offlineMagnet = ref("");
 const offlineName = ref("");
-const activeSite = ref(""); // 当前选中的镜像 id
+const activeSite = ref(""); // 当前选中的站点 URL
 
 onMounted(async () => {
   void refreshFavorites();
   await loadSites();
-  if (!activeSite.value && enabledSites.value.length > 0) {
-    activeSite.value = enabledSites.value[0].id;
+  if (!activeSite.value && sites.value.length > 0) {
+    activeSite.value = sites.value[0].url;
   }
 });
 
@@ -166,23 +166,23 @@ function formatDate(unix: number): string {
       </div>
 
       <!-- 镜像 tab 栏：选择本次搜索走哪个站 -->
-      <div v-if="enabledSites.length > 1" class="magnet-page__site-tabs" role="tablist">
+      <div v-if="sites.length > 1" class="magnet-page__site-tabs" role="tablist">
         <button
-          v-for="s in enabledSites"
-          :key="s.id"
+          v-for="s in sites"
+          :key="s.url"
           type="button"
           role="tab"
-          :aria-selected="activeSite === s.id"
-          :class="['magnet-page__site-tab', { 'magnet-page__site-tab--active': activeSite === s.id }]"
-          @click="activeSite = s.id"
+          :aria-selected="activeSite === s.url"
+          :class="['magnet-page__site-tab', { 'magnet-page__site-tab--active': activeSite === s.url }]"
+          @click="activeSite = s.url"
         >
           <i class="fa-solid fa-server" aria-hidden="true"></i>
           {{ s.label }}
         </button>
       </div>
-      <div v-else-if="enabledSites.length === 1" class="magnet-page__site-tabs magnet-page__site-tabs--single">
+      <div v-else-if="sites.length === 1" class="magnet-page__site-tabs magnet-page__site-tabs--single">
         <i class="fa-solid fa-server" aria-hidden="true"></i>
-        当前镜像：<strong>{{ enabledSites[0].label }}</strong>
+        当前镜像：<strong>{{ sites[0].label }}</strong>
       </div>
     </header>
 
