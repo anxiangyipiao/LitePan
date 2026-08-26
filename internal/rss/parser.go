@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"fmt"
+	"html"
 	"net/url"
 	"regexp"
 	"strings"
@@ -99,20 +100,26 @@ func newXMLDecoder(data []byte) (*xml.Decoder, error) {
 
 type rssFeed struct {
 	Channel struct {
-		Title string    `xml:"title"`
-		Items []rssItem `xml:"item"`
+		Title string       `xml:"title"`
+		Items []rssItemXML `xml:"item"`
 	} `xml:"channel"`
 }
 
-type rssItem struct {
-	GUID        rssGUID   `xml:"guid"`
-	Title       string    `xml:"title"`
-	Link        string    `xml:"link"`
-	PubDate     string    `xml:"pubDate"`
-	Enclosure   rssEncl   `xml:"enclosure"`
-	MagnetURI   string    `xml:"magnetURI"` // nyaa/sukebei 的 torrent:magnetURI
-	InfoHash    string    `xml:"infoHash"`  // nyaa/sukebei 的 nyaa:infoHash
-	Description rawXML    `xml:"description"`
+// rssItemXML 把整个 <item> 节点收为 rawXML，再用正则抽取带前缀的
+// nyaa:infoHash / nyaa:seeders / torrent:magnetURI 等扩展字段。
+// 这样做可以同时兼容：原始 sukebei.nyaa.si（命名空间 https://nyaa.si/xmlns/nyaa）、
+// nyaa.net（https://nyaa.net/xmlns/nyaa）、sukebei.cn.nyaa.net
+// （https://sukebei.nyaa.net/xmlns/nyaa），以及任何未声明命名空间的情况。
+type rssItemXML struct {
+	GUID        rssGUID `xml:"guid"`
+	Title       string  `xml:"title"`
+	Link        string  `xml:"link"`
+	PubDate     string  `xml:"pubDate"`
+	Enclosure   rssEncl `xml:"enclosure"`
+	Description rawXML  `xml:"description"`
+	// 兜底：标准库 encoding/xml 对带命名空间的元素需要显式声明，
+	// 这里用 ,any 把所有未匹配元素原样收下。
+	Extras []rawXML `xml:",any"`
 }
 
 type rssGUID struct {
@@ -155,6 +162,12 @@ type rawXML struct {
 func (r *rawXML) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	var sb strings.Builder
 	depth := 1
+	sb.WriteString("<")
+	sb.WriteString(rawElementName(start.Name))
+	for _, a := range start.Attr {
+		sb.WriteString(` ` + rawElementName(a.Name) + `="` + a.Value + `"`)
+	}
+	sb.WriteString(">")
 	for depth > 0 {
 		tok, err := d.Token()
 		if err != nil {
@@ -163,15 +176,18 @@ func (r *rawXML) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 		switch t := tok.(type) {
 		case xml.StartElement:
 			depth++
-			sb.WriteString("<" + t.Name.Local)
+			sb.WriteString("<")
+			sb.WriteString(rawElementName(t.Name))
 			for _, a := range t.Attr {
-				sb.WriteString(` ` + a.Name.Local + `="` + a.Value + `"`)
+				sb.WriteString(` ` + rawElementName(a.Name) + `="` + a.Value + `"`)
 			}
 			sb.WriteString(">")
 		case xml.EndElement:
 			depth--
 			if depth > 0 {
-				sb.WriteString("</" + t.Name.Local + ">")
+				sb.WriteString("</")
+				sb.WriteString(rawElementName(t.Name))
+				sb.WriteString(">")
 			}
 		case xml.CharData:
 			sb.Write(t)
@@ -180,6 +196,15 @@ func (r *rawXML) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	}
 	r.Data = sb.String()
 	return nil
+}
+
+// rawElementName 把 xml.Name 序列化为带前缀的形式（prefix:local），
+// 无前缀时只返回 local。保留前缀后，正则才能匹配 <nyaa:infoHash>。
+func rawElementName(n xml.Name) string {
+	if n.Space == "" {
+		return n.Local
+	}
+	return n.Space + ":" + n.Local
 }
 
 func parseRSS(data []byte) (string, []FeedItem, error) {
@@ -193,11 +218,12 @@ func parseRSS(data []byte) (string, []FeedItem, error) {
 	}
 	items := make([]FeedItem, 0, len(feed.Channel.Items))
 	for _, it := range feed.Channel.Items {
+		magnetURI, infoHash := extractNyaaExt(it.Extras)
 		torrentURL := pickTorrentURL(torrentSources{
 			enclosureURL: it.Enclosure.URL,
 			link:         it.Link,
-			magnetURI:    it.MagnetURI,
-			infoHash:     it.InfoHash,
+			magnetURI:    magnetURI,
+			infoHash:     infoHash,
 			description:  it.Description.Data,
 			title:        it.Title,
 		})
@@ -269,7 +295,7 @@ func atomLinks(links []atomLnk) (alternate, enclosure string) {
 type torrentSources struct {
 	enclosureURL string // <enclosure url>
 	link         string // <link>
-	magnetURI    string // torrent:magnetURI（nyaa/sukebei）
+	magnetURI    string // torrent:magnetURI / nyaa:magnetURI（带命名空间的扩展）
 	infoHash     string // nyaa:infoHash（仅 infohash 的源）
 	description  string // <description>/<summary>/<content> 原文
 	title        string // 用于构造磁力链的 dn 参数
@@ -369,6 +395,36 @@ func findMagnetInText(s string) string {
 		m = m[:i]
 	}
 	return m
+}
+
+// 兼容带前缀的 magnetURI 元素：<torrent:magnetURI>、<nyaa:magnetURI>、<magnetURI>。
+// 匹配前缀中的字母/数字/下划线/点/连字符（XML 前缀允许字符），随后是 :magnetURI。
+var nyaaMagnetURIRe = regexp.MustCompile(`(?is)<[a-zA-Z_][\w.-]*:magnetURI[^>]*>([^<]+)</[a-zA-Z_][\w.-]*:magnetURI>`)
+
+// 兼容带前缀的 infoHash 元素：<nyaa:infoHash>、<infoHash>。
+// 值必须是 32 位 base32 或 40 位 hex。
+var nyaaInfoHashRe = regexp.MustCompile(`(?is)<[a-zA-Z_][\w.-]*:infoHash[^>]*>\s*([0-9a-fA-F]{32}|[A-Za-z0-9]{40})\s*</[a-zA-Z_][\w.-]*:infoHash>`)
+
+// extractNyaaExt 从 rawXML 抓取 <item> 内未能通过 struct tag 命中的元素，
+// 返回 (magnetURI, infoHash)。任一未命中则为空串。
+func extractNyaaExt(extras []rawXML) (magnetURI, infoHash string) {
+	for i := range extras {
+		e := &extras[i]
+		if magnetURI != "" && infoHash != "" {
+			return
+		}
+		if magnetURI == "" {
+			if m := nyaaMagnetURIRe.FindStringSubmatch(e.Data); m != nil {
+				magnetURI = strings.TrimSpace(html.UnescapeString(m[1]))
+			}
+		}
+		if infoHash == "" {
+			if m := nyaaInfoHashRe.FindStringSubmatch(e.Data); m != nil {
+				infoHash = strings.TrimSpace(m[1])
+			}
+		}
+	}
+	return
 }
 
 func infoHash(magnet string) string {
