@@ -409,10 +409,10 @@ onDeactivated(stopPolling);
 .subscribe-page {
   max-width: 960px;
   margin: 0 auto;
-  min-height: 100vh;
-  min-height: 100dvh;
   padding: 28px 20px calc(20px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .subscribe-page__head {
@@ -530,6 +530,12 @@ onDeactivated(stopPolling);
 .admin-panel-table-wrap .admin-table {
   table-layout: fixed;
   min-width: 900px;
+}
+
+/* 表格容器：窄屏支持水平滚动，避免内容溢出 */
+.admin-panel-table-wrap .table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .subscribe-page__th:nth-child(1),
@@ -764,5 +770,66 @@ onDeactivated(stopPolling);
 
 .subscribe-drawer__ops {
   flex: 0 0 auto;
+}
+
+/* 平板及以下（≤768px）：hero 收窄内边距，统计卡片 2 列，操作栏允许换行 */
+@media (max-width: 768px) {
+  .subscribe-page {
+    padding: 22px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .subscribe-page__hero {
+    padding: 18px 18px;
+  }
+
+  .subscribe-page__title {
+    font-size: 19px;
+  }
+
+  .subscribe-page__desc {
+    font-size: 12px;
+  }
+
+  .subscribe-page__stats {
+    flex-wrap: wrap;
+  }
+
+  .subscribe-page__stat {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+  }
+
+  .subscribe-page__count {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+/* 手机（≤480px）：hero 紧凑，按钮 / 计数垂直堆叠 */
+@media (max-width: 480px) {
+  .subscribe-page__hero {
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 16px 16px;
+  }
+
+  .subscribe-page__icon {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+
+  .subscribe-page__title {
+    font-size: 17px;
+  }
+
+  .subscribe-page__bar {
+    gap: 8px;
+  }
+
+  .subscribe-page__bar .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
 }
 </style>

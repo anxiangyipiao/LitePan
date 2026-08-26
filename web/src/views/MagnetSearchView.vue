@@ -205,10 +205,10 @@ function formatDate(unix: number): string {
 .magnet-page {
   max-width: 960px;
   margin: 0 auto;
-  min-height: 100vh;
-  min-height: 100dvh;
   padding: 28px 20px calc(20px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .magnet-page__head {
@@ -438,6 +438,7 @@ function formatDate(unix: number): string {
   background: var(--surface);
   box-shadow: var(--shadow-soft);
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  min-width: 0;
 }
 .magnet-page__row:hover {
   border-color: var(--border);
@@ -522,22 +523,63 @@ function formatDate(unix: number): string {
   text-decoration: underline;
 }
 
-@media (max-width: 640px) {
+/* 中等屏（≤960px）：缩小 hero 内边距 + 允许标题 / 搜索框垂直排布，给搜索框更多空间 */
+@media (max-width: 960px) {
+  .magnet-page__hero {
+    padding: 20px 22px;
+    gap: 18px;
+  }
+
+  .magnet-page__hero-search {
+    min-width: 0;
+    max-width: 460px;
+  }
+}
+
+/* 平板及以下（≤768px）：hero 改竖排，搜索框占满宽度；结果行让 main 与 actions 垂直堆叠 */
+@media (max-width: 768px) {
   .magnet-page {
-    padding: 18px 12px calc(16px + env(safe-area-inset-bottom, 0px));
+    padding: 22px 16px calc(18px + env(safe-area-inset-bottom, 0px));
   }
 
   .magnet-page__hero {
     flex-direction: column;
     align-items: stretch;
     gap: 16px;
-    padding: 18px;
+    padding: 18px 18px;
+  }
+
+  .magnet-page__hero-info {
+    flex-shrink: 1;
   }
 
   .magnet-page__hero-search {
     max-width: none;
     min-width: 0;
     margin-left: 0;
+    width: 100%;
+  }
+
+  .magnet-page__row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .magnet-page__actions {
+    width: 100%;
+  }
+
+  .magnet-page__meta {
+    gap: 5px;
+  }
+}
+
+/* 手机（≤640px）：动作按钮 2 列网格，「详情」链接单独占满一行 */
+@media (max-width: 640px) {
+  .magnet-page {
+    padding: 18px 12px calc(16px + env(safe-area-inset-bottom, 0px));
   }
 
   .magnet-page__icon {
@@ -550,17 +592,9 @@ function formatDate(unix: number): string {
     font-size: 18px;
   }
 
-  .magnet-page__row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-    padding: 14px;
-  }
-
   .magnet-page__actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    width: 100%;
   }
 
   .magnet-page__actions .btn {

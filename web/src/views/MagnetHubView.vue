@@ -40,11 +40,11 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
 
 <style scoped>
 .magnet-hub {
-  min-height: 100vh;
-  min-height: 100dvh;
   /* 与影视模式切换视觉对齐的品牌色（蓝色） */
   --magnet-accent: var(--brand-strong, #3b82f6);
   --magnet-accent-soft: rgba(79, 142, 247, 0.12);
+  width: 100%;
+  overflow-x: hidden;
 }
 
 /* 分段药丸：与影视的 .ml-mode-switch 同款——白底圆角胶囊，内部含 1–2 个圆角按钮（与下方面板共享 960 容器，左对齐） */
@@ -109,6 +109,20 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 8px 24px rgba(15, 23, 42, 0.08);
   overflow: hidden;
+  min-width: 0;
+}
+
+/* 中等屏及以下：tab 与 panel 收紧左右内边距 */
+@media (max-width: 768px) {
+  .magnet-hub__tabs {
+    margin: 12px 12px 0;
+    max-width: none;
+  }
+
+  .magnet-hub__panel {
+    margin: 12px 12px 20px;
+    max-width: none;
+  }
 }
 
 /* 子页面在内嵌时去掉自身外层 padding / max-width / 最小高度，让矩形容器统一控制 */
