@@ -526,16 +526,21 @@ onDeactivated(stopPolling);
   padding: 48px 0;
 }
 
-/* 订阅表格：auto 布局让列宽跟随内容自适应，列间距紧凑无横向滚动条 */
+/* 订阅表格：固定布局 + 百分比列宽，确保不出现横向滚动条 */
 .admin-panel-table-wrap .admin-table {
-  table-layout: auto;
+  table-layout: fixed;
   width: 100%;
 }
 
-/* 表格容器：窄屏支持水平滚动，避免内容溢出 */
+/* 表格容器不再保留横向滚动，列宽由百分比 + min-width 控制 */
 .admin-panel-table-wrap .table-wrap {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  overflow-x: visible;
+}
+
+/* 名称列：22%，内容溢出省略 */
+.subscribe-page__th:nth-child(1),
+.subscribe-page__td-name {
+  width: 22%;
 }
 
 .subscribe-page__td-name {
@@ -548,7 +553,7 @@ onDeactivated(stopPolling);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 280px;
+  max-width: 100%;
 }
 
 .subscribe-page__feed {
@@ -557,7 +562,7 @@ onDeactivated(stopPolling);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 280px;
+  max-width: 100%;
 }
 
 .subscribe-page__cell {
@@ -565,7 +570,17 @@ onDeactivated(stopPolling);
   font-size: 13px;
 }
 
-/* 规则 / 目标：紧凑展示，长内容换行 */
+/* 规则 / 目标：换行展示全部内容 */
+.subscribe-page__th:nth-child(2),
+.subscribe-page__td-trunc:nth-child(2) {
+  width: 18%;
+}
+
+.subscribe-page__th:nth-child(3),
+.subscribe-page__td-trunc:nth-child(3) {
+  width: 18%;
+}
+
 .subscribe-page__td-trunc {
   white-space: normal;
   word-break: break-word;
@@ -577,7 +592,18 @@ onDeactivated(stopPolling);
   white-space: normal;
 }
 
-/* 间隔 / 上次抓取 / 操作：禁止换行 */
+/* 间隔列 10% */
+.subscribe-page__th:nth-child(4),
+.subscribe-page__td-nowrap:nth-child(4) {
+  width: 10%;
+}
+
+/* 上次抓取列 16% */
+.subscribe-page__th:nth-child(5),
+.subscribe-page__td-nowrap:nth-child(5) {
+  width: 16%;
+}
+
 .subscribe-page__td-nowrap {
   white-space: nowrap;
 }
@@ -610,11 +636,12 @@ onDeactivated(stopPolling);
   gap: 4px;
 }
 
-/* 操作列：自然宽度，但最少保证 4 个按钮能排下 */
+/* 操作列：固定宽度 16%，最少保证 4 个按钮能排下 */
 .subscribe-page__th-actions,
 .subscribe-page__td-actions {
-  white-space: nowrap;
+  width: 16%;
   min-width: 160px;
+  white-space: nowrap;
 }
 
 /* 抓取记录抽屉 */
