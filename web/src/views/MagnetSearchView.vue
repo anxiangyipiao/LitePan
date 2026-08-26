@@ -89,32 +89,36 @@ function formatDate(unix: number): string {
   <div class="magnet-page">
     <header class="magnet-page__head">
       <div class="magnet-page__hero">
-        <div class="magnet-page__icon">
-          <i class="fa-solid fa-magnet" aria-hidden="true"></i>
+        <!-- 左侧：标识 + 标题 + 描述 -->
+        <div class="magnet-page__hero-info">
+          <div class="magnet-page__icon">
+            <i class="fa-solid fa-magnet" aria-hidden="true"></i>
+          </div>
+          <div class="magnet-page__hero-text">
+            <h1 class="magnet-page__title">磁力搜索</h1>
+            <p class="magnet-page__desc">输入番号或关键词，搜索磁力资源</p>
+          </div>
         </div>
-        <div class="magnet-page__hero-text">
-          <h1 class="magnet-page__title">磁力搜索</h1>
-          <p class="magnet-page__desc">输入番号或关键词，搜索磁力资源</p>
+
+        <!-- 右侧：搜索框内嵌进横幅，消除右侧留白 -->
+        <div class="magnet-page__hero-search">
+          <div class="magnet-page__input-wrap">
+            <i class="fa-solid fa-search magnet-page__input-icon" aria-hidden="true"></i>
+            <input
+              v-model="keyword"
+              class="magnet-page__input"
+              type="search"
+              placeholder="输入番号或关键词，回车搜索"
+              @keydown.enter="search"
+            />
+          </div>
+          <AppButton type="button" variant="primary" :disabled="loading" @click="search">
+            <i v-if="!loading" class="fa-solid fa-search" aria-hidden="true"></i>
+            {{ loading ? "搜索中…" : "搜索" }}
+          </AppButton>
         </div>
       </div>
     </header>
-
-    <div class="magnet-page__bar">
-      <div class="magnet-page__input-wrap">
-        <i class="fa-solid fa-search magnet-page__input-icon" aria-hidden="true"></i>
-        <input
-          v-model="keyword"
-          class="magnet-page__input"
-          type="search"
-          placeholder="输入番号或关键词，回车搜索"
-          @keydown.enter="search"
-        />
-      </div>
-      <AppButton type="button" variant="primary" :disabled="loading" @click="search">
-        <i v-if="!loading" class="fa-solid fa-search" aria-hidden="true"></i>
-        {{ loading ? "搜索中…" : "搜索" }}
-      </AppButton>
-    </div>
 
     <p v-if="error" class="magnet-page__error">
       <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
@@ -211,14 +215,42 @@ function formatDate(unix: number): string {
   margin-bottom: 20px;
 }
 
+/* 横幅：左侧标题信息 + 右侧内嵌搜索框，左右两端对齐，不留白 */
 .magnet-page__hero {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 20px 24px;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 28px;
   border-radius: var(--radius-md);
   background: var(--brand-gradient);
   box-shadow: var(--shadow-card);
+}
+
+/* 右上角装饰光晕，让横幅看起来饱满有层次 */
+.magnet-page__hero::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: -70px;
+  top: -90px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 68%);
+  pointer-events: none;
+}
+
+.magnet-page__hero-info {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  flex-shrink: 0;
 }
 
 .magnet-page__icon {
@@ -252,11 +284,17 @@ function formatDate(unix: number): string {
   color: rgba(255, 255, 255, 0.85);
 }
 
-.magnet-page__bar {
+/* 内嵌搜索区：占据横幅剩余宽度 */
+.magnet-page__hero-search {
+  position: relative;
+  z-index: 1;
   display: flex;
+  flex: 1 1 auto;
+  align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 18px;
+  min-width: 280px;
+  max-width: 560px;
+  margin-left: auto;
 }
 
 .magnet-page__input-wrap {
@@ -286,11 +324,48 @@ function formatDate(unix: number): string {
   font-size: 14px;
   outline: none;
   box-shadow: var(--shadow-soft);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 .magnet-page__input:focus {
   border-color: var(--brand);
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* 横幅内的输入框/按钮：半透明玻璃质感 + 白色按钮，与渐变底色形成对比 */
+.magnet-page__hero-search .magnet-page__input {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  box-shadow: none;
+  height: 46px;
+}
+.magnet-page__hero-search .magnet-page__input::placeholder {
+  color: rgba(255, 255, 255, 0.78);
+}
+.magnet-page__hero-search .magnet-page__input:focus {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.24);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18);
+}
+.magnet-page__hero-search .magnet-page__input-icon {
+  color: rgba(255, 255, 255, 0.88);
+}
+.magnet-page__hero-search .btn--primary {
+  background: #fff;
+  color: var(--brand-strong);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  height: 46px;
+  padding-left: 18px;
+  padding-right: 18px;
+}
+.magnet-page__hero-search .btn--primary:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+.magnet-page__hero-search .btn--primary:disabled {
+  background: #fff;
+  color: var(--brand-strong);
+  opacity: 0.6;
 }
 
 .magnet-page__error {
@@ -453,7 +528,16 @@ function formatDate(unix: number): string {
   }
 
   .magnet-page__hero {
-    padding: 16px 18px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 18px;
+  }
+
+  .magnet-page__hero-search {
+    max-width: none;
+    min-width: 0;
+    margin-left: 0;
   }
 
   .magnet-page__icon {

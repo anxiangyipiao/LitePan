@@ -130,8 +130,7 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
   box-shadow: none;
 }
 
-/* hero 下的功能区（搜索栏 / 统计卡片等）在矩形内增加内边距 */
-.magnet-hub__panel :deep(.magnet-page__bar),
+/* hero 下的功能区（统计卡片等）在矩形内增加内边距 */
 .magnet-hub__panel :deep(.subscribe-page__stats),
 .magnet-hub__panel :deep(.subscribe-page__bar) {
   margin-left: 24px;
