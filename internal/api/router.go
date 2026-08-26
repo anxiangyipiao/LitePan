@@ -175,6 +175,7 @@ func NewRouter(d Deps) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(h.requireUser)
 			r.Get("/magnet-search", h.magnetSearch)
+			r.Get("/magnet-search/sites", h.magnetSearchSites)
 			r.Get("/magnet-favorites", h.listMagnetFavorites)
 			r.Post("/magnet-favorites", h.addMagnetFavorite)
 			r.Delete("/magnet-favorites/{hash}", h.removeMagnetFavorite)

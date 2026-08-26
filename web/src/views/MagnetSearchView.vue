@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, onBeforeUnmount, ref } from "vue";
 import AppButton from "@/components/base/AppButton.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
 import { searchMagnet, type MagnetSearchResult } from "@/api/magnetSearch";
@@ -10,8 +10,10 @@ import { formatSize } from "@/utils/format";
 import { toast, copyTextToClipboard } from "@/composables/useToast";
 import MagnetOfflineModal from "@/components/common/MagnetOfflineModal.vue";
 import { useMagnetFavorites } from "@/composables/useMagnetFavorites";
+import { useMagnetSites } from "@/composables/useMagnetSites";
 
 const { refresh: refreshFavorites, isFavorited, toggle: toggleFavorite } = useMagnetFavorites();
+const { sites: magnetSites, load: loadSites, toggle: toggleMagnetSite, persistEnabled: persistMagnetSites } = useMagnetSites();
 
 const keyword = ref("");
 const results = ref<MagnetSearchResult[]>([]);
@@ -22,10 +24,45 @@ const qbPushing = ref<Record<number, boolean>>({});
 const offlineOpen = ref(false);
 const offlineMagnet = ref("");
 const offlineName = ref("");
+const sitePickerOpen = ref(false);
 
 onMounted(() => {
   void refreshFavorites();
+  void loadSites();
+  document.addEventListener("click", onDocClick);
 });
+
+onBeforeUnmount(() => {
+  document.removeEventListener("click", onDocClick);
+});
+
+function onDocClick() {
+  if (sitePickerOpen.value) sitePickerOpen.value = false;
+}
+
+async function onToggleSite(id: string) {
+  toggleMagnetSite(id);
+  try {
+    await persistMagnetSites();
+  } catch (e) {
+    toast.error(getApiErrorMessage(e, "保存镜像配置失败"));
+  }
+}
+
+const siteLabelMap = ref<Record<string, string>>({});
+function refreshSiteLabelMap() {
+  const m: Record<string, string> = {};
+  for (const s of magnetSites.value) m[s.id] = s.label;
+  siteLabelMap.value = m;
+}
+function sourceLabel(src?: string): string {
+  if (!src) return "";
+  if (src === "sukebei") return "Sukebei";
+  if (src === "nyaa") return "Nyaa";
+  if (src === "sukebei_cn") return "Sukebei CN";
+  if (src.startsWith("custom:")) return src.slice("custom:".length);
+  return siteLabelMap.value[src] || src;
+}
 
 async function search() {
   const q = keyword.value.trim();
@@ -33,11 +70,18 @@ async function search() {
     toast.warning("请输入搜索关键词");
     return;
   }
+  const enabledCount = magnetSites.value.filter((s) => s.enabled).length;
+  if (magnetSites.value.length > 0 && enabledCount === 0) {
+    toast.warning("请至少启用一个磁力镜像");
+    sitePickerOpen.value = true;
+    return;
+  }
   loading.value = true;
   error.value = "";
   try {
     results.value = (await searchMagnet(q)) ?? [];
     searched.value = true;
+    refreshSiteLabelMap();
   } catch (e) {
     error.value = getApiErrorMessage(e, "搜索失败，请检查站点地址或代理配置");
     results.value = [];
@@ -138,11 +182,34 @@ function formatDate(unix: number): string {
               @keydown.enter="search"
             />
           </div>
+          <AppButton type="button" variant="secondary" title="选择搜索镜像" @click="sitePickerOpen = !sitePickerOpen">
+            <i class="fa-solid fa-server" aria-hidden="true"></i>
+            镜像
+          </AppButton>
           <AppButton type="button" variant="primary" :disabled="loading" @click="search">
             <i v-if="!loading" class="fa-solid fa-search" aria-hidden="true"></i>
             {{ loading ? "搜索中…" : "搜索" }}
           </AppButton>
         </div>
+      </div>
+
+      <!-- 镜像多选 popover -->
+      <div v-if="sitePickerOpen" class="magnet-page__site-picker" @click.stop>
+        <div class="magnet-page__site-picker-head">
+          <span>选择搜索镜像</span>
+          <button class="magnet-page__site-close" aria-label="关闭" @click="sitePickerOpen = false">×</button>
+        </div>
+        <div v-if="magnetSites.length === 0" class="magnet-page__site-empty">加载中…</div>
+        <label v-for="s in magnetSites" :key="s.id" class="magnet-page__site-item">
+          <input
+            type="checkbox"
+            :checked="s.enabled"
+            @change="onToggleSite(s.id)"
+          />
+          <span class="magnet-page__site-label">{{ s.label }}</span>
+          <span class="magnet-page__site-url">{{ s.base_url }}</span>
+        </label>
+        <p class="magnet-page__site-hint">至少启用一个，搜索结果按种子数去重排序</p>
       </div>
     </header>
 
@@ -177,6 +244,9 @@ function formatDate(unix: number): string {
         <div class="magnet-page__main">
           <div class="magnet-page__name" :title="r.name">{{ r.name }}</div>
           <div class="magnet-page__meta">
+            <span v-if="r.source" class="magnet-page__tag magnet-page__tag--source" :title="r.source">
+              <i class="fa-solid fa-server" aria-hidden="true"></i>{{ sourceLabel(r.source) }}
+            </span>
             <span v-if="r.category" class="magnet-page__tag magnet-page__tag--cat">
               <i class="fa-solid fa-folder-open" aria-hidden="true"></i>{{ r.category }}
             </span>
@@ -342,5 +412,83 @@ function formatDate(unix: number): string {
   .magnet-page {
     padding: 18px 12px calc(16px + env(safe-area-inset-bottom, 0px));
   }
+}
+
+/* 镜像多选 popover */
+.magnet-page__site-picker {
+  position: relative;
+  margin: 12px 0 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+  padding: 12px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 2;
+}
+.magnet-page__site-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.magnet-page__site-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.magnet-page__site-close:hover {
+  color: var(--text);
+}
+.magnet-page__site-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 4px 0;
+}
+.magnet-page__site-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+.magnet-page__site-label {
+  font-weight: 600;
+  min-width: 90px;
+}
+.magnet-page__site-url {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  word-break: break-all;
+}
+.magnet-page__site-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 6px 0;
+}
+.magnet-page__site-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+
+/* 来源镜像标签：浅紫底色 */
+.magnet-page__tag--source {
+  background: rgba(124, 92, 255, 0.12);
+  color: #6c4ce6;
+  border-color: rgba(124, 92, 255, 0.28);
 }
 </style>

@@ -53,6 +53,8 @@ const (
 	KeyMagnetSearchProxyURL      = "magnet_search_proxy_url"
 	KeyMagnetSearchProxyUsername = "magnet_search_proxy_username"
 	KeyMagnetSearchProxyPassword = "magnet_search_proxy_password"
+	KeyMagnetSearchEnabledSites  = "magnet_search_enabled_sites" // JSON 数组：启用的 site id
+	KeyMagnetSearchCustomSites   = "magnet_search_custom_sites"  // JSON 数组：自定义 base_url
 
 	KeyRSSDefaultFetchInterval = "rss_default_fetch_interval_minutes"
 
@@ -321,6 +323,22 @@ func defaultSpecs() []Spec {
 			Description: "代理认证密码。",
 			Default:     "",
 			Sensitive:   true,
+		},
+		{
+			Key:         KeyMagnetSearchEnabledSites,
+			Type:        TypeString,
+			Category:    "system",
+			Label:       "磁力搜索启用站点",
+			Description: "启用的镜像站 ID 列表，JSON 数组。空表示全启用。内置：sukebei / nyaa / sukebei_cn。",
+			Default:     "[\"sukebei\",\"nyaa\",\"sukebei_cn\"]",
+		},
+		{
+			Key:         KeyMagnetSearchCustomSites,
+			Type:        TypeString,
+			Category:    "system",
+			Label:       "磁力搜索自定义镜像",
+			Description: "用户自定义的镜像 base_url 列表，JSON 数组。每一项在启用站点里以 custom:<url> 形式可勾选。",
+			Default:     "[]",
 		},
 		{
 			Key:         KeyRSSDefaultFetchInterval,

@@ -12,6 +12,7 @@ export interface MagnetSearchResult {
   hash: string;
   magnet: string;
   view_url: string;
+  source?: string; // 多站聚合时标注来源镜像 ID（sukebei / nyaa / sukebei_cn / custom:*）
 }
 
 export function searchMagnet(q: string, limit = 20) {
