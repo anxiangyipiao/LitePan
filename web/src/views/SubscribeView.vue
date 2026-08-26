@@ -526,9 +526,9 @@ onDeactivated(stopPolling);
   padding: 48px 0;
 }
 
-/* 订阅表格：固定布局 + 列宽，去掉 min-width 限宽让表格跟 panel 一起撑满父容器 */
+/* 订阅表格：auto 布局让列宽跟随内容自适应，列间距紧凑无横向滚动条 */
 .admin-panel-table-wrap .admin-table {
-  table-layout: fixed;
+  table-layout: auto;
   width: 100%;
 }
 
@@ -536,31 +536,6 @@ onDeactivated(stopPolling);
 .admin-panel-table-wrap .table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-}
-
-.subscribe-page__th:nth-child(1),
-.subscribe-page__td-name {
-  width: 22%;
-}
-
-.subscribe-page__th:nth-child(2),
-.subscribe-page__td-trunc:nth-child(2) {
-  width: 18%;
-}
-
-.subscribe-page__th:nth-child(3),
-.subscribe-page__td-trunc:nth-child(3) {
-  width: 18%;
-}
-
-.subscribe-page__th:nth-child(4),
-.subscribe-page__td-nowrap:nth-child(4) {
-  width: 10%;
-}
-
-.subscribe-page__th:nth-child(5),
-.subscribe-page__td-nowrap:nth-child(5) {
-  width: 16%;
 }
 
 .subscribe-page__td-name {
@@ -573,7 +548,7 @@ onDeactivated(stopPolling);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  max-width: 280px;
 }
 
 .subscribe-page__feed {
@@ -582,7 +557,7 @@ onDeactivated(stopPolling);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  max-width: 280px;
 }
 
 .subscribe-page__cell {
@@ -590,7 +565,7 @@ onDeactivated(stopPolling);
   font-size: 13px;
 }
 
-/* 规则 / 目标：允许文本换行以展示全部内容，不出现横向滚动条 */
+/* 规则 / 目标：紧凑展示，长内容换行 */
 .subscribe-page__td-trunc {
   white-space: normal;
   word-break: break-word;
@@ -635,10 +610,10 @@ onDeactivated(stopPolling);
   gap: 4px;
 }
 
-/* 操作列：固定宽度，确保 4 个按钮能排下 */
+/* 操作列：自然宽度，但最少保证 4 个按钮能排下 */
 .subscribe-page__th-actions,
 .subscribe-page__td-actions {
-  width: 16%;
+  white-space: nowrap;
   min-width: 160px;
 }
 
