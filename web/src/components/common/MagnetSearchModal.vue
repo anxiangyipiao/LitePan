@@ -14,7 +14,7 @@ import { useMagnetSites } from "@/composables/useMagnetSites";
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: [] }>();
 
-const { sites: magnetSites, load: loadSites, toggle: toggleMagnetSite, persistEnabled: persistMagnetSites } = useMagnetSites();
+const { enabledSites, load: loadSites } = useMagnetSites();
 
 const keyword = ref("");
 const results = ref<MagnetSearchResult[]>([]);
@@ -26,39 +26,31 @@ const offlineOpen = ref(false);
 const offlineMagnet = ref("");
 const offlineName = ref("");
 const isFullscreen = ref(false);
-const sitePickerOpen = ref(false);
+const activeSite = ref("");
 
 watch(
   () => props.open,
   (open) => {
     if (open) {
-      // 重新打开回到初始态，避免残留上次搜索的「无结果」空态
       error.value = "";
       searched.value = false;
       results.value = [];
-      void loadSites();
+      void loadSites().then(() => {
+        if (!activeSite.value && enabledSites.value.length > 0) {
+          activeSite.value = enabledSites.value[0].id;
+        }
+      });
     }
   },
 );
 
-function sourceLabel(src?: string): string {
-  if (!src) return "";
-  if (src === "sukebei") return "Sukebei";
-  if (src === "nyaa") return "Nyaa";
-  if (src === "sukebei_cn") return "Sukebei CN";
-  if (src.startsWith("custom:")) return src.slice("custom:".length);
-  const s = magnetSites.value.find((x) => x.id === src);
-  return s ? s.label : src;
-}
-
-async function onToggleSite(id: string) {
-  toggleMagnetSite(id);
-  try {
-    await persistMagnetSites();
-  } catch (e) {
-    toast.error(getApiErrorMessage(e, "保存镜像配置失败"));
+watch(activeSite, () => {
+  if (searched.value) {
+    results.value = [];
+    searched.value = false;
+    error.value = "";
   }
-}
+});
 
 async function search() {
   const q = keyword.value.trim();
@@ -66,16 +58,14 @@ async function search() {
     toast.warning("请输入搜索关键词");
     return;
   }
-  const enabledCount = magnetSites.value.filter((s) => s.enabled).length;
-  if (magnetSites.value.length > 0 && enabledCount === 0) {
-    toast.warning("请至少启用一个磁力镜像");
-    sitePickerOpen.value = true;
+  if (!activeSite.value) {
+    toast.warning("暂无可用的磁力镜像");
     return;
   }
   loading.value = true;
   error.value = "";
   try {
-    results.value = (await searchMagnet(q)) ?? [];
+    results.value = (await searchMagnet(q, activeSite.value)) ?? [];
     searched.value = true;
   } catch (e) {
     error.value = getApiErrorMessage(e, "搜索失败，请检查站点地址或代理配置");
@@ -164,26 +154,26 @@ function formatDate(unix: number): string {
           placeholder="输入番号或关键词，回车搜索"
           @keydown.enter="search"
         />
-        <AppButton type="button" variant="secondary" title="选择搜索镜像" @click="sitePickerOpen = !sitePickerOpen">
-          <i class="fa-solid fa-server" aria-hidden="true"></i>
-          镜像
-        </AppButton>
         <AppButton type="button" variant="primary" :disabled="loading" @click="search">
           {{ loading ? "搜索中…" : "搜索" }}
         </AppButton>
       </div>
 
-      <div v-if="sitePickerOpen" class="magnet-search__site-picker" @click.stop>
-        <div class="magnet-search__site-head">
-          <span>选择搜索镜像</span>
-          <button class="magnet-search__site-close" aria-label="关闭" @click="sitePickerOpen = false">×</button>
-        </div>
-        <div v-if="magnetSites.length === 0" class="magnet-search__site-empty">加载中…</div>
-        <label v-for="s in magnetSites" :key="s.id" class="magnet-search__site-item">
-          <input type="checkbox" :checked="s.enabled" @change="onToggleSite(s.id)" />
-          <span class="magnet-search__site-label">{{ s.label }}</span>
-          <span class="magnet-search__site-url">{{ s.base_url }}</span>
-        </label>
+      <div v-if="enabledSites.length > 1" class="magnet-search__site-tabs" role="tablist">
+        <button
+          v-for="s in enabledSites"
+          :key="s.id"
+          type="button"
+          role="tab"
+          :aria-selected="activeSite === s.id"
+          :class="['magnet-search__site-tab', { 'magnet-search__site-tab--active': activeSite === s.id }]"
+          @click="activeSite = s.id"
+        >
+          {{ s.label }}
+        </button>
+      </div>
+      <div v-else-if="enabledSites.length === 1" class="magnet-search__site-single">
+        镜像：<strong>{{ enabledSites[0].label }}</strong>
       </div>
 
       <p v-if="error" class="magnet-search__error">{{ error }}</p>
@@ -205,7 +195,6 @@ function formatDate(unix: number): string {
           <div class="magnet-search__main">
             <div class="magnet-search__name" :title="r.name">{{ r.name }}</div>
             <div class="magnet-search__meta">
-              <span v-if="r.source" class="magnet-search__meta-item magnet-search__source">{{ sourceLabel(r.source) }}</span>
               <span v-if="r.category" class="magnet-search__meta-item">{{ r.category }}</span>
               <span class="magnet-search__meta-item">{{ formatSize(r.size) }}</span>
               <span class="magnet-search__meta-item" :title="'做种 ' + r.seeders">↑{{ r.seeders }}</span>
@@ -394,69 +383,38 @@ function formatDate(unix: number): string {
   min-height: 0;
 }
 
-/* 镜像多选 popover */
-.magnet-search__site-picker {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px 12px;
+/* 镜像 tab 栏 */
+.magnet-search__site-tabs {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 4px;
 }
-.magnet-search__site-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.magnet-search__site-tab {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
   font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.magnet-search__site-tab:hover {
+  border-color: var(--brand);
   color: var(--text);
 }
-.magnet-search__site-close {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0 4px;
+.magnet-search__site-tab--active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
-.magnet-search__site-close:hover {
+.magnet-search__site-single {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.magnet-search__site-single strong {
   color: var(--text);
-}
-.magnet-search__site-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  cursor: pointer;
-  padding: 3px 0;
-}
-.magnet-search__site-item input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
-  accent-color: var(--brand);
-  cursor: pointer;
-}
-.magnet-search__site-label {
-  font-weight: 600;
-  min-width: 84px;
-}
-.magnet-search__site-url {
-  color: var(--text-muted);
-  font-family: var(--font-mono, monospace);
-  word-break: break-all;
-}
-.magnet-search__site-empty {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-.magnet-search__source {
-  background: rgba(124, 92, 255, 0.12);
-  color: #6c4ce6;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-weight: 600;
+  margin-left: 4px;
 }
 </style>

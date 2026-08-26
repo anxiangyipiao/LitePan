@@ -7,12 +7,33 @@ import (
 	"strings"
 
 	"litepan/internal/domain"
-	"litepan/internal/magnetsearch"
 	"litepan/internal/settings"
 	"litepan/internal/sukebei"
 )
 
-// magnetSearchSiteDTO 描述一个镜像，前端用于渲染站点多选 UI。
+// magnetSite 描述一个 nyaa/sukebei 系镜像（HTML 表格格式）的元数据。
+// 不同镜像的 HTML 结构与 sukebei.nyaa.si 一致，因此共用 sukebei 解析器。
+type magnetSite struct {
+	ID      string `json:"id"`
+	Label   string `json:"label"`
+	BaseURL string `json:"base_url"`
+}
+
+// magnetBuiltin 内置镜像清单。顺序即前端 tab 默认顺序。
+var magnetBuiltin = []magnetSite{
+	{ID: "sukebei", Label: "Sukebei", BaseURL: "https://sukebei.nyaa.si"},
+	{ID: "nyaa", Label: "Nyaa", BaseURL: "https://nyaa.net"},
+	{ID: "sukebei_cn", Label: "Sukebei CN", BaseURL: "https://sukebei.cn.nyaa.net"},
+}
+
+// magnetResult 是单站搜索返回的一条结果，嵌入 sukebei.Result 复用其 JSON tag。
+// Source 字段记录该条来自哪个镜像 id（前端单站模式时仅展示，但保留以备未来扩展）。
+type magnetResult struct {
+	sukebei.Result
+	Source string `json:"source"`
+}
+
+// magnetSearchSiteDTO 是 /magnet-search/sites 的返回项。
 type magnetSearchSiteDTO struct {
 	ID      string `json:"id"`
 	Label   string `json:"label"`
@@ -20,18 +41,18 @@ type magnetSearchSiteDTO struct {
 	Enabled bool   `json:"enabled"`
 }
 
-// magnetSearchSites 返回内置 + 用户自定义镜像清单，并附当前是否启用。
-// 前端用此接口渲染多选 UI。
+// magnetSearchSites 返回内置 + 用户自定义镜像清单，附当前是否启用。
+// 前端按此渲染 tab 栏（只显示 enabled=true 的）。
 func (h *Handler) magnetSearchSites(w http.ResponseWriter, r *http.Request) {
-	custom := parseCustomSites(h.settingString(settings.KeyMagnetSearchCustomSites))
-	enabled := magnetsearch.ParseEnabledSites(h.settingString(settings.KeyMagnetSearchEnabledSites))
-	out := make([]magnetSearchSiteDTO, 0, len(magnetsearch.Builtin)+len(custom))
-	for _, s := range magnetsearch.Builtin {
+	custom := parseMagnetCustomSites(h.settingString(settings.KeyMagnetSearchCustomSites))
+	enabled := parseMagnetEnabledSites(h.settingString(settings.KeyMagnetSearchEnabledSites))
+	out := make([]magnetSearchSiteDTO, 0, len(magnetBuiltin)+len(custom))
+	for _, s := range magnetBuiltin {
 		out = append(out, magnetSearchSiteDTO{
 			ID:      s.ID,
 			Label:   s.Label,
 			BaseURL: s.BaseURL,
-			Enabled: siteEnabled(enabled, s.ID),
+			Enabled: magnetSiteEnabled(enabled, s.ID),
 		})
 	}
 	for _, raw := range custom {
@@ -39,7 +60,7 @@ func (h *Handler) magnetSearchSites(w http.ResponseWriter, r *http.Request) {
 			ID:      "custom:" + raw,
 			Label:   customSiteLabel(raw),
 			BaseURL: raw,
-			Enabled: siteEnabled(enabled, "custom:"+raw),
+			Enabled: magnetSiteEnabled(enabled, "custom:"+raw),
 		})
 	}
 	writeOK(w, out)
@@ -57,8 +78,8 @@ func customSiteLabel(raw string) string {
 	return label
 }
 
-// siteEnabled 兼容 enabled == nil（全启用）情况。
-func siteEnabled(enabled map[string]struct{}, id string) bool {
+// magnetSiteEnabled 兼容 enabled == nil（全启用）情况。
+func magnetSiteEnabled(enabled map[string]struct{}, id string) bool {
 	if enabled == nil {
 		return true
 	}
@@ -66,8 +87,33 @@ func siteEnabled(enabled map[string]struct{}, id string) bool {
 	return ok
 }
 
-// parseCustomSites 解析自定义镜像 JSON 数组；空 / 失败返回 nil。
-func parseCustomSites(raw string) []string {
+// parseMagnetEnabledSites 解析 settings 存的 JSON 字符串为启用的 site id 集合。
+// 空 / 失败 → 返回 nil（前端按"全启用"处理，保持向后兼容）。
+func parseMagnetEnabledSites(raw string) map[string]struct{} {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var ids []string
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		return nil
+	}
+	out := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		out[id] = struct{}{}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// parseMagnetCustomSites 解析自定义镜像 JSON 数组；空 / 失败返回 nil。
+func parseMagnetCustomSites(raw string) []string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil
@@ -87,9 +133,9 @@ func parseCustomSites(raw string) []string {
 	return out
 }
 
-// magnetSearch 并发抓取所有启用镜像的搜索结果，按 infohash 去重后按 seeders 排序。
-// 旧 KeyMagnetSearchBaseURL 作为单站兜底：若用户没启用任何新站点（清空了 enabled list），
-// 回退到 BaseURL 设置里的单站，向后兼容老配置。
+// magnetSearch 按前端 tab 选定的单站抓取，结果不跨站合并。
+// ?site=<id>：sukebei / nyaa / sukebei_cn / custom:<url>。
+// 若 site 缺失或对应镜像找不到 → 回退到旧 KeyMagnetSearchBaseURL 单站（"legacy"），保持向后兼容。
 func (h *Handler) magnetSearch(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if query == "" {
@@ -109,42 +155,53 @@ func (h *Handler) magnetSearch(w http.ResponseWriter, r *http.Request) {
 		h.settingString(settings.KeyMagnetSearchProxyPassword),
 	)
 
-	sites := h.enabledMagnetSites()
-	if len(sites) == 0 {
-		// 兜底：旧配置的 BaseURL
-		if base := h.magnetSearchBaseURL(); base != "" {
-			sites = []magnetsearch.Site{{ID: "legacy", Label: "Legacy", BaseURL: base}}
-		}
-	}
-	if len(sites) == 0 {
-		writeErr(w, domain.Errorf(domain.CodeValidation, "未启用任何磁力搜索镜像"))
+	site, err := h.resolveMagnetSite(r.URL.Query().Get("site"))
+	if err != nil {
+		writeErr(w, err)
 		return
 	}
 
-	results, err := magnetsearch.Search(r.Context(), sites, proxy, query, limit, magnetsearch.Options{})
+	c := sukebei.NewClient(sukebei.Options{BaseURL: site.BaseURL, ProxyURL: proxy})
+	results, err := c.Search(r.Context(), query, limit)
 	if err != nil {
-		h.log.Warn("磁力搜索失败", "q", query, "err", err, "sites", siteIDs(sites))
+		h.log.Warn("磁力搜索失败", "q", query, "site", site.ID, "err", err)
 		writeErr(w, domain.Errorf(domain.CodeDriverError, "磁力搜索失败：%v", err))
 		return
 	}
-	if results == nil {
-		results = []magnetsearch.Result{}
+	out := make([]magnetResult, 0, len(results))
+	for _, it := range results {
+		out = append(out, magnetResult{Result: it, Source: site.ID})
 	}
-	writeOK(w, results)
+	writeOK(w, out)
 }
 
-// enabledMagnetSites 解析 settings 中的启用列表 + 自定义镜像，返回实际要抓的站点。
-// 解析失败时（无 key / JSON 损坏）按"全启用"处理，保持向后兼容。
-func (h *Handler) enabledMagnetSites() []magnetsearch.Site {
-	enabled := magnetsearch.ParseEnabledSites(h.settingString(settings.KeyMagnetSearchEnabledSites))
-	custom := parseCustomSites(h.settingString(settings.KeyMagnetSearchCustomSites))
-	return magnetsearch.EnabledSites(enabled, custom)
+// resolveMagnetSite 解析前端传来的 site id；找不到时回退到旧 BaseURL 配置。
+func (h *Handler) resolveMagnetSite(raw string) (magnetSite, error) {
+	id := strings.TrimSpace(raw)
+	if id != "" {
+		for _, s := range h.allMagnetSites() {
+			if s.ID == id {
+				return s, nil
+			}
+		}
+	}
+	if base := h.magnetSearchBaseURL(); base != "" {
+		return magnetSite{ID: "legacy", Label: "Legacy", BaseURL: base}, nil
+	}
+	return magnetSite{}, domain.Errorf(domain.CodeValidation, "未配置任何磁力搜索镜像")
 }
 
-func siteIDs(sites []magnetsearch.Site) []string {
-	out := make([]string, 0, len(sites))
-	for _, s := range sites {
-		out = append(out, s.ID)
+// allMagnetSites 返回内置 + 自定义镜像清单。
+func (h *Handler) allMagnetSites() []magnetSite {
+	custom := parseMagnetCustomSites(h.settingString(settings.KeyMagnetSearchCustomSites))
+	out := make([]magnetSite, 0, len(magnetBuiltin)+len(custom))
+	out = append(out, magnetBuiltin...)
+	for _, raw := range custom {
+		out = append(out, magnetSite{
+			ID:      "custom:" + raw,
+			Label:   customSiteLabel(raw),
+			BaseURL: strings.TrimRight(raw, "/"),
+		})
 	}
 	return out
 }

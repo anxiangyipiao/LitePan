@@ -1,8 +1,7 @@
-// 共享的磁力镜像站点状态：拉取内置+自定义镜像清单、当前用户启用哪些。
-// 三个入口（搜索页、顶栏 modal、TMDB 详情）共用同一份本地状态，避免重复请求。
+// 共享的磁力镜像站点状态：拉取内置+自定义镜像清单，跨页签共享当前选中的 site。
+// 三个入口（搜索页、顶栏弹窗、TMDB 详情）共用同一份本地状态。
 import { computed, ref } from "vue";
 import { http } from "@/api/client";
-import { saveSettings } from "@/api/settings";
 
 export interface MagnetSite {
   id: string;
@@ -14,9 +13,6 @@ export interface MagnetSite {
 const sites = ref<MagnetSite[]>([]);
 const loading = ref(false);
 let loadPromise: Promise<MagnetSite[]> | null = null;
-
-const ENABLED_KEY = "magnet_search_enabled_sites";
-// 同步一份到 localStorage，三个入口跨页签共用。settings 仍以 settings API 为准。
 
 async function fetchSites(): Promise<MagnetSite[]> {
   loading.value = true;
@@ -36,25 +32,13 @@ export function useMagnetSites() {
     return loadPromise;
   }
 
-  const enabledIds = computed(() => sites.value.filter((s) => s.enabled).map((s) => s.id));
+  // 已启用的镜像（按内置 + 自定义顺序）
+  const enabledSites = computed(() => sites.value.filter((s) => s.enabled));
 
-  // 把当前 enabled 状态同步到 settings（以 JSON 数组字符串形式存）。
-  // 全启用时存空串（=兼容"全启用"语义），否则存数组 JSON。
-  async function persistEnabled(): Promise<void> {
-    const allEnabled = sites.value.length > 0 && sites.value.every((s) => s.enabled);
-    const value = allEnabled ? "" : JSON.stringify(enabledIds.value);
-    await saveSettings({ [ENABLED_KEY]: value });
-  }
-
-  function setEnabled(id: string, on: boolean) {
+  function labelOf(id: string): string {
     const s = sites.value.find((x) => x.id === id);
-    if (s) s.enabled = on;
+    return s ? s.label : id;
   }
 
-  function toggle(id: string) {
-    const s = sites.value.find((x) => x.id === id);
-    if (s) s.enabled = !s.enabled;
-  }
-
-  return { sites, loading, load, enabledIds, setEnabled, toggle, persistEnabled };
+  return { sites, enabledSites, loading, load, labelOf };
 }
