@@ -523,6 +523,18 @@ function formatDate(unix: number): string {
   text-decoration: underline;
 }
 
+/* 宽屏（≥1100px）：hero 内的内嵌搜索框解除 max-width 限制，占满剩余空间 */
+@media (min-width: 1100px) {
+  .magnet-page__hero {
+    padding: 24px 32px;
+  }
+
+  .magnet-page__hero-search {
+    max-width: none;
+    min-width: 320px;
+  }
+}
+
 /* 中等屏（≤960px）：缩小 hero 内边距 + 允许标题 / 搜索框垂直排布，给搜索框更多空间 */
 @media (max-width: 960px) {
   .magnet-page__hero {

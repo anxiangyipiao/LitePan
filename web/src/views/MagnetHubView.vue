@@ -47,9 +47,9 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
   overflow-x: hidden;
 }
 
-/* 分段药丸：与影视的 .ml-mode-switch 同款——白底圆角胶囊，内部含 1–2 个圆角按钮（与下方面板共享 960 容器，左对齐） */
+/* 分段药丸：与影视的 .ml-mode-switch 同款——白底圆角胶囊，内部含 1–2 个圆角按钮（与下方面板共享 1280 容器，左对齐） */
 .magnet-hub__tabs {
-  max-width: 960px;
+  max-width: 1280px;
   margin: 16px auto 0;
   display: flex;
   justify-content: flex-start;
@@ -100,7 +100,7 @@ const { activeTab, setActiveTab } = useSectionTabRoute("search", ["search", "sub
 
 /* 子页面包裹矩形：白底卡片 + 圆角 + 边框 + 阴影（边框与阴影加重，确保浅色主题下也能明显区分） */
 .magnet-hub__panel {
-  max-width: 960px;
+  max-width: 1280px;
   margin: 16px auto 24px;
   background: var(--surface);
   border-radius: var(--radius-md);
