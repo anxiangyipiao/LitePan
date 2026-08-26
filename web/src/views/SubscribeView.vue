@@ -526,21 +526,42 @@ onDeactivated(stopPolling);
   padding: 48px 0;
 }
 
-/* 订阅表格：固定布局 + 百分比列宽，确保不出现横向滚动条 */
+/* 订阅表格：固定布局，操作列固定 160px，其他列按比例分剩余空间，确保不溢出容器 */
 .admin-panel-table-wrap .admin-table {
   table-layout: fixed;
   width: 100%;
 }
 
-/* 表格容器不再保留横向滚动，列宽由百分比 + min-width 控制 */
+/* 表格容器不再保留横向滚动，列宽由 calc 严格控制 */
 .admin-panel-table-wrap .table-wrap {
   overflow-x: visible;
 }
 
-/* 名称列：22%，内容溢出省略 */
+/* 固定列宽：操作列 160px，其他列基于「容器宽 - 160px」按百分比分配
+   这样总宽度永远 = 容器宽，不会溢出 */
 .subscribe-page__th:nth-child(1),
 .subscribe-page__td-name {
-  width: 22%;
+  width: calc((100% - 160px) * 0.32);
+}
+
+.subscribe-page__th:nth-child(2),
+.subscribe-page__td-trunc:nth-child(2) {
+  width: calc((100% - 160px) * 0.22);
+}
+
+.subscribe-page__th:nth-child(3),
+.subscribe-page__td-trunc:nth-child(3) {
+  width: calc((100% - 160px) * 0.22);
+}
+
+.subscribe-page__th:nth-child(4),
+.subscribe-page__td-nowrap:nth-child(4) {
+  width: calc((100% - 160px) * 0.10);
+}
+
+.subscribe-page__th:nth-child(5),
+.subscribe-page__td-nowrap:nth-child(5) {
+  width: calc((100% - 160px) * 0.14);
 }
 
 .subscribe-page__td-name {
@@ -570,17 +591,6 @@ onDeactivated(stopPolling);
   font-size: 13px;
 }
 
-/* 规则 / 目标：换行展示全部内容 */
-.subscribe-page__th:nth-child(2),
-.subscribe-page__td-trunc:nth-child(2) {
-  width: 18%;
-}
-
-.subscribe-page__th:nth-child(3),
-.subscribe-page__td-trunc:nth-child(3) {
-  width: 18%;
-}
-
 .subscribe-page__td-trunc {
   white-space: normal;
   word-break: break-word;
@@ -590,18 +600,6 @@ onDeactivated(stopPolling);
   display: block;
   word-break: break-word;
   white-space: normal;
-}
-
-/* 间隔列 10% */
-.subscribe-page__th:nth-child(4),
-.subscribe-page__td-nowrap:nth-child(4) {
-  width: 10%;
-}
-
-/* 上次抓取列 16% */
-.subscribe-page__th:nth-child(5),
-.subscribe-page__td-nowrap:nth-child(5) {
-  width: 16%;
 }
 
 .subscribe-page__td-nowrap {
@@ -636,11 +634,10 @@ onDeactivated(stopPolling);
   gap: 4px;
 }
 
-/* 操作列：固定宽度 16%，最少保证 4 个按钮能排下 */
+/* 操作列：固定 160px，容纳 4 个按钮 */
 .subscribe-page__th-actions,
 .subscribe-page__td-actions {
-  width: 16%;
-  min-width: 160px;
+  width: 160px;
   white-space: nowrap;
 }
 
