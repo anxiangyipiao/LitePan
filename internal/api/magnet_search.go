@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"litepan/internal/btdig"
 	"litepan/internal/domain"
 	"litepan/internal/settings"
 	"litepan/internal/sukebei"
@@ -59,12 +60,31 @@ func (h *Handler) magnetSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c := sukebei.NewClient(sukebei.Options{BaseURL: siteURL, ProxyURL: proxy})
-	results, err := c.Search(r.Context(), query, limit)
-	if err != nil {
-		h.log.Warn("磁力搜索失败", "q", query, "site", siteURL, "err", err)
-		writeErr(w, domain.Errorf(domain.CodeDriverError, "磁力搜索失败：%v", err))
-		return
+	var results []sukebei.Result
+	if strings.Contains(siteURL, "btdig.com") {
+		bc := btdig.NewClient(btdig.Options{BaseURL: siteURL, ProxyURL: proxy})
+		bresults, berr := bc.Search(r.Context(), query, limit)
+		if berr != nil {
+			h.log.Warn("磁力搜索失败", "q", query, "site", siteURL, "err", berr)
+			writeErr(w, domain.Errorf(domain.CodeDriverError, "磁力搜索失败：%v", berr))
+			return
+		}
+		for _, br := range bresults {
+			results = append(results, sukebei.Result{
+				ID: br.ID, Name: br.Name, Size: br.Size, Date: br.Date,
+				Seeders: br.Seeders, Leechers: br.Leechers, Downloads: br.Downloads,
+				Hash: br.Hash, Magnet: br.Magnet, ViewURL: br.ViewURL,
+			})
+		}
+	} else {
+		c := sukebei.NewClient(sukebei.Options{BaseURL: siteURL, ProxyURL: proxy})
+		var serr error
+		results, serr = c.Search(r.Context(), query, limit)
+		if serr != nil {
+			h.log.Warn("磁力搜索失败", "q", query, "site", siteURL, "err", serr)
+			writeErr(w, domain.Errorf(domain.CodeDriverError, "磁力搜索失败：%v", serr))
+			return
+		}
 	}
 	writeOK(w, results)
 }

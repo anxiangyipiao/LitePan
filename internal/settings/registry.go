@@ -295,7 +295,7 @@ func defaultSpecs() []Spec {
 			Category:    "system",
 			Label:       "磁力搜索站点",
 			Description: "磁力搜索站点 URL 列表，JSON 数组。每个 URL 对应一个搜索 tab。示例：[\"https://sukebei.nyaa.si\",\"https://nyaa.net\"]",
-			Default:     "[\"https://sukebei.nyaa.si\",\"https://nyaa.si\",\"https://nyaa.net\",\"https://sukebei.cn.nyaa.net\",\"https://nyaa.land\",\"https://nyaa.pantsu.cat\",\"https://sukebei.pantsu.cat\"]",
+			Default:     "[\"https://sukebei.nyaa.si\",\"https://nyaa.si\",\"https://nyaa.net\",\"https://sukebei.cn.nyaa.net\",\"https://nyaa.land\",\"https://nyaa.pantsu.cat\",\"https://sukebei.pantsu.cat\",\"https://btdig.com\"]",
 		},
 		{
 			Key:         KeyMagnetSearchProxyURL,
