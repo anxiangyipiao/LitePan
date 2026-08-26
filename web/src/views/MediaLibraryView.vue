@@ -743,8 +743,6 @@ const subtitle = (item: MediaLibraryItem) => {
 .ml-page {
   min-height: 100vh;
   padding: 16px;
-  max-width: 1280px;
-  margin: 0 auto;
   box-sizing: border-box;
   background: linear-gradient(180deg, var(--bg) 0%, var(--bg-muted) 100%);
   --ml-gold: #b45309;
