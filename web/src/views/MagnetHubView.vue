@@ -153,6 +153,14 @@ const tabIcon: Record<string, string> = {
   box-shadow: none;
 }
 
+/* 去掉 admin-table 外层 admin-panel-table-wrap 自身带的边框/阴影，避免与 panel 容器重复 */
+.magnet-hub__panel :deep(.admin-panel-table-wrap) {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
 /* hero 下的功能区（统计卡片等）在矩形内增加内边距 */
 .magnet-hub__panel :deep(.subscribe-page__stats),
 .magnet-hub__panel :deep(.subscribe-page__bar) {
@@ -165,9 +173,7 @@ const tabIcon: Record<string, string> = {
 .magnet-hub__panel :deep(.magnet-page__empty),
 .magnet-hub__panel :deep(.magnet-page__error),
 .magnet-hub__panel :deep(.magnet-page__loading),
-.magnet-hub__panel :deep(.magnet-page__stats),
-.magnet-hub__panel :deep(.subscribe-page__bar + .admin-table),
-.magnet-hub__panel :deep(.subscribe-page__bar) {
+.magnet-hub__panel :deep(.magnet-page__stats) {
   padding-left: 24px;
   padding-right: 24px;
   box-sizing: border-box;

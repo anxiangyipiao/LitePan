@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 import AppButton from "@/components/base/AppButton.vue";
 import BusySpinner from "@/components/base/BusySpinner.vue";
 import { searchMagnet, type MagnetSearchResult } from "@/api/magnetSearch";
+import "@/styles/magnet.css";
 import { addToQB } from "@/api/qb";
 import { getApiErrorMessage } from "@/api/client";
 import { formatSize } from "@/utils/format";
@@ -238,86 +239,12 @@ function formatDate(unix: number): string {
 </template>
 
 <style scoped>
+/* search 页容器（favorites 共享 @/styles/magnet.css 通用样式） */
 .magnet-page {
   max-width: 960px;
   margin: 0 auto;
   padding: 28px 20px calc(20px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
-  width: 100%;
-  overflow-x: hidden;
-}
-
-.magnet-page__head {
-  margin-bottom: 20px;
-}
-
-/* 横幅：左侧标题信息 + 右侧内嵌搜索框，左右两端对齐，不留白 */
-.magnet-page__hero {
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 24px 28px;
-  border-radius: var(--radius-md);
-  background: var(--brand-gradient);
-  box-shadow: var(--shadow-card);
-}
-
-/* 右上角装饰光晕，让横幅看起来饱满有层次 */
-.magnet-page__hero::before {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  right: -70px;
-  top: -90px;
-  width: 260px;
-  height: 260px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 68%);
-  pointer-events: none;
-}
-
-.magnet-page__hero-info {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  min-width: 0;
-  flex-shrink: 0;
-}
-
-.magnet-page__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-  font-size: 20px;
-  flex-shrink: 0;
-}
-
-.magnet-page__hero-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.magnet-page__title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.magnet-page__desc {
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.85);
 }
 
 /* 内嵌搜索区：占据横幅剩余宽度 */
@@ -404,267 +331,16 @@ function formatDate(unix: number): string {
   opacity: 0.6;
 }
 
-.magnet-page__error {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 12px;
-  padding: 12px 16px;
-  border-radius: var(--radius-sm);
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  color: var(--danger);
-  font-size: 13px;
-}
-
-.magnet-page__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: var(--text-muted);
-  font-size: 14px;
-  text-align: center;
-  padding: 72px 0;
-}
-.magnet-page__empty i {
-  font-size: 40px;
-  color: var(--border);
-}
-
-.magnet-page__loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: var(--text-muted);
-  font-size: 13px;
-  padding: 60px 0;
-}
-
-.magnet-page__stats {
-  margin-bottom: 12px;
-}
-.magnet-page__stats-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.magnet-page__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.magnet-page__row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 18px;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: var(--shadow-soft);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
-  min-width: 0;
-}
-.magnet-page__row:hover {
-  border-color: var(--border);
-  box-shadow: var(--shadow-card);
-}
-
-.magnet-page__main {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.magnet-page__name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.magnet-page__meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.magnet-page__tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.magnet-page__tag i {
-  font-size: 10px;
-}
-.magnet-page__tag--cat {
-  background: var(--info-soft);
-  color: var(--info);
-}
-.magnet-page__tag--size {
-  background: var(--surface-sunken);
-  color: var(--text-regular);
-}
-.magnet-page__tag--seed {
-  background: rgba(16, 185, 129, 0.1);
-  color: #059669;
-}
-.magnet-page__tag--leech {
-  background: rgba(239, 68, 68, 0.08);
-  color: #dc2626;
-}
-.magnet-page__tag--date {
-  background: var(--surface-sunken);
-  color: var(--text-muted);
-}
-
-.magnet-page__actions {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.magnet-page__link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--brand);
-  font-size: 13px;
-  font-weight: 500;
-  text-decoration: none;
-  white-space: nowrap;
-}
-.magnet-page__link:hover {
-  text-decoration: underline;
-}
-
-/* 宽屏（≥1100px）：hero 内的内嵌搜索框解除 max-width 限制，占满剩余空间 */
-@media (min-width: 1100px) {
-  .magnet-page__hero {
-    padding: 24px 32px;
-  }
-
-  .magnet-page__hero-search {
-    max-width: none;
-    min-width: 320px;
-  }
-}
-
-/* 中等屏（≤960px）：缩小 hero 内边距 + 允许标题 / 搜索框垂直排布，给搜索框更多空间 */
-@media (max-width: 960px) {
-  .magnet-page__hero {
-    padding: 20px 22px;
-    gap: 18px;
-  }
-
-  .magnet-page__hero-search {
-    min-width: 0;
-    max-width: 460px;
-  }
-}
-
-/* 平板及以下（≤768px）：hero 改竖排，搜索框占满宽度；结果行让 main 与 actions 垂直堆叠 */
+/* search 页专属：768px 时 .magnet-page 自身的 padding 调整 */
 @media (max-width: 768px) {
   .magnet-page {
     padding: 22px 16px calc(18px + env(safe-area-inset-bottom, 0px));
   }
-
-  .magnet-page__hero {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 16px;
-    padding: 18px 18px;
-  }
-
-  .magnet-page__hero-info {
-    flex-shrink: 1;
-  }
-
-  .magnet-page__hero-search {
-    max-width: none;
-    min-width: 0;
-    margin-left: 0;
-    width: 100%;
-  }
-
-  .magnet-page__row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-    padding: 14px;
-  }
-
-  .magnet-page__actions {
-    width: 100%;
-  }
-
-  .magnet-page__meta {
-    gap: 5px;
-  }
 }
 
-/* 手机（≤640px）：动作按钮 2 列网格，「详情」链接单独占满一行 */
 @media (max-width: 640px) {
   .magnet-page {
     padding: 18px 12px calc(16px + env(safe-area-inset-bottom, 0px));
-  }
-
-  .magnet-page__icon {
-    width: 40px;
-    height: 40px;
-    font-size: 16px;
-  }
-
-  .magnet-page__title {
-    font-size: 18px;
-  }
-
-  .magnet-page__actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .magnet-page__actions .btn {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .magnet-page__link {
-    grid-column: 1 / -1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 30px;
-    padding: 4px 9px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface);
-    font-size: 13px;
-  }
-
-  .magnet-page__link:active {
-    background: var(--surface-sunken);
   }
 }
 </style>

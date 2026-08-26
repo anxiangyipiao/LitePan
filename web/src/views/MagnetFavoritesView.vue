@@ -10,6 +10,7 @@ import { toast, copyTextToClipboard } from "@/composables/useToast";
 import { confirm } from "@/composables/useConfirm";
 import { useMagnetFavorites } from "@/composables/useMagnetFavorites";
 import type { MagnetFavorite } from "@/api/magnetFavorites";
+import "@/styles/magnet.css";
 
 const { items, loading, refresh, unfavorite } = useMagnetFavorites();
 
@@ -107,10 +108,10 @@ async function remove(r: MagnetFavorite) {
       </div>
     </header>
 
-    <p v-if="loading && !sortedItems.length" class="magnet-page__loading">
+    <div v-if="loading && !sortedItems.length" class="magnet-page__loading">
       <BusySpinner :size="22" />
       <span>正在加载收藏…</span>
-    </p>
+    </div>
 
     <div v-else-if="!sortedItems.length" class="magnet-page__empty">
       <i class="fa-regular fa-star" aria-hidden="true"></i>
@@ -184,7 +185,11 @@ async function remove(r: MagnetFavorite) {
 </template>
 
 <style scoped>
-.magnet-page__hero--favorites {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
+/* favorites 页容器：跟随 hub panel 全宽 */
+.magnet-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 28px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
 }
 </style>
