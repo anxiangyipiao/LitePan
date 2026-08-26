@@ -526,7 +526,7 @@ onDeactivated(stopPolling);
   padding: 48px 0;
 }
 
-/* 订阅表格：固定布局，操作列固定 160px，其他列按比例分剩余空间，确保不溢出容器 */
+/* 订阅表格：固定布局，操作列固定 200px，其他列按比例分剩余空间，确保不溢出容器 */
 .admin-panel-table-wrap .admin-table {
   table-layout: fixed;
   width: 100%;
@@ -537,31 +537,36 @@ onDeactivated(stopPolling);
   overflow-x: visible;
 }
 
-/* 固定列宽：操作列 160px，其他列基于「容器宽 - 160px」按百分比分配
-   这样总宽度永远 = 容器宽，不会溢出 */
+/* 关键：去掉 admin-table th 的 nowrap，否则表头文字会撑破列宽导致整表溢出 */
+.admin-panel-table-wrap .admin-table th {
+  white-space: normal;
+}
+
+/* 固定列宽：操作列 200px（容纳 4 个 34x34 按钮 + 间距 + td padding），
+   其他列基于「容器宽 - 200px」按比例分配，总宽度永远 = 容器宽 */
 .subscribe-page__th:nth-child(1),
 .subscribe-page__td-name {
-  width: calc((100% - 160px) * 0.32);
+  width: calc((100% - 200px) * 0.32);
 }
 
 .subscribe-page__th:nth-child(2),
 .subscribe-page__td-trunc:nth-child(2) {
-  width: calc((100% - 160px) * 0.22);
+  width: calc((100% - 200px) * 0.22);
 }
 
 .subscribe-page__th:nth-child(3),
 .subscribe-page__td-trunc:nth-child(3) {
-  width: calc((100% - 160px) * 0.22);
+  width: calc((100% - 200px) * 0.22);
 }
 
 .subscribe-page__th:nth-child(4),
 .subscribe-page__td-nowrap:nth-child(4) {
-  width: calc((100% - 160px) * 0.10);
+  width: calc((100% - 200px) * 0.10);
 }
 
 .subscribe-page__th:nth-child(5),
 .subscribe-page__td-nowrap:nth-child(5) {
-  width: calc((100% - 160px) * 0.14);
+  width: calc((100% - 200px) * 0.14);
 }
 
 .subscribe-page__td-name {
@@ -634,10 +639,10 @@ onDeactivated(stopPolling);
   gap: 4px;
 }
 
-/* 操作列：固定 160px，容纳 4 个按钮 */
+/* 操作列：固定 200px，容纳 4 个 34x34 按钮 + 间距 + td padding */
 .subscribe-page__th-actions,
 .subscribe-page__td-actions {
-  width: 160px;
+  width: 200px;
   white-space: nowrap;
 }
 
