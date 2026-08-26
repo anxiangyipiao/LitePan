@@ -526,10 +526,10 @@ onDeactivated(stopPolling);
   padding: 48px 0;
 }
 
-/* 订阅表格：固定布局 + 列宽，避免内容把表撑出容器 */
+/* 订阅表格：固定布局 + 列宽，去掉 min-width 限宽让表格跟 panel 一起撑满父容器 */
 .admin-panel-table-wrap .admin-table {
   table-layout: fixed;
-  min-width: 900px;
+  width: 100%;
 }
 
 /* 表格容器：窄屏支持水平滚动，避免内容溢出 */
@@ -573,7 +573,7 @@ onDeactivated(stopPolling);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 190px;
+  max-width: 320px;
 }
 
 .subscribe-page__feed {
@@ -582,7 +582,7 @@ onDeactivated(stopPolling);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 190px;
+  max-width: 320px;
 }
 
 .subscribe-page__cell {
@@ -597,7 +597,7 @@ onDeactivated(stopPolling);
 
 .subscribe-page__td-trunc .subscribe-page__cell {
   display: block;
-  max-width: 150px;
+  max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
