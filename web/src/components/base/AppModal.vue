@@ -11,8 +11,10 @@ const props = withDefaults(
     bare?: boolean;
     // nested：叠在另一层弹窗之上（目录选择等）。
     nested?: boolean;
+    // fullscreen：铺满整个视口，不带圆角、固定宽度限制。
+    fullscreen?: boolean;
   }>(),
-  { title: "", size: "md", bare: false, nested: false },
+  { title: "", size: "md", bare: false, nested: false, fullscreen: false },
 );
 const emit = defineEmits<{ close: [] }>();
 
@@ -51,7 +53,7 @@ onUnmounted(() => {
         <div class="overlay__center">
           <div
             class="modal"
-            :class="bare ? 'modal--bare' : `modal--${size}`"
+            :class="[bare ? 'modal--bare' : `modal--${size}`, { 'modal--fullscreen': fullscreen }]"
             role="dialog"
           >
             <template v-if="bare">
@@ -142,6 +144,22 @@ onUnmounted(() => {
   width: auto;
   max-width: min(94vw, 960px);
   overflow: visible;
+}
+.modal--fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  border-radius: 0;
+  flex-shrink: 0;
+}
+.modal--fullscreen .modal__body {
+  flex: 1 1 auto;
+  overflow: hidden;
+  padding: 20px 24px;
+}
+.modal--fullscreen .overlay__center {
+  padding: 0;
 }
 
 .modal__head {

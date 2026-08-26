@@ -22,6 +22,7 @@ const qbPushing = ref<Record<number, boolean>>({});
 const offlineOpen = ref(false);
 const offlineMagnet = ref("");
 const offlineName = ref("");
+const isFullscreen = ref(false);
 
 watch(
   () => props.open,
@@ -102,7 +103,28 @@ function formatDate(unix: number): string {
 </script>
 
 <template>
-  <AppModal :open="open" title="磁力搜索" size="lg" @close="emit('close')">
+  <AppModal
+    :open="open"
+    title="磁力搜索"
+    size="lg"
+    :fullscreen="isFullscreen"
+    @close="emit('close')"
+  >
+    <template #header>
+      <h3 class="modal__title">磁力搜索</h3>
+      <div class="magnet-search__header-actions">
+        <button
+          type="button"
+          class="magnet-search__fs-btn"
+          :title="isFullscreen ? '退出全屏' : '全屏'"
+          @click.stop="isFullscreen = !isFullscreen"
+        >
+          <i :class="isFullscreen ? 'fa-solid fa-compress' : 'fa-solid fa-expand'" aria-hidden="true"></i>
+        </button>
+        <button class="modal__close" aria-label="关闭" @click="emit('close')">×</button>
+      </div>
+    </template>
+
     <div class="magnet-search">
       <div class="magnet-search__bar">
         <input
@@ -173,7 +195,7 @@ function formatDate(unix: number): string {
       </ul>
     </div>
   </AppModal>
-    <MagnetOfflineModal :open="offlineOpen" :magnet="offlineMagnet" :magnet-name="offlineName" @close="offlineOpen = false" />
+  <MagnetOfflineModal :open="offlineOpen" :magnet="offlineMagnet" :magnet-name="offlineName" @close="offlineOpen = false" />
 </template>
 
 <style scoped>
@@ -289,5 +311,38 @@ function formatDate(unix: number): string {
   font-size: 13px;
   text-decoration: none;
   white-space: nowrap;
+}
+
+.magnet-search__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.magnet-search__fs-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+.magnet-search__fs-btn:hover {
+  color: var(--text);
+  background: var(--surface-sunken);
+}
+
+:deep(.modal--fullscreen) .magnet-search {
+  max-height: calc(100vh - 120px);
+}
+:deep(.modal--fullscreen) .magnet-search__list {
+  max-height: calc(100vh - 200px);
+  min-height: 0;
 }
 </style>
