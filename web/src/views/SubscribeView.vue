@@ -505,10 +505,23 @@ onDeactivated(stopPolling);
   padding: 48px 0;
 }
 
-/* 订阅表格：固定布局，操作列固定 200px，其他列按比例分剩余空间，确保不溢出容器 */
+/* 订阅表格：固定布局 + box-sizing border-box，避免 padding 撑破列宽 */
+.admin-panel-table-wrap {
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow: hidden;
+}
+
 .admin-panel-table-wrap .admin-table {
   table-layout: fixed;
   width: 100%;
+  border-collapse: collapse;
+  box-sizing: border-box;
+}
+
+.admin-panel-table-wrap .admin-table th,
+.admin-panel-table-wrap .admin-table td {
+  box-sizing: border-box;
 }
 
 /* 表格容器不再保留横向滚动，列宽由 calc 严格控制 */
