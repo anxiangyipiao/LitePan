@@ -105,8 +105,8 @@ type rssFeed struct {
 	} `xml:"channel"`
 }
 
-// rssItemXML 把整个 <item> 节点收为 rawXML，再用正则抽取带前缀的
-// nyaa:infoHash / nyaa:seeders / torrent:magnetURI 等扩展字段。
+// rssItemXML 用 ,innerxml 捕获整个 <item> 节点的全部原始 XML（含命名空间化元素），
+// 再用正则抽取带前缀的 nyaa:infoHash / nyaa:seeders / torrent:magnetURI 等扩展字段。
 // 这样做可以同时兼容：原始 sukebei.nyaa.si（命名空间 https://nyaa.si/xmlns/nyaa）、
 // nyaa.net（https://nyaa.net/xmlns/nyaa）、sukebei.cn.nyaa.net
 // （https://sukebei.nyaa.net/xmlns/nyaa），以及任何未声明命名空间的情况。
@@ -117,9 +117,9 @@ type rssItemXML struct {
 	PubDate     string  `xml:"pubDate"`
 	Enclosure   rssEncl `xml:"enclosure"`
 	Description rawXML  `xml:"description"`
-	// 兜底：标准库 encoding/xml 对带命名空间的元素需要显式声明，
-	// 这里用 ,any 把所有未匹配元素原样收下。
-	Extras []rawXML `xml:",any"`
+	// ,innerxml 把 <item>...</item> 内部的全部子节点原样捕获成字符串，
+	// 避免标准库对带命名空间元素需要显式声明的问题。
+	Inner string `xml:",innerxml"`
 }
 
 type rssGUID struct {
@@ -218,12 +218,12 @@ func parseRSS(data []byte) (string, []FeedItem, error) {
 	}
 	items := make([]FeedItem, 0, len(feed.Channel.Items))
 	for _, it := range feed.Channel.Items {
-		magnetURI, infoHash := extractNyaaExt(it.Extras)
+		magnetURI, nyaaInfoHash := extractNyaaExt(it.Inner)
 		torrentURL := pickTorrentURL(torrentSources{
 			enclosureURL: it.Enclosure.URL,
 			link:         it.Link,
 			magnetURI:    magnetURI,
-			infoHash:     infoHash,
+			infoHash:     nyaaInfoHash,
 			description:  it.Description.Data,
 			title:        it.Title,
 		})
@@ -405,24 +405,18 @@ var nyaaMagnetURIRe = regexp.MustCompile(`(?is)<[a-zA-Z_][\w.-]*:magnetURI[^>]*>
 // 值必须是 32 位 base32 或 40 位 hex。
 var nyaaInfoHashRe = regexp.MustCompile(`(?is)<[a-zA-Z_][\w.-]*:infoHash[^>]*>\s*([0-9a-fA-F]{32}|[A-Za-z0-9]{40})\s*</[a-zA-Z_][\w.-]*:infoHash>`)
 
-// extractNyaaExt 从 rawXML 抓取 <item> 内未能通过 struct tag 命中的元素，
+// extractNyaaExt 从 <item> 的 innerxml 字符串中用正则抓取带前缀的
+// nyaa:infoHash / torrent:magnetURI 等扩展字段。
 // 返回 (magnetURI, infoHash)。任一未命中则为空串。
-func extractNyaaExt(extras []rawXML) (magnetURI, infoHash string) {
-	for i := range extras {
-		e := &extras[i]
-		if magnetURI != "" && infoHash != "" {
-			return
-		}
-		if magnetURI == "" {
-			if m := nyaaMagnetURIRe.FindStringSubmatch(e.Data); m != nil {
-				magnetURI = strings.TrimSpace(html.UnescapeString(m[1]))
-			}
-		}
-		if infoHash == "" {
-			if m := nyaaInfoHashRe.FindStringSubmatch(e.Data); m != nil {
-				infoHash = strings.TrimSpace(m[1])
-			}
-		}
+func extractNyaaExt(innerXML string) (magnetURI, infoHash string) {
+	if innerXML == "" {
+		return
+	}
+	if m := nyaaMagnetURIRe.FindStringSubmatch(innerXML); m != nil {
+		magnetURI = strings.TrimSpace(html.UnescapeString(m[1]))
+	}
+	if m := nyaaInfoHashRe.FindStringSubmatch(innerXML); m != nil {
+		infoHash = strings.TrimSpace(m[1])
 	}
 	return
 }
