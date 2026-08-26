@@ -505,7 +505,7 @@ onDeactivated(stopPolling);
   padding: 48px 0;
 }
 
-/* 订阅表格：固定布局 + box-sizing border-box，避免 padding 撑破列宽 */
+/* 订阅表格：auto 布局让列宽根据内容自适应，box-sizing border-box 防 padding 撑破 */
 .admin-panel-table-wrap {
   box-sizing: border-box;
   max-width: 100%;
@@ -513,7 +513,7 @@ onDeactivated(stopPolling);
 }
 
 .admin-panel-table-wrap .admin-table {
-  table-layout: fixed;
+  table-layout: auto;
   width: 100%;
   border-collapse: collapse;
   box-sizing: border-box;
@@ -522,37 +522,39 @@ onDeactivated(stopPolling);
 .admin-panel-table-wrap .admin-table th,
 .admin-panel-table-wrap .admin-table td {
   box-sizing: border-box;
+  max-width: 0;
+  overflow: hidden;
 }
 
-/* 表格容器不再保留横向滚动，列宽由 calc 严格控制 */
+/* 表格容器不再保留横向滚动 */
 .admin-panel-table-wrap .table-wrap {
   overflow-x: visible;
 }
 
-/* 关键：去掉 admin-table th 的 nowrap，否则表头文字会撑破列宽导致整表溢出 */
-.admin-panel-table-wrap .admin-table th {
-  white-space: normal;
-}
-
-/* 表格列宽：5 列按 20/20/20/5/35 归一化分配（总和 100%） */
+/* 表格列宽：auto 布局 + max-width 约束，列宽按内容自适应且不会撑破容器 */
 .subscribe-page__th:nth-child(1),
 .subscribe-page__td-name {
-  width: 20%;
+  max-width: 360px;
 }
 
 .subscribe-page__th:nth-child(2),
 .subscribe-page__td-trunc:nth-child(2) {
-  width: 20%;
+  max-width: 280px;
 }
 
 .subscribe-page__th:nth-child(3),
 .subscribe-page__td-trunc:nth-child(3) {
-  width: 20%;
+  max-width: 280px;
 }
 
 .subscribe-page__th:nth-child(4),
 .subscribe-page__td-nowrap:nth-child(4) {
-  width: 5%;
+  max-width: 80px;
+}
+
+.subscribe-page__th:nth-child(5),
+.subscribe-page__td-actions {
+  max-width: 220px;
 }
 
 .subscribe-page__td-name {
@@ -617,17 +619,14 @@ onDeactivated(stopPolling);
   margin-left: auto;
 }
 
-/* 操作列：35% 比例，与其他列一起 5 列总和 100% */
+/* 操作列：auto 布局下自然宽度（auto + max-width 220px） */
 .subscribe-page__th-actions,
 .subscribe-page__td-actions {
-  width: 35%;
   white-space: nowrap;
-  /* 让 td 内容可以靠右对齐而不被拉伸到 35% 宽度 */
   text-align: right;
 }
 
 .subscribe-page__td-actions {
-  /* td 的内层 div 用 inline-flex 收缩宽度到只装按钮 */
   vertical-align: middle;
 }
 
