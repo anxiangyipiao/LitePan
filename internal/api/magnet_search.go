@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"litepan/internal/cltt2"
 	"litepan/internal/domain"
 	"litepan/internal/settings"
 	"litepan/internal/sukebei"
@@ -59,6 +60,17 @@ func (h *Handler) magnetSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.Contains(siteURL, "cltt2") {
+		cc := cltt2.NewClient(cltt2.Options{BaseURL: siteURL, ProxyURL: proxy})
+		results, err := cc.Search(r.Context(), query, limit)
+		if err != nil {
+			h.log.Warn("磁力搜索失败", "q", query, "site", siteURL, "err", err)
+			writeErr(w, domain.Errorf(domain.CodeDriverError, "磁力搜索失败：%v", err))
+			return
+		}
+		writeOK(w, results)
+		return
+	}
 	c := sukebei.NewClient(sukebei.Options{BaseURL: siteURL, ProxyURL: proxy})
 	results, serr := c.Search(r.Context(), query, limit)
 	if serr != nil {
