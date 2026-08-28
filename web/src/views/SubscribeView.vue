@@ -523,25 +523,36 @@ onDeactivated(stopPolling);
   box-sizing: border-box;
 }
 
-/* 表格容器 */
+/* 表格容器：恢复横向滚动，避免窄屏下操作列被裁出屏外 */
 .admin-panel-table-wrap .table-wrap {
-  overflow-x: visible;
+  overflow-x: auto;
 }
 
-/* 表格列宽：名称 20% / 规则 20% / 目标 20% / 间隔 5% / 操作 25%（总和 90%，留 10% 给 panel padding） */
+/* 表格列宽：参照 strm-task-table 做法，内容列压缩，操作列给足空间 */
+.admin-table {
+  table-layout: fixed;
+}
+
+/* 内容列：百分比 + overflow:hidden 压缩，防止撑破操作列 */
 .subscribe-page__th:nth-child(1),
 .subscribe-page__td-name {
-  width: 20%;
+  width: 15%;
+  overflow: hidden;
+  max-width: 0;
 }
 
 .subscribe-page__th:nth-child(2),
 .subscribe-page__td-trunc:nth-child(2) {
-  width: 20%;
+  width: 12%;
+  overflow: hidden;
+  max-width: 0;
 }
 
 .subscribe-page__th:nth-child(3),
 .subscribe-page__td-trunc:nth-child(3) {
-  width: 20%;
+  width: 12%;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .subscribe-page__th:nth-child(4),
@@ -549,9 +560,12 @@ onDeactivated(stopPolling);
   width: 5%;
 }
 
+/* 操作列：参照 strm-task-table，给 40% + min-width:200px */
 .subscribe-page__th:nth-child(5),
 .subscribe-page__td-actions {
-  width: 25%;
+  width: 40%;
+  min-width: 200px;
+  text-align: left;
 }
 
 .subscribe-page__td-name {
@@ -590,34 +604,25 @@ onDeactivated(stopPolling);
   display: block;
   word-break: break-word;
   white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .subscribe-page__td-nowrap {
   white-space: nowrap;
 }
 
-.subscribe-page__td-actions {
-  text-align: left;
-}
-
 .subscribe-page__th-actions {
   text-align: left;
 }
 
-
 .subscribe-page__actions {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
   justify-content: flex-start;
-  flex-wrap: nowrap;
+  align-items: center;
   gap: 4px;
-}
-
-/* 操作列：auto 布局下自然宽度，左对齐 */
-.subscribe-page__th-actions,
-.subscribe-page__td-actions {
-  white-space: nowrap;
-  text-align: left;
 }
 
 .subscribe-page__td-actions {
