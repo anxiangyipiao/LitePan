@@ -533,24 +533,24 @@ onDeactivated(stopPolling);
   table-layout: fixed;
 }
 
-/* 内容列：百分比 + overflow:hidden 压缩，防止撑破操作列 */
+/* 内容列：百分比 + overflow:hidden 压缩，把空间让给操作列 */
 .subscribe-page__th:nth-child(1),
 .subscribe-page__td-name {
-  width: 15%;
+  width: 10%;
   overflow: hidden;
   max-width: 0;
 }
 
 .subscribe-page__th:nth-child(2),
 .subscribe-page__td-trunc:nth-child(2) {
-  width: 12%;
+  width: 10%;
   overflow: hidden;
   max-width: 0;
 }
 
 .subscribe-page__th:nth-child(3),
 .subscribe-page__td-trunc:nth-child(3) {
-  width: 12%;
+  width: 10%;
   overflow: hidden;
   min-width: 0;
 }
@@ -560,10 +560,10 @@ onDeactivated(stopPolling);
   width: 5%;
 }
 
-/* 操作列：参照 strm-task-table，给 40% + min-width:200px */
+/* 操作列：吃满剩余空间，min-width:200px 兜底，避免窄屏被裁 */
 .subscribe-page__th:nth-child(5),
 .subscribe-page__td-actions {
-  width: 40%;
+  width: 65%;
   min-width: 200px;
   text-align: left;
 }
