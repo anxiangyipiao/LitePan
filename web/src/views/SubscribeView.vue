@@ -523,9 +523,9 @@ onDeactivated(stopPolling);
   box-sizing: border-box;
 }
 
-/* 表格容器：恢复横向滚动，避免窄屏下操作列被裁出屏外 */
+/* 表格容器：去掉横向滚动，操作列按钮在窄屏自动换行，不撑破屏宽 */
 .admin-panel-table-wrap .table-wrap {
-  overflow-x: auto;
+  overflow-x: visible;
 }
 
 /* 表格列宽：参照 strm-task-table 做法，内容列压缩，操作列给足空间 */
@@ -560,11 +560,10 @@ onDeactivated(stopPolling);
   width: 5%;
 }
 
-/* 操作列：吃满剩余空间，min-width:200px 兜底，避免窄屏被裁 */
+/* 操作列：吃满剩余空间，不设 min-width 让窄屏按钮自动换行 */
 .subscribe-page__th:nth-child(5),
 .subscribe-page__td-actions {
   width: 65%;
-  min-width: 200px;
   text-align: left;
 }
 
