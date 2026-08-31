@@ -95,10 +95,6 @@ function ruleLabel(sub: RSSSubscription): string {
   return parts.join(" · ") || "不限";
 }
 
-function intervalLabel(sub: RSSSubscription): string {
-  return sub.fetch_interval_minutes > 0 ? `${sub.fetch_interval_minutes}m` : "默认";
-}
-
 function openCreate() {
   editing.value = null;
   modalOpen.value = true;
@@ -297,7 +293,6 @@ onDeactivated(stopPolling);
               <th>名称</th>
               <th>规则</th>
               <th>目标</th>
-              <th>间隔</th>
               <th class="subscribe-page__th-actions">操作</th>
             </tr>
           </thead>
@@ -312,9 +307,6 @@ onDeactivated(stopPolling);
               </td>
               <td class="subscribe-page__td-trunc" :title="targetLabel(sub)">
                 <span class="subscribe-page__cell">{{ targetLabel(sub) }}</span>
-              </td>
-              <td class="subscribe-page__td-nowrap">
-                <span class="subscribe-page__cell">{{ intervalLabel(sub) }}</span>
               </td>
               <td class="subscribe-page__td-nowrap subscribe-page__td-actions">
                 <div class="subscribe-page__actions">
@@ -555,15 +547,10 @@ onDeactivated(stopPolling);
   min-width: 0;
 }
 
-.subscribe-page__th:nth-child(4),
-.subscribe-page__td-nowrap:nth-child(4) {
-  width: 5%;
-}
-
 /* 操作列：吃满剩余空间，不设 min-width 让窄屏按钮自动换行 */
-.subscribe-page__th:nth-child(5),
+.subscribe-page__th:nth-child(4),
 .subscribe-page__td-actions {
-  width: 65%;
+  width: 70%;
   text-align: left;
 }
 
