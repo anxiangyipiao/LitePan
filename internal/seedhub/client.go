@@ -114,20 +114,24 @@ func (c *Client) Search(ctx context.Context, query string, limit int) ([]Result,
 	}
 
 	// 2. 并发抓详情页 + magnet
-	results := make([]Result, len(movies))
+	var mu sync.Mutex
+	var allResults []Result
 	var wg sync.WaitGroup
-	for i, m := range movies {
+	for _, m := range movies {
 		wg.Add(1)
-		go func(idx int, mv movieCard) {
+		go func(mv movieCard) {
 			defer wg.Done()
-			results[idx] = c.fetchMovieMagnet(ctx, mv)
-		}(i, m)
+			seeds := c.fetchMovieSeeds(ctx, mv)
+			mu.Lock()
+			allResults = append(allResults, seeds...)
+			mu.Unlock()
+		}(m)
 	}
 	wg.Wait()
 
 	// 过滤掉没有 magnet 的结果
-	out := make([]Result, 0, len(results))
-	for _, r := range results {
+	out := make([]Result, 0, len(allResults))
+	for _, r := range allResults {
 		if r.Magnet != "" {
 			out = append(out, r)
 		}
@@ -141,43 +145,47 @@ type movieCard struct {
 	genre string
 }
 
-// fetchMovieMagnet 对一部电影：抓详情页取 seed_id，再抓 /link_start/ 解 base64 magnet。
-func (c *Client) fetchMovieMagnet(ctx context.Context, mv movieCard) Result {
-	r := Result{
-		ID:       mv.id,
-		Name:     mv.title,
-		Category: mv.genre,
-		ViewURL:  c.baseURL + "/movies/" + strconv.FormatInt(mv.id, 10) + "/",
-	}
-
-	// 详情页 → seed_id
+// fetchMovieSeeds 对一部电影：抓详情页取所有 seed_id，再并发抓 magnet。
+func (c *Client) fetchMovieSeeds(ctx context.Context, mv movieCard) []Result {
 	detailURL := c.baseURL + "/movies/" + strconv.FormatInt(mv.id, 10) + "/"
 	body, err := c.get(ctx, detailURL)
 	if err != nil {
-		return r
+		return nil
 	}
-	seedID, seedTitle, seedSize := parseDetailFirstSeed(body)
-	if seedID == "" {
-		return r
-	}
-	r.Size = parseSizeStr(seedSize)
-	if t := strings.TrimSpace(seedTitle); t != "" {
-		r.Name = t
+	seeds := parseDetailSeeds(body)
+	if len(seeds) == 0 {
+		return nil
 	}
 
-	// /link_start/ → base64 magnet
-	linkURL := c.baseURL + "/link_start/?seed_id=" + seedID + "&movie_title=" + url.PathEscape(mv.title)
-	body, err = c.get(ctx, linkURL)
-	if err != nil {
-		return r
+	// 并发抓每个 seed 的 magnet
+	results := make([]Result, len(seeds))
+	var wg sync.WaitGroup
+	for i, s := range seeds {
+		wg.Add(1)
+		go func(idx int, si seedInfo) {
+			defer wg.Done()
+			linkURL := c.baseURL + "/link_start/?seed_id=" + si.seedID + "&movie_title=" + url.PathEscape(mv.title)
+			linkBody, err := c.get(ctx, linkURL)
+			if err != nil {
+				return
+			}
+			magnet := extractMagnetFromBody(linkBody)
+			if magnet == "" {
+				return
+			}
+			results[idx] = Result{
+				ID:       mv.id,
+				Name:     si.title,
+				Size:     parseSizeStr(si.size),
+				Hash:     magnetHash(magnet),
+				Magnet:   magnet,
+				ViewURL:  c.baseURL + "/movies/" + strconv.FormatInt(mv.id, 10) + "/",
+				Category: mv.genre,
+			}
+		}(i, s)
 	}
-	magnet := extractMagnetFromBody(body)
-	if magnet == "" {
-		return r
-	}
-	r.Magnet = magnet
-	r.Hash = magnetHash(magnet)
-	return r
+	wg.Wait()
+	return results
 }
 
 // parseSearchHTML 从搜索页 HTML 提取电影卡片列表。
@@ -238,46 +246,48 @@ func parseCoverDiv(n *html.Node) movieCard {
 	return mc
 }
 
-// parseDetailFirstSeed 从详情页 HTML 提取第一个 seed 的 seed_id、标题、大小。
-func parseDetailFirstSeed(data []byte) (seedID, title, size string) {
+// seedInfo 是详情页中单个种子的信息。
+type seedInfo struct {
+	seedID string
+	title  string
+	size   string
+}
+
+// parseDetailSeeds 从详情页 HTML 提取所有 seed 的 seed_id、标题、大小。
+func parseDetailSeeds(data []byte) []seedInfo {
 	doc, err := html.Parse(bytes.NewReader(data))
 	if err != nil {
-		return "", "", ""
+		return nil
 	}
-	var found bool
+	var seeds []seedInfo
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
-		if found {
-			return
-		}
 		if n.Type == html.ElementNode && n.Data == "ul" && attrContainsClass(n, "seeds") {
 			for li := n.FirstChild; li != nil; li = li.NextSibling {
 				if li.Type != html.ElementNode || li.Data != "li" {
 					continue
 				}
-				for a := li.FirstChild; a != nil; a = a.NextSibling {
-					if a.Type != html.ElementNode || a.Data != "a" {
+				var si seedInfo
+				for c := li.FirstChild; c != nil; c = c.NextSibling {
+					if c.Type != html.ElementNode {
 						continue
 					}
-					href := attrVal(a, "href")
-					if strings.Contains(href, "seed_id=") {
-						seedID = extractQueryParam(href, "seed_id")
-						title = strings.TrimSpace(attrVal(a, "title"))
-						if title == "" {
-							title = strings.TrimSpace(nodeText(a))
+					if c.Data == "a" {
+						href := attrVal(c, "href")
+						if strings.Contains(href, "seed_id=") {
+							si.seedID = extractQueryParam(href, "seed_id")
+							si.title = strings.TrimSpace(attrVal(c, "title"))
+							if si.title == "" {
+								si.title = strings.TrimSpace(nodeText(c))
+							}
 						}
-						found = true
-						break
+					}
+					if c.Data == "code" && attrContainsClass(c, "size") {
+						si.size = strings.TrimSpace(nodeText(c))
 					}
 				}
-				if found {
-					// 提取大小：<code class="size">6.94G</code>
-					for code := li.FirstChild; code != nil; code = code.NextSibling {
-						if code.Type == html.ElementNode && code.Data == "code" && attrContainsClass(code, "size") {
-							size = strings.TrimSpace(nodeText(code))
-						}
-					}
-					break
+				if si.seedID != "" {
+					seeds = append(seeds, si)
 				}
 			}
 			return
@@ -287,7 +297,7 @@ func parseDetailFirstSeed(data []byte) (seedID, title, size string) {
 		}
 	}
 	walk(doc)
-	return
+	return seeds
 }
 
 // extractMagnetFromBody 从 /link_start/ 页面 JS 中提取 base64 编码的 magnet。
