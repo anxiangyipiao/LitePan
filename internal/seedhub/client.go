@@ -10,6 +10,7 @@ package seedhub
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -21,8 +22,6 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
-
-	"litepan/internal/httpx"
 )
 
 const (
@@ -68,12 +67,19 @@ func NewClient(opts Options) *Client {
 			proxy = http.ProxyURL(parsed)
 		}
 	}
+	// 自定义 transport：强制 TLS 1.2 + 禁用 keep-alive，避免 EOF
+	tr := &http.Transport{
+		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12},
+		DisableKeepAlives:   true,
+		MaxIdleConnsPerHost: 0,
+		Proxy:               proxy,
+	}
 	return &Client{
 		baseURL: baseURL,
-		http: httpx.NewClient(httpx.ClientOptions{
-			Timeout: timeout,
-			Proxy:   proxy,
-		}),
+		http: &http.Client{
+			Timeout:   timeout,
+			Transport: tr,
+		},
 	}
 }
 
@@ -311,28 +317,41 @@ func extractMagnetFromBody(data []byte) string {
 }
 
 func (c *Client) get(ctx context.Context, rawURL string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, err
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(time.Duration(attempt) * time.Second):
+			}
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36")
+		resp, err := c.http.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		data, err := io.ReadAll(io.LimitReader(resp.Body, maxHTMLBytes+1))
+		_ = resp.Body.Close()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return nil, fmt.Errorf("seedhub: HTTP %d", resp.StatusCode)
+		}
+		if len(data) > maxHTMLBytes {
+			return nil, fmt.Errorf("seedhub: 页面过大")
+		}
+		return data, nil
 	}
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36")
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("seedhub: HTTP %d", resp.StatusCode)
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxHTMLBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(data) > maxHTMLBytes {
-		return nil, fmt.Errorf("seedhub: 页面过大")
-	}
-	return data, nil
+	return nil, fmt.Errorf("seedhub: 请求失败（重试3次）：%w", lastErr)
 }
 
 // --- HTML helpers ---
