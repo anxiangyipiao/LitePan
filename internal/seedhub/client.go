@@ -67,9 +67,9 @@ func NewClient(opts Options) *Client {
 			proxy = http.ProxyURL(parsed)
 		}
 	}
-	// 自定义 transport：强制 TLS 1.2 + 禁用 keep-alive，避免 EOF
+	// 自定义 transport：宽松 TLS 配置 + 禁用 keep-alive，兼容各种代理/CDN 环境
 	tr := &http.Transport{
-		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12},
+		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
 		DisableKeepAlives:   true,
 		MaxIdleConnsPerHost: 0,
 		Proxy:               proxy,
@@ -317,6 +317,18 @@ func extractMagnetFromBody(data []byte) string {
 }
 
 func (c *Client) get(ctx context.Context, rawURL string) ([]byte, error) {
+	data, err := c.doGet(ctx, rawURL)
+	if err != nil && strings.HasPrefix(rawURL, "https://") {
+		// HTTPS 失败，降级到 HTTP 重试（服务器 TLS 兼容性问题）
+		httpURL := "http://" + rawURL[len("https://"):]
+		if alt, altErr := c.doGet(ctx, httpURL); altErr == nil {
+			return alt, nil
+		}
+	}
+	return data, err
+}
+
+func (c *Client) doGet(ctx context.Context, rawURL string) ([]byte, error) {
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
