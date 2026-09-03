@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"litepan/internal/btkitty"
 	"litepan/internal/btfox"
 	"litepan/internal/cltt2"
 	"litepan/internal/domain"
@@ -63,6 +64,17 @@ func (h *Handler) magnetSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.Contains(siteURL, "btkitty") {
+		bc := btkitty.NewClient(btkitty.Options{BaseURL: siteURL, ProxyURL: proxy})
+		results, err := bc.Search(r.Context(), query, limit)
+		if err != nil {
+			h.log.Warn("磁力搜索失败", "q", query, "site", siteURL, "err", err)
+			writeErr(w, domain.Errorf(domain.CodeDriverError, "磁力搜索失败：%v", err))
+			return
+		}
+		writeOK(w, results)
+		return
+	}
 	if strings.Contains(siteURL, "btfox") {
 		bc := btfox.NewClient(btfox.Options{BaseURL: siteURL, ProxyURL: proxy})
 		results, err := bc.Search(r.Context(), query, limit)
