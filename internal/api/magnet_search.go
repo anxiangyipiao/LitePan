@@ -10,6 +10,7 @@ import (
 	"litepan/internal/domain"
 	"litepan/internal/seedhub"
 	"litepan/internal/settings"
+	"litepan/internal/sobt"
 	"litepan/internal/sukebei"
 )
 
@@ -61,6 +62,17 @@ func (h *Handler) magnetSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.Contains(siteURL, "sobt") {
+		sc := sobt.NewClient(sobt.Options{BaseURL: siteURL, ProxyURL: proxy})
+		results, err := sc.Search(r.Context(), query, limit)
+		if err != nil {
+			h.log.Warn("磁力搜索失败", "q", query, "site", siteURL, "err", err)
+			writeErr(w, domain.Errorf(domain.CodeDriverError, "磁力搜索失败：%v", err))
+			return
+		}
+		writeOK(w, results)
+		return
+	}
 	if strings.Contains(siteURL, "seedhub") {
 		sc := seedhub.NewClient(seedhub.Options{BaseURL: siteURL, ProxyURL: proxy})
 		results, err := sc.Search(r.Context(), query, limit)
