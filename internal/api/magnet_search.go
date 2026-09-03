@@ -14,6 +14,7 @@ import (
 	"litepan/internal/settings"
 	"litepan/internal/sobt"
 	"litepan/internal/sukebei"
+	"litepan/internal/zzb"
 )
 
 // magnetSearchSiteDTO 是 /magnet-search/sites 的返回项，前端按此渲染 tab 栏。
@@ -64,6 +65,17 @@ func (h *Handler) magnetSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.Contains(siteURL, "zzb") || strings.Contains(siteURL, "zhongziba") || strings.Contains(siteURL, "seed8") {
+		zc := zzb.NewClient(zzb.Options{BaseURL: siteURL, ProxyURL: proxy})
+		results, err := zc.Search(r.Context(), query, limit)
+		if err != nil {
+			h.log.Warn("磁力搜索失败", "q", query, "site", siteURL, "err", err)
+			writeErr(w, domain.Errorf(domain.CodeDriverError, "磁力搜索失败：%v", err))
+			return
+		}
+		writeOK(w, results)
+		return
+	}
 	if strings.Contains(siteURL, "btkitty") {
 		bc := btkitty.NewClient(btkitty.Options{BaseURL: siteURL, ProxyURL: proxy})
 		results, err := bc.Search(r.Context(), query, limit)
