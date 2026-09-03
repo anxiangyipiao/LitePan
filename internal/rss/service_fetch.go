@@ -13,7 +13,7 @@ import (
 	"litepan/internal/offlinedownload"
 	"litepan/internal/qb"
 	"litepan/internal/settings"
-	"litepan/internal/sukebei"
+	"litepan/internal/magnet/sukebei"
 )
 
 // FetchNowResult 单次抓取的汇总，供手动「立即抓取」与调度器复用。

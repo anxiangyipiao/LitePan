@@ -6,17 +6,17 @@ import (
 	"strconv"
 	"strings"
 
-	"litepan/internal/btkitty"
-	"litepan/internal/btfox"
-	"litepan/internal/cilibao"
-	"litepan/internal/clm64"
-	"litepan/internal/cltt2"
 	"litepan/internal/domain"
-	"litepan/internal/seedhub"
+	"litepan/internal/magnet/btkitty"
+	"litepan/internal/magnet/btfox"
+	"litepan/internal/magnet/cilibao"
+	"litepan/internal/magnet/clm64"
+	"litepan/internal/magnet/cltt2"
+	"litepan/internal/magnet/seedhub"
+	"litepan/internal/magnet/sobt"
+	"litepan/internal/magnet/sukebei"
+	"litepan/internal/magnet/zzb"
 	"litepan/internal/settings"
-	"litepan/internal/sobt"
-	"litepan/internal/sukebei"
-	"litepan/internal/zzb"
 )
 
 // magnetSearchSiteDTO 是 /magnet-search/sites 的返回项，前端按此渲染 tab 栏。
