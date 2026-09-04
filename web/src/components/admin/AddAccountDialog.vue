@@ -5,7 +5,6 @@ import { useAccountsStore } from "@/stores/accounts";
 import { getApiErrorMessage } from "@/api/client";
 import type { Account, FieldSchema } from "@/api/types";
 import { toast } from "@/composables/useToast";
-import { useOAuthAuth } from "@/composables/useOAuthAuth";
 import AppModal from "@/components/base/AppModal.vue";
 import AppButton from "@/components/base/AppButton.vue";
 import AppInput from "@/components/base/AppInput.vue";
@@ -19,7 +18,6 @@ const emit = defineEmits<{ close: []; saved: [] }>();
 
 const store = useAccountsStore();
 const { drivers, accounts } = storeToRefs(store);
-const { loading: oauthLoading, run: runOAuth, cancel: cancelOAuth } = useOAuthAuth();
 
 const step = ref<1 | 2>(1);
 const driverType = ref("");
@@ -36,7 +34,6 @@ const isEdit = computed(() => props.editing !== null);
 const stepTitle = computed(() =>
   isEdit.value ? "编辑账号" : step.value === 1 ? "选择网盘驱动" : "配置账号信息",
 );
-const supportsOAuth = computed(() => Boolean(selectedDriver.value?.supports_oauth));
 const supportsQRLogin = computed(() => Boolean(selectedDriver.value?.supports_qr_login));
 const qrOpen = ref(false);
 
@@ -65,7 +62,6 @@ function initForm(fs: FieldSchema[], preset: Record<string, unknown> = {}) {
 }
 
 function resetDialog() {
-  cancelOAuth();
   step.value = 1;
   driverType.value = "";
   name.value = "";
@@ -77,7 +73,6 @@ watch(
   () => props.open,
   (open) => {
     if (!open) {
-      cancelOAuth();
       return;
     }
     store.loadDrivers();
@@ -101,7 +96,6 @@ watch(
 );
 
 function goPrevStep() {
-  cancelOAuth();
   formValues.value = {};
   step.value = 1;
 }
@@ -243,17 +237,6 @@ async function submit() {
   }
 }
 
-async function handleOAuth() {
-  if (!driverType.value) return;
-  const fieldNames = fields.value.map((f) => f.name);
-  try {
-    const filled = await runOAuth(driverType.value, fieldNames);
-    formValues.value = { ...formValues.value, ...filled };
-  } catch {
-    /* toast 已在 composable 内处理 */
-  }
-}
-
 function openQRLogin() {
   if (!driverType.value) return;
   qrOpen.value = true;
@@ -265,7 +248,6 @@ function onQRSuccess(credentials: Record<string, string>) {
 }
 
 function handleClose() {
-  cancelOAuth();
   qrOpen.value = false;
   emit("close");
 }
@@ -326,14 +308,6 @@ function handleClose() {
     <template v-if="step === 2" #footer>
       <div class="step-footer">
         <div class="step-footer__left">
-          <AppButton
-            v-if="supportsOAuth"
-            variant="primary"
-            :disabled="oauthLoading || submitting"
-            @click="handleOAuth"
-          >
-            {{ oauthLoading ? "正在获取…" : isEdit ? "重新获取 Token" : "自动获取 Token" }}
-          </AppButton>
           <AppButton
             v-if="supportsQRLogin"
             variant="primary"

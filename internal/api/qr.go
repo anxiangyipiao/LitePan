@@ -7,7 +7,6 @@ import (
 
 	"litepan/internal/domain"
 	"litepan/internal/driver"
-	"litepan/internal/settings"
 )
 
 type qrStartReq struct {
@@ -37,14 +36,7 @@ type qrPollResp struct {
 }
 
 func (h *Handler) qrEphemeralConfig() driver.EphemeralConfig {
-	return driver.EphemeralConfig{
-		OAuthServerURL: func(ctx context.Context) string {
-			if h.settings == nil {
-				return domain.NormalizeOAuthServerURL("")
-			}
-			return domain.NormalizeOAuthServerURL(h.settings.String(settings.KeyOAuthServerURL))
-		},
-	}
+	return driver.EphemeralConfig{}
 }
 
 func qrProvider(ctx context.Context, driverType string, cfg driver.EphemeralConfig) (driver.QRLoginProvider, func(context.Context), error) {

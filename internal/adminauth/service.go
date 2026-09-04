@@ -82,7 +82,6 @@ type SystemConfig struct {
 	IndexStrmAutoDetectEnabled bool    `json:"index_strm_auto_detect_enabled"`
 	MustChangePassword         bool    `json:"must_change_password"`
 	PasswordChangeReason       string  `json:"password_change_reason"`
-	OAuthServerURL             string  `json:"oauth_server_url,omitempty"`
 	UploadTaskConcurrency      int     `json:"upload_task_concurrency,omitempty"`
 	LogRetentionDays           int     `json:"log_retention_days,omitempty"`
 	AuthActiveRefreshEnabled   bool    `json:"auth_active_refresh_enabled,omitempty"`
@@ -102,7 +101,6 @@ type UpdateCredentialsRequest struct {
 	AdminHomeReturnMode        *string  `json:"admin_home_return_mode"`
 	HeaderEffectsEnabled       *bool    `json:"header_effects_enabled"`
 	IndexStrmAutoDetectEnabled *bool    `json:"index_strm_auto_detect_enabled"`
-	OAuthServerURL             string   `json:"oauth_server_url"`
 	UploadTaskConcurrency      *int     `json:"upload_task_concurrency"`
 	LogRetentionDays           *int     `json:"log_retention_days"`
 	AuthActiveRefreshEnabled   *bool    `json:"auth_active_refresh_enabled"`
@@ -389,7 +387,6 @@ func (s *Service) SystemConfig(ctx context.Context) SystemConfig {
 		IndexStrmAutoDetectEnabled: s.indexStrmAutoDetectEnabled(ctx),
 		MustChangePassword:         state.MustChangePassword,
 		PasswordChangeReason:       state.PasswordChangeReason,
-		OAuthServerURL:             s.configString(ctx, domain.SettingOAuthServerURL, domain.DefaultOAuthServerURL),
 		UploadTaskConcurrency:      s.configInt(ctx, "upload_task_concurrency", 3),
 		LogRetentionDays:           s.configInt(ctx, "log_retention_days", 30),
 		AuthActiveRefreshEnabled:   s.configBool(ctx, "auth_active_refresh_enabled", true),
@@ -487,13 +484,6 @@ func (s *Service) prepareCredentialUpdates(ctx context.Context, req UpdateCreden
 	}
 	if req.IndexStrmAutoDetectEnabled != nil {
 		updates = append(updates, configUpdate{key: KeyIndexStrmAutoDetectEnabled, value: boolString(*req.IndexStrmAutoDetectEnabled)})
-	}
-	if strings.TrimSpace(req.OAuthServerURL) != "" {
-		url := strings.TrimSuffix(strings.TrimSpace(req.OAuthServerURL), "/")
-		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-			return "", nil, domain.Errorf(domain.CodeValidation, "OAuth服务地址格式不正确，示例：https://litepan.top")
-		}
-		updates = append(updates, configUpdate{key: domain.SettingOAuthServerURL, value: url})
 	}
 	if req.UploadTaskConcurrency != nil {
 		if *req.UploadTaskConcurrency < 1 || *req.UploadTaskConcurrency > 5 {

@@ -17,8 +17,6 @@ type Driver struct {
 	add    Addition
 	client *http.Client
 
-	oauthBase string
-
 	intervalGate driver.RequestIntervalGate
 	persist      driver.AuthPersistFunc
 
@@ -41,7 +39,6 @@ var config = driver.Config{
 	CardLogo:       "/logos/baidu.png",
 	DefaultRoot:    "/",
 	AuthType:       driver.AuthToken,
-	OAuthName:      "百度网盘Open",
 	TokenLifetime:  30 * 24 * time.Hour,
 	RefreshAdvance: 10 * time.Hour,
 	ProvideHashes:  []string{"md5"},
@@ -54,8 +51,6 @@ func init() { driver.Register(New) }
 func (d *Driver) Config() driver.Config { return config }
 
 func (d *Driver) GetAddition() any { return &d.add }
-
-func (d *Driver) SetOAuthServer(baseURL string) { d.oauthBase = strings.TrimSpace(baseURL) }
 
 func (d *Driver) SetAuthCredentials(creds domain.AuthCredentials) {
 	d.mu.Lock()
@@ -247,7 +242,6 @@ var (
 	_ driver.FolderCreator            = (*Driver)(nil)
 	_ driver.LocalUploader            = (*Driver)(nil)
 	_ driver.AuthRefresher            = (*Driver)(nil)
-	_ driver.OAuthConsumer            = (*Driver)(nil)
 	_ driver.AuthCredentialConsumer   = (*Driver)(nil)
 	_ driver.AuthPersistConsumer      = (*Driver)(nil)
 	_ driver.ConnectionErrorExplainer = (*Driver)(nil)

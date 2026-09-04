@@ -22,7 +22,6 @@ type Driver struct {
 	add    Addition
 	client *http.Client
 
-	oauthBase    string
 	intervalGate driver.RequestIntervalGate
 	persist      driver.AuthPersistFunc
 
@@ -43,7 +42,6 @@ var config = driver.Config{
 	CardLogo:               "/logos/onedrive.png",
 	DefaultRoot:            "/",
 	AuthType:               driver.AuthToken,
-	OAuthName:              "OneDrive",
 	TokenLifetime:          time.Hour,
 	RefreshAdvance:         10 * time.Minute,
 	UploadConflictPolicies: []string{"overwrite", "rename", "skip", "fail"},
@@ -65,10 +63,6 @@ func (d *Driver) SetAuthCredentials(creds domain.AuthCredentials) {
 }
 
 func (d *Driver) SetAuthPersister(fn driver.AuthPersistFunc) { d.persist = fn }
-
-func (d *Driver) SetOAuthServer(baseURL string) {
-	d.oauthBase = strings.TrimRight(strings.TrimSpace(baseURL), "/")
-}
 
 func (d *Driver) SetRequestIntervalGate(gate driver.RequestIntervalGate) { d.intervalGate = gate }
 
@@ -172,7 +166,6 @@ var (
 	_ driver.Renamer                  = (*Driver)(nil)
 	_ driver.FolderCreator            = (*Driver)(nil)
 	_ driver.LocalUploader            = (*Driver)(nil)
-	_ driver.OAuthConsumer            = (*Driver)(nil)
 	_ driver.AuthRefresher            = (*Driver)(nil)
 	_ driver.AuthCredentialConsumer   = (*Driver)(nil)
 	_ driver.AuthPersistConsumer      = (*Driver)(nil)

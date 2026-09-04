@@ -1,12 +1,9 @@
 package settings
 
-import "litepan/internal/domain"
-
 // 全局设置：默认值在代码，DB 仅存用户改过的项。
 
-// 设置键。oauth 复用 domain 常量，保证与驱动层读取一致。
+// 设置键。
 const (
-	KeyOAuthServerURL              = domain.SettingOAuthServerURL
 	KeyCacheEnabled                = "cache_enabled"
 	KeyCacheTTL                    = "cache_ttl"
 	KeyCacheMaxItems               = "cache_max_items"
@@ -126,15 +123,6 @@ func intp(n int) *int { return &n }
 // defaultSpecs 是全部全局设置的有序声明。新增全局设置只改这里。
 func defaultSpecs() []Spec {
 	return []Spec{
-		{
-			Key:         KeyOAuthServerURL,
-			Type:        TypeString,
-			Category:    "system",
-			Label:       "OAuth 代理服务地址",
-			Description: "添加账号时「自动获取 Token」经此服务转发。留空或无效地址将回落默认值。本地调试可填 http://127.0.0.1:8000。",
-			Default:     domain.DefaultOAuthServerURL,
-			normalize:   domain.NormalizeOAuthServerURL,
-		},
 		{
 			Key:         KeyCacheEnabled,
 			Type:        TypeBool,

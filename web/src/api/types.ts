@@ -38,7 +38,6 @@ export interface DriverInfo {
   card_color: string;
   card_logo?: string;
   auth_type: string;
-  supports_oauth?: boolean;
   supports_qr_login?: boolean;
   fields: FieldSchema[];
 }

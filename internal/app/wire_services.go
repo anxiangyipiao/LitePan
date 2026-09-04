@@ -9,7 +9,6 @@ import (
 	"litepan/internal/cacheretention"
 	"litepan/internal/config"
 	"litepan/internal/crosstransfer"
-	"litepan/internal/domain"
 	"litepan/internal/embyproxy"
 	"litepan/internal/favorites"
 	"litepan/internal/file"
@@ -23,7 +22,6 @@ import (
 	"litepan/internal/offlinedownload"
 	"litepan/internal/playback"
 	"litepan/internal/rss"
-	"litepan/internal/settings"
 	"litepan/internal/strm"
 	"litepan/internal/strmscrape"
 	"litepan/internal/upload"
@@ -111,9 +109,6 @@ func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *
 		Playback:      playbackSvc,
 		MetadataCache: core.cache,
 		Lifecycle:     lifecycle,
-		OAuthURL: func(context.Context) string {
-			return domain.NormalizeOAuthServerURL(st.settings.String(settings.KeyOAuthServerURL))
-		},
 	})
 	uploadSvc := upload.NewManager(upload.Options{
 		Exec:     core.exec,

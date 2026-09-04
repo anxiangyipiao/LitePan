@@ -20,8 +20,6 @@ type Driver struct {
 	client       *http.Client
 	uploadClient *http.Client
 
-	oauthBase string
-
 	intervalGate driver.RequestIntervalGate
 	persist      driver.AuthPersistFunc
 
@@ -39,8 +37,6 @@ func (d *Driver) SetAuthCredentials(creds domain.AuthCredentials) {
 
 func (d *Driver) SetAuthPersister(fn driver.AuthPersistFunc) { d.persist = fn }
 
-func (d *Driver) SetOAuthServer(baseURL string) { d.oauthBase = baseURL }
-
 func (d *Driver) SetRequestIntervalGate(gate driver.RequestIntervalGate) { d.intervalGate = gate }
 
 var config = driver.Config{
@@ -54,7 +50,6 @@ var config = driver.Config{
 	CardLogo:               "/logos/123.png",
 	DefaultRoot:            "0",
 	AuthType:               driver.AuthToken,
-	OAuthName:              "123云盘Open",
 	TokenLifetime:          30 * 24 * time.Hour,
 	RefreshAdvance:         10 * time.Hour,
 	ProvideHashes:          []string{"md5"},
@@ -208,7 +203,6 @@ var (
 	_ driver.Renamer                  = (*Driver)(nil)
 	_ driver.FolderCreator            = (*Driver)(nil)
 	_ driver.LocalUploader            = (*Driver)(nil)
-	_ driver.OAuthConsumer            = (*Driver)(nil)
 	_ driver.AuthRefresher            = (*Driver)(nil)
 	_ driver.AuthCredentialConsumer   = (*Driver)(nil)
 	_ driver.AuthPersistConsumer      = (*Driver)(nil)

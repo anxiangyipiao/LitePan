@@ -133,7 +133,6 @@ func (m *Manager) buildDriver(ctx context.Context, accountID int64, acc *domain.
 	if err := applyConfigJSON(drv, acc.Config); err != nil {
 		return nil, err
 	}
-	applyOAuth(ctx, drv, m.oauthServerURL)
 	if c, ok := drv.(RequestIntervalConsumer); ok {
 		c.SetRequestIntervalGate(m.delays.Gate(accountID))
 	}
@@ -161,16 +160,6 @@ func (m *Manager) ResetTransport(ctx context.Context, accountID int64) {
 	}
 	_ = inst.drv.Drop(ctx)
 	m.log.Debug("驱动传输层已重置", "account", accountID)
-}
-
-// oauthServerURL 取全局 OAuth 代理地址：系统设置优先，无效值回落默认值。
-func (m *Manager) oauthServerURL(ctx context.Context) string {
-	if m.settings != nil {
-		if v, ok, _ := m.settings.Get(ctx, domain.SettingOAuthServerURL); ok {
-			return domain.NormalizeOAuthServerURL(v)
-		}
-	}
-	return domain.NormalizeOAuthServerURL("")
 }
 
 // resolveAccountByID 按账号 ID 获取驱动实例。

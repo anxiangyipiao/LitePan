@@ -136,7 +136,6 @@ function driverCardTags(driver: DriverInfo) {
 
 function driverAuthLabel(driver: DriverInfo) {
   if (driver.auth_label) return driver.auth_label;
-  if (driver.supports_oauth) return "OAuth";
   if (driver.supports_qr_login) return "扫码";
   if (driver.auth_type === "cookie") return "Cookie";
   if (driver.auth_type === "token") return "Token";

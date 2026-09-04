@@ -689,15 +689,7 @@ async function submit() {
               <div class="settings-row__label">
                 <span>{{ displayLabel(it) }}</span>
                 <SettingsHelpTooltip
-                  v-if="it.key === 'oauth_server_url'"
-                  title="OAuth 代理服务地址说明"
-                >
-                  <p>用于主程序对接 OAuth 认证代理服务，会影响相关驱动的授权、刷新和回调地址处理。</p>
-                  <p>添加账号时「自动获取 Token」经此服务转发。留空或无效地址将回落默认值。</p>
-                  <p>示例：<strong>https://oauth.litepan.top</strong></p>
-                </SettingsHelpTooltip>
-                <SettingsHelpTooltip
-                  v-else-if="it.key === 'auth_active_refresh_enabled'"
+                  v-if="it.key === 'auth_active_refresh_enabled'"
                   title="主动认证刷新说明"
                 >
                   <p>程序根据各网盘过期时间提前刷新 token，减少访问时遇到认证过期的概率。</p>

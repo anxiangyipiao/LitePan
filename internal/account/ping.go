@@ -9,9 +9,7 @@ import (
 )
 
 func (s *Service) pingDriver(ctx context.Context, driverType, configJSON string, saving bool) error {
-	drv, release, err := driver.OpenEphemeral(ctx, driverType, configJSON, driver.EphemeralConfig{
-		OAuthServerURL: s.oauthURL,
-	})
+	drv, release, err := driver.OpenEphemeral(ctx, driverType, configJSON, driver.EphemeralConfig{})
 	if err != nil {
 		return err
 	}

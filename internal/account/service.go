@@ -10,9 +10,6 @@ import (
 	"litepan/internal/driver"
 )
 
-// OAuthServerURL 返回 OAuth 代理基址（连接测试与 OAuth 驱动用）。
-type OAuthServerURL func(ctx context.Context) string
-
 // PlaybackInvalidator 在账号变更后失效播放/直链缓存。
 type PlaybackInvalidator interface {
 	InvalidateAccount(accountID int64)
@@ -70,7 +67,6 @@ type Service struct {
 	playback      PlaybackInvalidator
 	metadataCache MetadataCacheInvalidator
 	lifecycle     AccountLifecycle
-	oauthURL      OAuthServerURL
 }
 
 // Options 构造账号应用服务。
@@ -82,7 +78,6 @@ type Options struct {
 	Playback      PlaybackInvalidator
 	MetadataCache MetadataCacheInvalidator
 	Lifecycle     AccountLifecycle
-	OAuthURL      OAuthServerURL
 }
 
 func NewService(opts Options) *Service {
@@ -94,7 +89,6 @@ func NewService(opts Options) *Service {
 		playback:      opts.Playback,
 		metadataCache: opts.MetadataCache,
 		lifecycle:     opts.Lifecycle,
-		oauthURL:      opts.OAuthURL,
 	}
 }
 

@@ -28,8 +28,6 @@ type Config struct {
 	CardLogo    string   // 前端卡片 logo 路径，如 /logos/123.png
 	DefaultRoot string   // 默认根目录 ID
 	AuthType    AuthType // 认证类型
-	// OAuthName 是需要代理续期的驱动在统一 OAuth 服务中的注册名。
-	OAuthName string
 	// 主动刷新调度参数（AuthToken 型驱动填写 TokenLifetime/RefreshAdvance）。
 	TokenLifetime          time.Duration
 	RefreshAdvance         time.Duration
@@ -87,11 +85,6 @@ type Renamer interface {
 
 type FolderCreator interface {
 	CreateFolder(ctx context.Context, parentID, name string) (*domain.FileItem, error)
-}
-
-// OAuthConsumer 经统一 OAuth 代理刷新令牌的驱动实现。
-type OAuthConsumer interface {
-	SetOAuthServer(baseURL string)
 }
 
 // AuthCredentialConsumer 运行前注入 token/cookie。

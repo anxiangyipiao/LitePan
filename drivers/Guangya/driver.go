@@ -19,8 +19,6 @@ type Driver struct {
 	add    Addition
 	client *http.Client
 
-	oauthBase string
-
 	intervalGate driver.RequestIntervalGate
 	persist      driver.AuthPersistFunc
 
@@ -41,7 +39,6 @@ var config = driver.Config{
 	CardLogo:               "/logos/guangya.png",
 	DefaultRoot:            "",
 	AuthType:               driver.AuthToken,
-	OAuthName:              "光鸭云盘",
 	TokenLifetime:          7200 * time.Second,
 	RefreshAdvance:         15 * time.Minute,
 	ProvideHashes:          []string{"md5"},
@@ -56,8 +53,6 @@ func init() { driver.Register(New) }
 func (d *Driver) Config() driver.Config { return config }
 
 func (d *Driver) GetAddition() any { return &d.add }
-
-func (d *Driver) SetOAuthServer(baseURL string) { d.oauthBase = strings.TrimSpace(baseURL) }
 
 func (d *Driver) SetAuthCredentials(creds domain.AuthCredentials) {
 	d.mu.Lock()
@@ -320,7 +315,6 @@ var (
 	_ driver.OfflineTaskRefresher     = (*Driver)(nil)
 	_ driver.OfflineTaskDeleter       = (*Driver)(nil)
 	_ driver.AuthRefresher            = (*Driver)(nil)
-	_ driver.OAuthConsumer            = (*Driver)(nil)
 	_ driver.AuthCredentialConsumer   = (*Driver)(nil)
 	_ driver.AuthPersistConsumer      = (*Driver)(nil)
 	_ driver.ConnectionErrorExplainer = (*Driver)(nil)

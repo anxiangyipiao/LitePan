@@ -23,7 +23,6 @@ export interface SystemConfig {
   index_strm_auto_detect_enabled?: boolean;
   must_change_password: boolean;
   password_change_reason?: string;
-  oauth_server_url?: string;
   upload_task_concurrency?: number;
   log_retention_days?: number;
   auth_active_refresh_enabled?: boolean;
@@ -37,7 +36,6 @@ export interface UpdateCredentialsRequest {
   public_index_enabled?: boolean;
   index_account_switch_mode?: "dropdown" | "floating";
   index_strm_auto_detect_enabled?: boolean;
-  oauth_server_url?: string;
   upload_task_concurrency?: number;
   log_retention_days?: number;
   auth_active_refresh_enabled?: boolean;

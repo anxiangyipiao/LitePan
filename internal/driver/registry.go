@@ -44,9 +44,7 @@ type DriverInfo struct {
 	RapidUpload            []string      `json:"rapid_upload,omitempty"`
 	UploadConflictPolicies []string      `json:"upload_conflict_policies,omitempty"`
 	AuthType               string        `json:"auth_type"`
-	SupportsOAuth          bool          `json:"supports_oauth"`
 	SupportsQRLogin        bool          `json:"supports_qr_login"`
-	OAuthName              string        `json:"oauth_name,omitempty"`
 	Fields                 []FieldSchema `json:"fields"`
 }
 
@@ -64,7 +62,6 @@ var (
 func Register(c Constructor) {
 	d := c()
 	cfg := d.Config()
-	_, supportsOAuth := d.(OAuthConsumer)
 	_, supportsQRLogin := d.(QRLoginProvider)
 	info := DriverInfo{
 		Name:                   cfg.Name,
@@ -79,9 +76,7 @@ func Register(c Constructor) {
 		RapidUpload:            append([]string(nil), cfg.RapidUploadHashes...),
 		UploadConflictPolicies: append([]string(nil), cfg.UploadConflictPolicies...),
 		AuthType:               string(cfg.AuthType),
-		SupportsOAuth:          supportsOAuth,
 		SupportsQRLogin:        supportsQRLogin,
-		OAuthName:              cfg.OAuthName,
 		Fields:                 buildSchema(d.GetAddition()),
 	}
 	regMu.Lock()
@@ -111,17 +106,6 @@ func List() []DriverInfo {
 		return out[i].Name < out[j].Name
 	})
 	return out
-}
-
-// OAuthName 返回统一 OAuth 注册名，未声明时回落 driverType。
-func OAuthName(driverType string) string {
-	regMu.RLock()
-	e, ok := registry[driverType]
-	regMu.RUnlock()
-	if ok && e.info.OAuthName != "" {
-		return e.info.OAuthName
-	}
-	return driverType
 }
 
 // Lookup 按驱动名返回已注册驱动的元信息。

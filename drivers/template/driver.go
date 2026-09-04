@@ -19,7 +19,6 @@ type Driver struct {
 	add    Addition
 	client *http.Client
 
-	oauthBase    string
 	intervalGate driver.RequestIntervalGate
 	persist      driver.AuthPersistFunc
 
@@ -35,7 +34,6 @@ var config = driver.Config{
 	CardLogo:       "/logos/webdav.png",
 	DefaultRoot:    "0",
 	AuthType:       driver.AuthToken,
-	OAuthName:      "模板驱动",
 	TokenLifetime:  30 * 24 * time.Hour,
 	RefreshAdvance: 10 * time.Hour,
 }
@@ -101,8 +99,6 @@ func (d *Driver) SetAuthCredentials(creds domain.AuthCredentials) {
 
 func (d *Driver) SetAuthPersister(fn driver.AuthPersistFunc) { d.persist = fn }
 
-func (d *Driver) SetOAuthServer(baseURL string) { d.oauthBase = baseURL }
-
 func (d *Driver) SetRequestIntervalGate(gate driver.RequestIntervalGate) { d.intervalGate = gate }
 
 func (d *Driver) currentToken() string {
@@ -120,7 +116,6 @@ var (
 	_ driver.Copier                   = (*Driver)(nil)
 	_ driver.Renamer                  = (*Driver)(nil)
 	_ driver.FolderCreator            = (*Driver)(nil)
-	_ driver.OAuthConsumer            = (*Driver)(nil)
 	_ driver.AuthCredentialConsumer   = (*Driver)(nil)
 	_ driver.AuthPersistConsumer      = (*Driver)(nil)
 	_ driver.AuthRefresher            = (*Driver)(nil)

@@ -17,7 +17,7 @@ template 就是**样板房**：文件怎么分、HTTP 怎么发、Token 过期�
 | `driver.go` | 注册、Init/Drop/Ping、**ListFiles / GetFileInfo**、列表分页 helper、能力断言 |
 | `transport.go` | API 常量、延迟、`apiCall`、错误码映射 |
 | `models.go` | 平台 JSON → `domain.FileItem` / 下载结构体 |
-| `auth.go` | Token 刷新、OAuth、认证失败分类 |
+| `auth.go` | Token 刷新、认证失败分类 |
 | `ops.go` | **ResolveDownload**、删/移/复制/重命名/建目录、下载探针等写操作辅助 |
 | `upload.go` | 本地上传、秒传/哈希复用、OSS 分片等上传实现 |
 | `qrlogin.go` | **仅**扫码/短信登录类驱动需要（如夸克） |
@@ -50,10 +50,10 @@ httpx 是**所有驱动共用的 HTTP 小工具**，不是替换 Go 标准库，
 2. 读 LitePan Python 原驱动：认证、删除/下载/上传约束
 3. 核对目标网盘接口：签名、分页、Range
 4. 改 `Addition` 字段与 form tag
-5. 改 `config.go` 里 `Name` / `DisplayName` / `CardLogo` / `OAuthName`
+5. 改 `config.go` 里 `Name` / `DisplayName` / `CardLogo`
 6. 实现 `models.go`：API 响应 → `domain`
 7. 改 `transport.go` 里平台域名、请求头、错误码映射（`mapAPIError`）
-8. Cookie 驱动改 `auth.go`；Token 驱动保留 OAuth 刷新路径
+8. Cookie 驱动改 `auth.go`；Token 驱动保留刷新路径
 9. 在 `ops.go` 实现 **ResolveDownload** / 删改移等
 10. 在 `upload.go` 实现上传与秒传（若有）
 11. `init()` 保留；在 `drivers/all.go` 加 `_ "litepan/drivers/<name>"`
