@@ -30,6 +30,7 @@ const (
 	pathDeleteFile       = "/userres/v1/file/delete_file"
 	pathCopyFile         = "/userres/v1/file/copy_file"
 	pathTaskStatus       = "/userres/v1/get_task_status"
+	pathAuthToken        = "/v1/auth/token"
 
 	listPageSize            = 50
 	listOrderByDefault      = 3
@@ -163,6 +164,33 @@ func (d *Driver) accountGET(ctx context.Context, path string, out any) error {
 	}
 	h := d.buildAccountHeaders()
 	h["Authorization"] = "Bearer " + d.currentToken()
+	httpx.SetHeaders(req, h)
+
+	resp, data, err := httpx.Execute(d.client, req, httpx.DefaultReadLimit)
+	if err != nil {
+		return domain.Wrap(domain.CodeDriverError, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return domain.Errorf(domain.CodeDriverError, "光鸭账户 HTTP %d: %s", resp.StatusCode, httpx.Truncate(data, 300))
+	}
+	if out != nil {
+		if err := json.Unmarshal(data, out); err != nil {
+			return domain.Wrap(domain.CodeDriverError, err)
+		}
+	}
+	return nil
+}
+
+func (d *Driver) accountPOST(ctx context.Context, path string, body map[string]any, out any) error {
+	if err := d.waitOperationDelay(ctx); err != nil {
+		return err
+	}
+	req, err := httpx.NewJSONRequest(ctx, http.MethodPost, d.accountBase()+path, nil, body)
+	if err != nil {
+		return domain.Wrap(domain.CodeInternal, err)
+	}
+	h := d.buildAccountHeaders()
+	h["x-action"] = "401"
 	httpx.SetHeaders(req, h)
 
 	resp, data, err := httpx.Execute(d.client, req, httpx.DefaultReadLimit)
